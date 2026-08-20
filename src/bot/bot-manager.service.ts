@@ -519,28 +519,11 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         const voteReward = botRecord.voteReward || 30000;
         const refBonus = botRecord.refBonus || 5000;
         const startText = BOT_MESSAGES.START(voteReward, refBonus);
-        const avatarPath = path.join(process.cwd(), 'public', 'assets', 'open_budget_avatar.jpg');
 
-        if (fs.existsSync(avatarPath)) {
-          await ctx.replyWithPhoto(
-            { source: avatarPath },
-            {
-              caption: startText,
-              parse_mode: 'HTML',
-              ...BotKeyboards.mainMenu(user.role === 'ADMIN'),
-            }
-          ).catch(async () => {
-            await ctx.reply(startText, {
-              parse_mode: 'HTML',
-              ...BotKeyboards.mainMenu(user.role === 'ADMIN'),
-            });
-          });
-        } else {
-          await ctx.reply(startText, {
-            parse_mode: 'HTML',
-            ...BotKeyboards.mainMenu(user.role === 'ADMIN'),
-          });
-        }
+        await ctx.reply(startText, {
+          parse_mode: 'HTML',
+          ...BotKeyboards.mainMenu(user.role === 'ADMIN'),
+        });
       } catch (err) {
         this.logger.error(`[Bot #${botRecord.id}] /start xatoligi:`, err);
       }
@@ -595,7 +578,6 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     bot.command('vote', handleVoteTrigger);
 
     // 3. 💰 Balans (/balance va tugma)
-    // 3. 💰 Balans & Profil (/balance, /profile va tugma)
     const handleBalanceTrigger = async (ctx: Context) => {
       try {
         const user = await this.getOrCreateBotUser(ctx, botRecord.id);
@@ -608,56 +590,10 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
         const balanceText = BOT_MESSAGES.BALANCE(user.balance, referralsCount, votesCount, pendingVotesCount, user.totalWithdrawn, voteReward);
 
-        // Foydalanuvchining Telegram profil rasmini olish
-        const fromId = ctx.from?.id;
-        let userPhotoFileId: string | null = null;
-
-        if (fromId) {
-          try {
-            const userPhotos = await ctx.telegram.getUserProfilePhotos(fromId, 0, 1);
-            if (userPhotos && userPhotos.total_count > 0 && userPhotos.photos[0]?.length > 0) {
-              userPhotoFileId = userPhotos.photos[0][userPhotos.photos[0].length - 1].file_id;
-            }
-          } catch (e) {}
-        }
-
-        if (userPhotoFileId) {
-          await ctx.replyWithPhoto(
-            userPhotoFileId,
-            {
-              caption: balanceText,
-              parse_mode: 'HTML',
-              ...BotKeyboards.balanceInline(),
-            }
-          ).catch(async () => {
-            await ctx.reply(balanceText, {
-              parse_mode: 'HTML',
-              ...BotKeyboards.balanceInline(),
-            });
-          });
-        } else {
-          const avatarPath = path.join(process.cwd(), 'public', 'assets', 'open_budget_avatar.jpg');
-          if (fs.existsSync(avatarPath)) {
-            await ctx.replyWithPhoto(
-              { source: avatarPath },
-              {
-                caption: balanceText,
-                parse_mode: 'HTML',
-                ...BotKeyboards.balanceInline(),
-              }
-            ).catch(async () => {
-              await ctx.reply(balanceText, {
-                parse_mode: 'HTML',
-                ...BotKeyboards.balanceInline(),
-              });
-            });
-          } else {
-            await ctx.reply(balanceText, {
-              parse_mode: 'HTML',
-              ...BotKeyboards.balanceInline(),
-            });
-          }
-        }
+        await ctx.reply(balanceText, {
+          parse_mode: 'HTML',
+          ...BotKeyboards.balanceInline(),
+        });
       } catch (err) {
         this.logger.error(`[Bot #${botRecord.id}] Balans xatoligi:`, err);
       }
