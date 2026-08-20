@@ -3,18 +3,14 @@ import { BOT_BUTTONS } from './bot.constants';
 
 export class BotKeyboards {
   /**
-   * Asosiy menyu klaviaturasi (Skrinshotdagi kabi ideal)
+   * Asosiy menyu klaviaturasi (Admin panel faqat web saytda boshqariladi)
    */
-  static mainMenu(isAdmin: boolean = false) {
+  static mainMenu(_isAdmin: boolean = false) {
     const buttons = [
       [BOT_BUTTONS.VOTE],
       [BOT_BUTTONS.BALANCE, BOT_BUTTONS.WITHDRAW],
       [BOT_BUTTONS.REFERRAL],
     ];
-
-    if (isAdmin) {
-      buttons.push([BOT_BUTTONS.ADMIN_PANEL]);
-    }
 
     return Markup.keyboard(buttons).resize();
   }
