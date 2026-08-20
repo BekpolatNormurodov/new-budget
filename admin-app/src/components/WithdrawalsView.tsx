@@ -8,7 +8,6 @@ import {
   Check,
   Download,
   FileCheck,
-  CreditCard,
 } from 'lucide-react';
 import { WithdrawalItem, BotInstanceItem } from '../types';
 import { formatSum } from '../utils/format';
@@ -16,7 +15,6 @@ import { Pagination } from './Pagination';
 import { exportToCsv } from '../utils/exportToCsv';
 import { ReceiptViewerModal } from './ReceiptViewerModal';
 import { SmartFilterBar } from './SmartFilterBar';
-import { ProDropdown } from './ProDropdown';
 
 interface WithdrawalsViewProps {
   withdrawals: WithdrawalItem[];
@@ -33,7 +31,6 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
 }) => {
   const [search, setSearch] = useState('');
   const [statusTab, setStatusTab] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'>('PENDING');
-  const [methodFilter, setMethodFilter] = useState<string>('ALL');
   const [selectedBotId, setSelectedBotId] = useState<string>('ALL');
   const [activePreset, setActivePreset] = useState<string>('ALL');
   const [startDate, setStartDate] = useState<string>('');
@@ -64,9 +61,6 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
       // Status filter
       if (statusTab !== 'ALL' && w.status !== statusTab) return false;
 
-      // Payment Method filter
-      if (methodFilter !== 'ALL' && w.paymentMethod !== methodFilter) return false;
-
       // Date filter
       const wDate = w.createdAt.slice(0, 10);
       if (activePreset === 'TODAY' && !w.createdAt.startsWith(todayStr)) return false;
@@ -88,7 +82,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
 
       return true;
     });
-  }, [withdrawals, statusTab, methodFilter, activePreset, startDate, endDate, search]);
+  }, [withdrawals, statusTab, activePreset, startDate, endDate, search]);
 
   const paginatedWithdrawals = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
@@ -134,7 +128,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
         totalFilteredLabel="Arizalar"
       />
 
-      {/* 2. Status Tabs, Method Filter, Search and Actions */}
+      {/* 2. Status Tabs, Search and Actions */}
       <div className="p-3 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-3">
         {/* Status Tabs and Export Action */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 border-b border-slate-800/80 pb-3">
@@ -191,34 +185,16 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
           </button>
         </div>
 
-        {/* Search & Payment Method Filter */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-          {/* Universal Search */}
-          <div className="relative sm:col-span-2">
-            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-              placeholder="Karta raqami, ism, karta egasi yoki telefon..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 shadow-inner"
-            />
-          </div>
-
-          {/* Payment Method ProDropdown */}
-          <div>
-            <ProDropdown
-              options={[
-                { value: 'ALL', label: 'Barcha To\'lovlar', badge: `${withdrawals.length}` },
-                { value: 'UZCARD', label: 'UZCARD', badge: '8600' },
-                { value: 'HUMO', label: 'HUMO', badge: '9860' },
-                { value: 'PAYNET', label: 'PAYNET', badge: 'Tel' },
-              ]}
-              value={methodFilter}
-              onChange={(val) => { setMethodFilter(val); setCurrentPage(1); }}
-              icon={<CreditCard className="w-3.5 h-3.5" />}
-            />
-          </div>
+        {/* Full-width Universal Search Input */}
+        <div className="relative">
+          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+            placeholder="Karta raqami, ism, karta egasi yoki telefon raqami bo'yicha qidirish..."
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 shadow-inner"
+          />
         </div>
       </div>
 
