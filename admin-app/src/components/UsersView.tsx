@@ -1,0 +1,299 @@
+import React, { useState, useMemo } from 'react';
+import {
+  Users,
+  Search,
+  Filter,
+  DollarSign,
+  Ban,
+  ShieldAlert,
+  ShieldCheck,
+  UserCheck,
+  Download,
+  User,
+  Vote,
+  Sparkles,
+} from 'lucide-react';
+import { UserItem } from '../types';
+import { formatSum } from '../utils/format';
+import { Pagination } from './Pagination';
+import { exportToCsv } from '../utils/exportToCsv';
+import { EditUserBalanceModal } from './EditUserBalanceModal';
+
+interface UsersViewProps {
+  users: UserItem[];
+  onUpdateBalance: (userId: number, amount: number, isAddition: boolean) => Promise<void>;
+  onToggleBan: (userId: number) => void;
+}
+
+export const UsersView: React.FC<UsersViewProps> = ({
+  users,
+  onUpdateBalance,
+  onToggleBan,
+}) => {
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'BANNED' | 'ADMIN'>('ALL');
+  const [editingUserBalance, setEditingUserBalance] = useState<UserItem | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  const filteredUsers = useMemo(() => {
+    return users.filter((u) => {
+      // Status & Role filter
+      if (statusFilter === 'ACTIVE' && u.isBanned) return false;
+      if (statusFilter === 'BANNED' && !u.isBanned) return false;
+      if (statusFilter === 'ADMIN' && u.role !== 'ADMIN') return false;
+
+      // Search query
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const idMatch = String(u.id).includes(q) || u.telegramId.includes(q);
+        const nameMatch = u.firstName?.toLowerCase().includes(q);
+        const userMatch = u.username?.toLowerCase().includes(q);
+        const phoneMatch = u.phone?.includes(q);
+        if (!idMatch && !nameMatch && !userMatch && !phoneMatch) return false;
+      }
+
+      return true;
+    });
+  }, [users, statusFilter, search]);
+
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredUsers.slice(start, start + pageSize);
+  }, [filteredUsers, currentPage, pageSize]);
+
+  const totalPages = Math.ceil(filteredUsers.length / pageSize) || 1;
+
+  const handleExportCsv = () => {
+    exportToCsv(
+      'foydalanuvchilar_royxati',
+      filteredUsers.map((u) => ({
+        ID: u.id,
+        TelegramID: u.telegramId,
+        Ism: u.firstName || '',
+        Username: u.username ? `@${u.username}` : '',
+        Telefon: u.phone ? `+${u.phone}` : '',
+        Balans: u.balance,
+        Ovozlar: u.totalVotes,
+        Referallar: u._count?.referrals || 0,
+        Roli: u.role || 'USER',
+        Bloklangan: u.isBanned ? 'HA' : 'YO\'Q',
+      }))
+    );
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Top Filter and Controls Bar */}
+      <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-4">
+        {/* Filter Pills and Export Action */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+          <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 flex-wrap">
+            <button
+              onClick={() => { setStatusFilter('ALL'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                statusFilter === 'ALL'
+                  ? 'bg-slate-800 text-white border border-slate-700'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Barcha Foydalanuvchilar ({users.length})
+            </button>
+            <button
+              onClick={() => { setStatusFilter('ACTIVE'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                statusFilter === 'ACTIVE'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              🟢 Faol
+            </button>
+            <button
+              onClick={() => { setStatusFilter('ADMIN'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                statusFilter === 'ADMIN'
+                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              👑 Adminlar
+            </button>
+            <button
+              onClick={() => { setStatusFilter('BANNED'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                statusFilter === 'BANNED'
+                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              🚫 Bloklangan
+            </button>
+          </div>
+
+          <button
+            onClick={handleExportCsv}
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl border border-slate-700 transition-colors"
+            title="Excel / CSV ga yuklab olish"
+          >
+            <Download className="w-4 h-4 text-slate-400" />
+            <span>Eksport</span>
+          </button>
+        </div>
+
+        {/* Search & Records Count */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+              placeholder="Ism, telefon, username yoki Telegram ID..."
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          <div className="flex items-center justify-end px-3 py-2 text-xs text-slate-400 font-medium">
+            Topildi: <b className="text-white ml-1 font-bold">{filteredUsers.length} ta</b>
+          </div>
+        </div>
+      </div>
+
+      {/* Table Card */}
+      <div className="rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs text-slate-300">
+            <thead className="bg-slate-800/80 text-slate-400 font-semibold border-b border-slate-800 uppercase text-[10px] tracking-wider">
+              <tr>
+                <th className="p-4">Foydalanuvchi</th>
+                <th className="p-4">Telefon</th>
+                <th className="p-4">Balans</th>
+                <th className="p-4">Ovozlar</th>
+                <th className="p-4">Taklif Qilgan</th>
+                <th className="p-4">Roli & Holati</th>
+                <th className="p-4 text-right">Amallar</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60">
+              {paginatedUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-slate-500 text-xs">
+                    <Users className="w-8 h-8 mx-auto mb-2 text-slate-600 opacity-50" />
+                    Mos keladigan foydalanuvchilar topilmadi.
+                  </td>
+                </tr>
+              ) : (
+                paginatedUsers.map((u) => (
+                  <tr key={u.id} className="hover:bg-slate-800/30 transition-colors">
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-bold text-xs">
+                          {u.firstName ? u.firstName.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-white">
+                            {u.firstName || 'Foydalanuvchi'}
+                            {u.role === 'ADMIN' && (
+                              <span className="ml-1.5 px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 text-[9px] font-bold">
+                                ADMIN
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[11px] text-slate-400 font-mono">
+                            {u.username ? `@${u.username}` : `TG: ${u.telegramId}`}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="p-4">
+                      <span className="font-mono text-slate-300">
+                        {u.phone ? `+${u.phone}` : '-'}
+                      </span>
+                    </td>
+
+                    <td className="p-4">
+                      <span className="font-black text-emerald-400 text-sm">
+                        {formatSum(u.balance)} so'm
+                      </span>
+                    </td>
+
+                    <td className="p-4">
+                      <span className="font-semibold text-slate-200">
+                        {u.totalVotes || 0} ta
+                      </span>
+                    </td>
+
+                    <td className="p-4">
+                      <span className="px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700 text-purple-300 font-medium text-[11px]">
+                        👥 {u._count?.referrals || 0} ta
+                      </span>
+                    </td>
+
+                    <td className="p-4">
+                      <span
+                        className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
+                          u.isBanned
+                            ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                            : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                        }`}
+                      >
+                        {u.isBanned ? '🚫 Bloklangan' : '🟢 Faol'}
+                      </span>
+                    </td>
+
+                    <td className="p-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setEditingUserBalance(u)}
+                          className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-lg border border-indigo-500/20 transition-colors"
+                          title="Balansni o'zgartirish"
+                        >
+                          <DollarSign className="w-3.5 h-3.5" />
+                          <span>Balans</span>
+                        </button>
+
+                        <button
+                          onClick={() => onToggleBan(u.id)}
+                          className={`p-1.5 rounded-lg border transition-colors ${
+                            u.isBanned
+                              ? 'text-emerald-400 hover:bg-emerald-500/10 border-emerald-500/20'
+                              : 'text-rose-400 hover:bg-rose-500/10 border-rose-500/20'
+                          }`}
+                          title={u.isBanned ? 'Blokdan chiqarish' : 'Bloklash'}
+                        >
+                          <Ban className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination Footer */}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={filteredUsers.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(newSize) => { setPageSize(newSize); setCurrentPage(1); }}
+        />
+      </div>
+
+      {/* Edit User Balance Modal */}
+      {editingUserBalance && (
+        <EditUserBalanceModal
+          isOpen={!!editingUserBalance}
+          onClose={() => setEditingUserBalance(null)}
+          user={editingUserBalance}
+          onSave={onUpdateBalance}
+        />
+      )}
+    </div>
+  );
+};

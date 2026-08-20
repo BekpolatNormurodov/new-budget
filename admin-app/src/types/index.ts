@@ -27,6 +27,7 @@ export interface BotInstanceItem {
   status: string;
   avatarUrl?: string;
   isLiveRunning?: boolean;
+  createdAt?: string;
 }
 
 export interface VoteItem {
@@ -37,10 +38,14 @@ export interface VoteItem {
   rewardAmount: number;
   createdAt: string;
   user?: {
+    id?: number;
     firstName: string;
     username?: string;
+    phone?: string;
   };
   botInstance?: {
+    id?: number;
+    name?: string;
     mahallaName: string;
   };
 }
@@ -56,9 +61,13 @@ export interface WithdrawalItem {
   adminNote?: string;
   receiptUrl?: string;
   createdAt: string;
+  processedAt?: string;
   user?: {
+    id?: number;
     firstName: string;
     username?: string;
+    phone?: string;
+    balance?: number;
   };
 }
 
@@ -70,13 +79,46 @@ export interface UserItem {
   phone?: string;
   balance: number;
   totalVotes: number;
+  totalEarned?: number;
+  totalWithdrawn?: number;
+  role?: string;
   isBanned: boolean;
+  createdAt?: string;
   _count?: {
     referrals: number;
+    votes?: number;
   };
   botInstance?: {
+    id?: number;
+    name?: string;
     mahallaName: string;
   };
+}
+
+export interface HealthReport {
+  timestamp: string;
+  status: 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY';
+  openBudget: { isAlive: boolean; latencyMs: number; error?: string };
+  captcha: { isAlive: boolean; sampleResolved: boolean; latencyMs: number };
+  proxies: { total: number; alive: number; dead: number };
+  externalBridge: { isEnabled: boolean; isAlive: boolean; latencyMs: number; status?: string };
+  bots: { total: number; online: number; offline: number };
+  issues: string[];
+}
+
+export interface ProxyStats {
+  enabled: boolean;
+  total: number;
+  alive: number;
+  dead: number;
+  pool: Array<{
+    host: string;
+    port: number;
+    protocol: string;
+    isAlive: boolean;
+    latencyMs?: number;
+    failCount: number;
+  }>;
 }
 
 export interface DashboardStats {
@@ -92,6 +134,7 @@ export interface DashboardStats {
   bots: BotInstanceItem[];
   pendingVotes: VoteItem[];
   pendingWithdrawals: WithdrawalItem[];
+  health?: HealthReport;
 }
 
 export interface ToastItem {

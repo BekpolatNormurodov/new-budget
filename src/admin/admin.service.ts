@@ -5,6 +5,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { OpenBudgetService } from '../openbudget/openbudget.service';
 import { BotManagerService } from '../bot/bot-manager.service';
+import { SystemHealthService } from '../health/system-health.service';
+import { ProxyManagerService } from '../proxy/proxy-manager.service';
 import { BOT_MESSAGES, formatSum } from '../bot/bot.constants';
 import { ConfigService } from '@nestjs/config';
 
@@ -17,6 +19,8 @@ export class AdminService {
     private readonly walletService: WalletService,
     private readonly openBudgetService: OpenBudgetService,
     private readonly botManagerService: BotManagerService,
+    private readonly systemHealthService: SystemHealthService,
+    private readonly proxyManagerService: ProxyManagerService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -429,5 +433,26 @@ export class AdminService {
       where: { id: userId },
       data: { isBanned: !user.isBanned },
     });
+  }
+
+  /**
+   * 30 daqiqalik tizim salomatligi va proxy holatini olish
+   */
+  async getSystemHealth() {
+    let report = this.systemHealthService.getLastReport();
+    if (!report) {
+      report = await this.systemHealthService.runPeriodicHealthCheck();
+    }
+    const proxyStats = this.proxyManagerService.getStats();
+    return { report, proxyStats };
+  }
+
+  /**
+   * Salomatlikni qo'lda tekshirishni ishga tushirish
+   */
+  async triggerSystemHealthCheck() {
+    const report = await this.systemHealthService.runPeriodicHealthCheck();
+    const proxyStats = this.proxyManagerService.getStats();
+    return { success: true, report, proxyStats };
   }
 }

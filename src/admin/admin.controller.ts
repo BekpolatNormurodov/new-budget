@@ -108,4 +108,15 @@ export class AdminController {
   async toggleBan(@Param('id') id: string) {
     return this.adminService.toggleBanUser(parseInt(id, 10));
   }
+
+  // System Health & Monitoring Routes
+  @Get('health')
+  async getHealth() {
+    return this.adminService.getSystemHealth();
+  }
+
+  @Post('health/trigger')
+  async triggerHealth() {
+    return this.adminService.triggerSystemHealthCheck();
+  }
 }
