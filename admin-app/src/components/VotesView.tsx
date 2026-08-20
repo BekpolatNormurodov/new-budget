@@ -2,19 +2,16 @@ import React, { useState, useMemo } from 'react';
 import {
   Vote,
   Search,
-  Filter,
   CheckCircle,
   Clock,
   Download,
-  CheckCircle2,
-  Calendar,
-  Sparkles,
   Zap,
 } from 'lucide-react';
 import { VoteItem, BotInstanceItem } from '../types';
 import { formatSum } from '../utils/format';
 import { Pagination } from './Pagination';
 import { exportToCsv } from '../utils/exportToCsv';
+import { SeasonCalendarFilter } from './SeasonCalendarFilter';
 
 interface VotesViewProps {
   pendingVotes: VoteItem[];
@@ -34,11 +31,18 @@ export const VotesView: React.FC<VotesViewProps> = ({
   const [search, setSearch] = useState('');
   const [statusTab, setStatusTab] = useState<'PENDING' | 'VERIFIED' | 'ALL'>('PENDING');
   const [selectedBotId, setSelectedBotId] = useState<string>('ALL');
-  const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | 'YESTERDAY' | 'CUSTOM'>('ALL');
+  const [activePreset, setActivePreset] = useState<string>('ALL');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+
+  const handleDateChange = (start: string, end: string, presetName: string = 'CUSTOM') => {
+    setStartDate(start);
+    setEndDate(end);
+    setActivePreset(presetName);
+    setCurrentPage(1);
+  };
 
   // Combine or select votes based on statusTab
   const combinedVotes = useMemo(() => {
@@ -63,25 +67,25 @@ export const VotesView: React.FC<VotesViewProps> = ({
 
       // Date filter
       const vDate = v.createdAt.slice(0, 10);
-      if (dateFilter === 'TODAY' && !v.createdAt.startsWith(todayStr)) return false;
-      if (dateFilter === 'YESTERDAY' && !v.createdAt.startsWith(yesterday)) return false;
-      if (dateFilter === 'CUSTOM') {
-        if (startDate && vDate < startDate) return false;
-        if (endDate && vDate > endDate) return false;
-      }
+      if (activePreset === 'TODAY' && !v.createdAt.startsWith(todayStr)) return false;
+      if (activePreset === 'YESTERDAY' && !v.createdAt.startsWith(yesterday)) return false;
+      if (startDate && vDate < startDate) return false;
+      if (endDate && vDate > endDate) return false;
 
-      // Search
+      // Universal Search (Phone, Name, Username, Mahalla Name, Bot ID)
       if (search.trim()) {
         const q = search.toLowerCase();
         const phoneMatch = v.phone.includes(q);
         const nameMatch = v.user?.firstName?.toLowerCase().includes(q);
         const userMatch = v.user?.username?.toLowerCase().includes(q);
-        if (!phoneMatch && !nameMatch && !userMatch) return false;
+        const mahallaMatch = v.botInstance?.mahallaName?.toLowerCase().includes(q);
+        const idMatch = String(v.id).includes(q) || String(v.userId).includes(q);
+        if (!phoneMatch && !nameMatch && !userMatch && !mahallaMatch && !idMatch) return false;
       }
 
       return true;
     });
-  }, [combinedVotes, statusTab, selectedBotId, dateFilter, startDate, endDate, search, bots]);
+  }, [combinedVotes, statusTab, selectedBotId, activePreset, startDate, endDate, search, bots]);
 
   // Paginated records
   const paginatedVotes = useMemo(() => {
@@ -107,12 +111,25 @@ export const VotesView: React.FC<VotesViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Top Filter and Controls Bar */}
+    <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-300">
+      {/* 1. Pro Season Calendar & Bot Filter Component */}
+      <SeasonCalendarFilter
+        bots={bots}
+        selectedBotId={selectedBotId}
+        onSelectBotId={(id) => { setSelectedBotId(id); setCurrentPage(1); }}
+        startDate={startDate}
+        endDate={endDate}
+        onDateChange={handleDateChange}
+        activePreset={activePreset}
+        totalFilteredCount={filteredVotes.length}
+        totalFilteredLabel="Filtrlangan Ovozlar"
+      />
+
+      {/* 2. Status Tabs, Search Bar and Actions */}
       <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-4">
         {/* Status Tabs and Quick Actions */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
-          <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
+          <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 flex-wrap">
             <button
               onClick={() => { setStatusTab('PENDING'); setCurrentPage(1); }}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
@@ -152,7 +169,7 @@ export const VotesView: React.FC<VotesViewProps> = ({
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-600/20 transition-all active:scale-95"
               >
                 <Zap className="w-4 h-4 fill-current" />
-                <span>Barcha Kutilayotganlarni Tasdiqlash ({pendingVotes.length})</span>
+                <span>Barchasini Tasdiqlash ({pendingVotes.length})</span>
               </button>
             )}
 
@@ -167,84 +184,17 @@ export const VotesView: React.FC<VotesViewProps> = ({
           </div>
         </div>
 
-        {/* Search & Dropdown Filters Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Universal Search Input */}
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-              placeholder="Telefon, ism yoki username..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-
-          {/* Mahalla / Bot Dropdown */}
-          <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300">
-            <Filter className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
-            <select
-              value={selectedBotId}
-              onChange={(e) => { setSelectedBotId(e.target.value); setCurrentPage(1); }}
-              className="w-full bg-transparent text-white focus:outline-none cursor-pointer"
-            >
-              <option value="ALL" className="bg-slate-900">Barcha Mahallalar ({bots.length})</option>
-              {bots.map((b) => (
-                <option key={b.id} value={String(b.id)} className="bg-slate-900">
-                  {b.mahallaName} ({b.name})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Date Preset Filter Dropdown */}
-          <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300">
-            <Calendar className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
-            <select
-              value={dateFilter}
-              onChange={(e) => { setDateFilter(e.target.value as any); setCurrentPage(1); }}
-              className="w-full bg-transparent text-white focus:outline-none cursor-pointer"
-            >
-              <option value="ALL" className="bg-slate-900">Barcha Sanalar</option>
-              <option value="TODAY" className="bg-slate-900">Bugungi ovozlar</option>
-              <option value="YESTERDAY" className="bg-slate-900">Kecha berilgan</option>
-              <option value="CUSTOM" className="bg-slate-900">📅 Maxsus kalendar oralig'i</option>
-            </select>
-          </div>
-
-          {/* Records summary counter */}
-          <div className="flex items-center justify-end px-3 py-2 text-xs text-slate-400 font-medium">
-            Topildi: <b className="text-white ml-1 font-bold">{filteredVotes.length} ta</b>
-          </div>
+        {/* Universal Search Input */}
+        <div className="relative">
+          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+            placeholder="Telefon raqami, ism, username yoki mahalla nomi bo'yicha qidirish..."
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+          />
         </div>
-
-        {/* Custom Calendar Date Range Pickers (if dateFilter === 'CUSTOM') */}
-        {dateFilter === 'CUSTOM' && (
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-indigo-500/20 text-xs text-slate-300 flex-wrap animate-in fade-in duration-200">
-            <span className="text-indigo-400 font-semibold flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5" /> Kalendar oralig'i:
-            </span>
-            <div className="flex items-center gap-2">
-              <span>Dan:</span>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1); }}
-                className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white [color-scheme:dark]"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <span>Gacha:</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => { setEndDate(e.target.value); setCurrentPage(1); }}
-                className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white [color-scheme:dark]"
-              />
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Table Card */}
@@ -268,7 +218,7 @@ export const VotesView: React.FC<VotesViewProps> = ({
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-500 text-xs">
                     <Vote className="w-8 h-8 mx-auto mb-2 text-slate-600 opacity-50" />
-                    Mos keladigan ovozlar topilmadi.
+                    Tanlangan sana va filter bo'yicha ovozlar topilmadi.
                   </td>
                 </tr>
               ) : (

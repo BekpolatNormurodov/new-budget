@@ -2,39 +2,39 @@ import React, { useState, useMemo } from 'react';
 import {
   Wallet,
   Search,
-  Filter,
   CheckCircle,
   XCircle,
   Copy,
   Check,
   Download,
   FileCheck,
-  Eye,
   CreditCard,
-  User,
-  Calendar,
 } from 'lucide-react';
-import { WithdrawalItem } from '../types';
+import { WithdrawalItem, BotInstanceItem } from '../types';
 import { formatSum } from '../utils/format';
 import { Pagination } from './Pagination';
 import { exportToCsv } from '../utils/exportToCsv';
 import { ReceiptViewerModal } from './ReceiptViewerModal';
+import { SeasonCalendarFilter } from './SeasonCalendarFilter';
 
 interface WithdrawalsViewProps {
   withdrawals: WithdrawalItem[];
+  bots?: BotInstanceItem[];
   onOpenApproveModal: (item: WithdrawalItem) => void;
   onRejectWithdrawal: (id: number) => void;
 }
 
 export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
   withdrawals,
+  bots = [],
   onOpenApproveModal,
   onRejectWithdrawal,
 }) => {
   const [search, setSearch] = useState('');
   const [statusTab, setStatusTab] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'>('PENDING');
   const [methodFilter, setMethodFilter] = useState<string>('ALL');
-  const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | 'YESTERDAY' | 'CUSTOM'>('ALL');
+  const [selectedBotId, setSelectedBotId] = useState<string>('ALL');
+  const [activePreset, setActivePreset] = useState<string>('ALL');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [copiedCard, setCopiedCard] = useState<string | null>(null);
@@ -46,6 +46,13 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
     navigator.clipboard.writeText(text.replace(/\s+/g, ''));
     setCopiedCard(text);
     setTimeout(() => setCopiedCard(null), 2000);
+  };
+
+  const handleDateChange = (start: string, end: string, presetName: string = 'CUSTOM') => {
+    setStartDate(start);
+    setEndDate(end);
+    setActivePreset(presetName);
+    setCurrentPage(1);
   };
 
   const filteredWithdrawals = useMemo(() => {
@@ -61,14 +68,12 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
 
       // Date filter
       const wDate = w.createdAt.slice(0, 10);
-      if (dateFilter === 'TODAY' && !w.createdAt.startsWith(todayStr)) return false;
-      if (dateFilter === 'YESTERDAY' && !w.createdAt.startsWith(yesterday)) return false;
-      if (dateFilter === 'CUSTOM') {
-        if (startDate && wDate < startDate) return false;
-        if (endDate && wDate > endDate) return false;
-      }
+      if (activePreset === 'TODAY' && !w.createdAt.startsWith(todayStr)) return false;
+      if (activePreset === 'YESTERDAY' && !w.createdAt.startsWith(yesterday)) return false;
+      if (startDate && wDate < startDate) return false;
+      if (endDate && wDate > endDate) return false;
 
-      // Search query
+      // Search query (Card Number, User Name, Username, Card Holder, Phone, ID)
       if (search.trim()) {
         const q = search.toLowerCase();
         const cardMatch = w.accountDetails.toLowerCase().includes(q);
@@ -76,12 +81,13 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
         const userMatch = w.user?.username?.toLowerCase().includes(q);
         const cardHolderMatch = w.cardHolder?.toLowerCase().includes(q);
         const phoneMatch = w.user?.phone?.includes(q);
-        if (!cardMatch && !nameMatch && !userMatch && !cardHolderMatch && !phoneMatch) return false;
+        const idMatch = String(w.id).includes(q);
+        if (!cardMatch && !nameMatch && !userMatch && !cardHolderMatch && !phoneMatch && !idMatch) return false;
       }
 
       return true;
     });
-  }, [withdrawals, statusTab, methodFilter, dateFilter, startDate, endDate, search]);
+  }, [withdrawals, statusTab, methodFilter, activePreset, startDate, endDate, search]);
 
   const paginatedWithdrawals = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
@@ -113,8 +119,21 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Top Filter and Controls Bar */}
+    <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-300">
+      {/* 1. Pro Season Calendar & Bot Filter Component */}
+      <SeasonCalendarFilter
+        bots={bots}
+        selectedBotId={selectedBotId}
+        onSelectBotId={(id) => { setSelectedBotId(id); setCurrentPage(1); }}
+        startDate={startDate}
+        endDate={endDate}
+        onDateChange={handleDateChange}
+        activePreset={activePreset}
+        totalFilteredCount={filteredWithdrawals.length}
+        totalFilteredLabel="Filtrlangan Arizalar"
+      />
+
+      {/* 2. Status Tabs, Method Filter, Search and Actions */}
       <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-4">
         {/* Status Tabs and Export Action */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
@@ -171,16 +190,16 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
           </button>
         </div>
 
-        {/* Search & Dropdown Filters Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Search & Payment Method Filter */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* Universal Search */}
-          <div className="relative">
+          <div className="relative sm:col-span-2">
             <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
             <input
               type="text"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-              placeholder="Karta raqami, ism yoki tel..."
+              placeholder="Karta raqami, ism, karta egasi yoki telefon..."
               className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -199,54 +218,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
               <option value="PAYNET" className="bg-slate-900">PAYNET</option>
             </select>
           </div>
-
-          {/* Date Filter */}
-          <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300">
-            <Calendar className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
-            <select
-              value={dateFilter}
-              onChange={(e) => { setDateFilter(e.target.value as any); setCurrentPage(1); }}
-              className="w-full bg-transparent text-white focus:outline-none cursor-pointer"
-            >
-              <option value="ALL" className="bg-slate-900">Barcha Sanalar</option>
-              <option value="TODAY" className="bg-slate-900">Bugungi arizalar</option>
-              <option value="YESTERDAY" className="bg-slate-900">Kecha berilgan</option>
-              <option value="CUSTOM" className="bg-slate-900">📅 Maxsus kalendar oralig'i</option>
-            </select>
-          </div>
-
-          {/* Records summary counter */}
-          <div className="flex items-center justify-end px-3 py-2 text-xs text-slate-400 font-medium">
-            Topildi: <b className="text-white ml-1 font-bold">{filteredWithdrawals.length} ta</b>
-          </div>
         </div>
-
-        {/* Custom Calendar Date Range Pickers (if dateFilter === 'CUSTOM') */}
-        {dateFilter === 'CUSTOM' && (
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-indigo-500/20 text-xs text-slate-300 flex-wrap animate-in fade-in duration-200">
-            <span className="text-indigo-400 font-semibold flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5" /> Kalendar oralig'i:
-            </span>
-            <div className="flex items-center gap-2">
-              <span>Dan:</span>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1); }}
-                className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white [color-scheme:dark]"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <span>Gacha:</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => { setEndDate(e.target.value); setCurrentPage(1); }}
-                className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white [color-scheme:dark]"
-              />
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Table Card */}
@@ -270,7 +242,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-500 text-xs">
                     <Wallet className="w-8 h-8 mx-auto mb-2 text-slate-600 opacity-50" />
-                    Mos keladigan pul yechish arizalari topilmadi.
+                    Tanlangan sana va filter bo'yicha pul yechish arizalari topilmadi.
                   </td>
                 </tr>
               ) : (

@@ -9,16 +9,12 @@ import {
   Wallet,
   Users,
   Building2,
-  CheckCircle2,
-  Hourglass,
-  ArrowUpRight,
-  Sparkles,
   BarChart3,
-  RotateCcw,
 } from 'lucide-react';
 import { BotInstanceItem, VoteItem, WithdrawalItem, UserItem, DashboardStats } from '../types';
 import { formatSum } from '../utils/format';
 import { exportToCsv } from '../utils/exportToCsv';
+import { SeasonCalendarFilter } from './SeasonCalendarFilter';
 
 interface AnalyticsViewProps {
   stats: DashboardStats | null;
@@ -37,48 +33,14 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 }) => {
   // Filters State
   const [selectedBotId, setSelectedBotId] = useState<string>('ALL');
-  const [datePreset, setDatePreset] = useState<'TODAY' | 'YESTERDAY' | 'LAST_7' | 'LAST_30' | 'THIS_MONTH' | 'ALL' | 'CUSTOM'>('ALL');
-  
-  // Custom Date Range
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
+  const [activePreset, setActivePreset] = useState<string>('SEASON');
+  const [startDate, setStartDate] = useState<string>('2026-08-22');
+  const [endDate, setEndDate] = useState<string>('2026-09-01');
 
-  // Handle Preset Selection
-  const applyPreset = (preset: 'TODAY' | 'YESTERDAY' | 'LAST_7' | 'LAST_30' | 'THIS_MONTH' | 'ALL') => {
-    setDatePreset(preset);
-    const now = new Date();
-    const todayStr = now.toISOString().slice(0, 10);
-
-    if (preset === 'TODAY') {
-      setStartDate(todayStr);
-      setEndDate(todayStr);
-    } else if (preset === 'YESTERDAY') {
-      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-      setStartDate(yesterday);
-      setEndDate(yesterday);
-    } else if (preset === 'LAST_7') {
-      const past7 = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
-      setStartDate(past7);
-      setEndDate(todayStr);
-    } else if (preset === 'LAST_30') {
-      const past30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-      setStartDate(past30);
-      setEndDate(todayStr);
-    } else if (preset === 'THIS_MONTH') {
-      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-      setStartDate(firstDay);
-      setEndDate(todayStr);
-    } else {
-      setStartDate('');
-      setEndDate('');
-    }
-  };
-
-  const handleResetFilters = () => {
-    setSelectedBotId('ALL');
-    setDatePreset('ALL');
-    setStartDate('');
-    setEndDate('');
+  const handleDateChange = (start: string, end: string, presetName: string = 'CUSTOM') => {
+    setStartDate(start);
+    setEndDate(end);
+    setActivePreset(presetName);
   };
 
   // Filtered Datasets based on Date Range and Mahalla
@@ -183,139 +145,46 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Universal Calendar & Mahalla Filter Control Panel */}
-      <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-4">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              <CalendarRange className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                Universal Kalendar & Mahalla Filtrlari
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                  Real-vaqt Tahlili
-                </span>
-              </h3>
-              <p className="text-xs text-slate-400">
-                Istalgan sana oralig'i va mahalla bo'yicha umumiy oqim va statistikani ko'rish
-              </p>
-            </div>
+      {/* Top Header Row with Export Button */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+            <CalendarRange className="w-5 h-5" />
           </div>
-
-          {/* Quick Actions (Reset & Export) */}
-          <div className="flex items-center gap-2 w-full lg:w-auto justify-end">
-            <button
-              onClick={handleResetFilters}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl border border-slate-700 transition-colors"
-              title="Filtrlarni tozalash"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Tozalash</span>
-            </button>
-
-            <button
-              onClick={handleExportRangeReport}
-              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-all active:scale-95"
-            >
-              <Download className="w-4 h-4" />
-              <span>Davr Hisobotini Yuklash</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Filter Selection Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
-          {/* 1. Mahalla / Bot Selector */}
           <div>
-            <label className="text-[11px] font-semibold text-slate-400 mb-1.5 block flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5 text-indigo-400" />
-              Mahalla / Bot bo'yicha
-            </label>
-            <select
-              value={selectedBotId}
-              onChange={(e) => setSelectedBotId(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
-            >
-              <option value="ALL" className="bg-slate-900">Barcha Mahallalar ({bots.length} ta)</option>
-              {bots.map((b) => (
-                <option key={b.id} value={String(b.id)} className="bg-slate-900">
-                  {b.mahallaName} ({b.name})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 2. Start Date (Dan) */}
-          <div>
-            <label className="text-[11px] font-semibold text-slate-400 mb-1.5 block flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-              Boshlanish sanasi (Dan):
-            </label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => {
-                setStartDate(e.target.value);
-                setDatePreset('CUSTOM');
-              }}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 [color-scheme:dark]"
-            />
-          </div>
-
-          {/* 3. End Date (Gacha) */}
-          <div>
-            <label className="text-[11px] font-semibold text-slate-400 mb-1.5 block flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-              Tugash sanasi (Gacha):
-            </label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => {
-                setEndDate(e.target.value);
-                setDatePreset('CUSTOM');
-              }}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 [color-scheme:dark]"
-            />
-          </div>
-
-          {/* 4. Active Date Interval Info */}
-          <div className="flex flex-col justify-end">
-            <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300">
-              <span className="text-[10px] text-slate-500 block">Tanlangan davr:</span>
-              <span className="font-semibold text-white">
-                {startDate ? startDate : 'Boshidan'} ➔ {endDate ? endDate : 'Hozirgacha'}
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              Open Budget 2026 — 10 Kunlik Ovoz Berish Mavsumi
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                22-Avgust — 1-Sentabr 2026
               </span>
-            </div>
+            </h3>
+            <p className="text-xs text-slate-400">
+              Bot ID va kunma-kun kalendar tahlili orqali barcha ko'rsatkichlarni boshqarish
+            </p>
           </div>
         </div>
 
-        {/* Quick Date Range Preset Buttons */}
-        <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-800/60">
-          <span className="text-[11px] text-slate-400 mr-1 font-medium">Tezkor oraliq:</span>
-          {[
-            { key: 'ALL', label: 'Barcha Vaqt' },
-            { key: 'TODAY', label: 'Bugun' },
-            { key: 'YESTERDAY', label: 'Kecha' },
-            { key: 'LAST_7', label: 'Oxirgi 7 kun' },
-            { key: 'LAST_30', label: 'Oxirgi 30 kun' },
-            { key: 'THIS_MONTH', label: 'Shu oy' },
-          ].map((preset) => (
-            <button
-              key={preset.key}
-              onClick={() => applyPreset(preset.key as any)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                datePreset === preset.key
-                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30'
-                  : 'bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-700 border border-slate-800'
-              }`}
-            >
-              {preset.label}
-            </button>
-          ))}
-        </div>
+        <button
+          onClick={handleExportRangeReport}
+          className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-all active:scale-95 flex-shrink-0"
+        >
+          <Download className="w-4 h-4" />
+          <span>Davr Hisobotini Yuklash (Excel)</span>
+        </button>
       </div>
+
+      {/* Season Calendar & Bot Filter Control Bar */}
+      <SeasonCalendarFilter
+        bots={bots}
+        selectedBotId={selectedBotId}
+        onSelectBotId={setSelectedBotId}
+        startDate={startDate}
+        endDate={endDate}
+        onDateChange={handleDateChange}
+        activePreset={activePreset}
+        totalFilteredCount={totalRangeVotes}
+        totalFilteredLabel="Yig'ilgan Ovozlar"
+      />
 
       {/* Range Specific KPI Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -359,7 +228,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </div>
           <h4 className="text-2xl font-black text-white">{formatSum(totalRangeUsers)} ta</h4>
           <p className="text-xs text-purple-300 font-medium pt-1 border-t border-slate-800/80">
-            Tanlangan sana va mahalla bo'yicha
+            Tanlangan sana va bot bo'yicha
           </p>
         </div>
 
@@ -407,7 +276,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 {dailyBreakdown.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="py-10 text-center text-slate-500">
-                      Tanlangan sanada ma'lumotlar mavjud emas.
+                      Tanlangan davrda ma'lumotlar mavjud emas.
                     </td>
                   </tr>
                 ) : (
@@ -454,7 +323,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   <div className="flex items-center justify-between">
                     <div>
                       <h5 className="text-xs font-bold text-white">{bot.mahallaName}</h5>
-                      <p className="text-[10px] text-slate-400">{bot.name}</p>
+                      <p className="text-[10px] text-slate-400">#{bot.id} • {bot.name}</p>
+                      <p className="text-[9px] text-slate-500 font-mono">ID: {bot.mahallaId}</p>
                     </div>
                     <span className="text-xs font-bold text-indigo-400">{percentage}%</span>
                   </div>

@@ -2,48 +2,74 @@ import React, { useState, useMemo } from 'react';
 import {
   Users,
   Search,
-  Filter,
   DollarSign,
   Ban,
-  ShieldAlert,
-  ShieldCheck,
-  UserCheck,
   Download,
   User,
-  Vote,
-  Sparkles,
 } from 'lucide-react';
-import { UserItem } from '../types';
+import { UserItem, BotInstanceItem } from '../types';
 import { formatSum } from '../utils/format';
 import { Pagination } from './Pagination';
 import { exportToCsv } from '../utils/exportToCsv';
 import { EditUserBalanceModal } from './EditUserBalanceModal';
+import { SeasonCalendarFilter } from './SeasonCalendarFilter';
 
 interface UsersViewProps {
   users: UserItem[];
+  bots?: BotInstanceItem[];
   onUpdateBalance: (userId: number, amount: number, isAddition: boolean) => Promise<void>;
   onToggleBan: (userId: number) => void;
 }
 
 export const UsersView: React.FC<UsersViewProps> = ({
   users,
+  bots = [],
   onUpdateBalance,
   onToggleBan,
 }) => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'BANNED' | 'ADMIN'>('ALL');
+  const [selectedBotId, setSelectedBotId] = useState<string>('ALL');
+  const [activePreset, setActivePreset] = useState<string>('ALL');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [editingUserBalance, setEditingUserBalance] = useState<UserItem | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
+  const handleDateChange = (start: string, end: string, presetName: string = 'CUSTOM') => {
+    setStartDate(start);
+    setEndDate(end);
+    setActivePreset(presetName);
+    setCurrentPage(1);
+  };
+
   const filteredUsers = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+
     return users.filter((u) => {
       // Status & Role filter
       if (statusFilter === 'ACTIVE' && u.isBanned) return false;
       if (statusFilter === 'BANNED' && !u.isBanned) return false;
       if (statusFilter === 'ADMIN' && u.role !== 'ADMIN') return false;
 
-      // Search query
+      // Mahalla / Bot filter
+      if (selectedBotId !== 'ALL') {
+        const bot = bots.find((b) => String(b.id) === selectedBotId);
+        if (bot && u.botInstance?.mahallaName !== bot.mahallaName) return false;
+      }
+
+      // Date filter
+      if (u.createdAt) {
+        const uDate = u.createdAt.slice(0, 10);
+        if (activePreset === 'TODAY' && !u.createdAt.startsWith(todayStr)) return false;
+        if (activePreset === 'YESTERDAY' && !u.createdAt.startsWith(yesterday)) return false;
+        if (startDate && uDate < startDate) return false;
+        if (endDate && uDate > endDate) return false;
+      }
+
+      // Search query (ID, Telegram ID, Name, Username, Phone)
       if (search.trim()) {
         const q = search.toLowerCase();
         const idMatch = String(u.id).includes(q) || u.telegramId.includes(q);
@@ -55,7 +81,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
       return true;
     });
-  }, [users, statusFilter, search]);
+  }, [users, statusFilter, selectedBotId, activePreset, startDate, endDate, search, bots]);
 
   const paginatedUsers = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
@@ -83,8 +109,21 @@ export const UsersView: React.FC<UsersViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Top Filter and Controls Bar */}
+    <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-300">
+      {/* 1. Pro Season Calendar & Bot Filter Component */}
+      <SeasonCalendarFilter
+        bots={bots}
+        selectedBotId={selectedBotId}
+        onSelectBotId={(id) => { setSelectedBotId(id); setCurrentPage(1); }}
+        startDate={startDate}
+        endDate={endDate}
+        onDateChange={handleDateChange}
+        activePreset={activePreset}
+        totalFilteredCount={filteredUsers.length}
+        totalFilteredLabel="Filtrlangan Foydalanuvchilar"
+      />
+
+      {/* 2. Status Filters and Search Bar */}
       <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-4">
         {/* Filter Pills and Export Action */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
@@ -141,22 +180,16 @@ export const UsersView: React.FC<UsersViewProps> = ({
           </button>
         </div>
 
-        {/* Search & Records Count */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-              placeholder="Ism, telefon, username yoki Telegram ID..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-
-          <div className="flex items-center justify-end px-3 py-2 text-xs text-slate-400 font-medium">
-            Topildi: <b className="text-white ml-1 font-bold">{filteredUsers.length} ta</b>
-          </div>
+        {/* Universal Search Input */}
+        <div className="relative">
+          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+            placeholder="Ism, telefon, username, ID yoki Telegram ID bo'yicha qidirish..."
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+          />
         </div>
       </div>
 
@@ -180,7 +213,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-500 text-xs">
                     <Users className="w-8 h-8 mx-auto mb-2 text-slate-600 opacity-50" />
-                    Mos keladigan foydalanuvchilar topilmadi.
+                    Tanlangan sana va filter bo'yicha foydalanuvchilar topilmadi.
                   </td>
                 </tr>
               ) : (

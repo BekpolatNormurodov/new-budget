@@ -479,6 +479,7 @@ export function App() {
           {activeTab === 'withdrawals' && (
             <WithdrawalsView
               withdrawals={withdrawals}
+              bots={bots}
               onOpenApproveModal={setApprovingWithdrawal}
               onRejectWithdrawal={handleRejectWithdrawal}
             />
@@ -487,6 +488,7 @@ export function App() {
           {activeTab === 'users' && (
             <UsersView
               users={users}
+              bots={bots}
               onUpdateBalance={handleUpdateUserBalance}
               onToggleBan={handleToggleBan}
             />
