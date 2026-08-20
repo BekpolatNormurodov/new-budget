@@ -194,7 +194,7 @@ export class ProxyManagerService implements OnModuleInit {
   }
 
   /**
-   * Istalgan so'rov uchun ideal darajada tayyorlangan Axios Instance yaratish
+   * Istalgan so'rov uchun ideal darajada tayyorlangan Axios Instance yaratish (Interceptors va Loglar bilan)
    */
   public createAxiosClient(sessionKey?: string, customConfig: any = {}) {
     const proxyConfig = this.getAxiosConfig(sessionKey);
@@ -203,12 +203,43 @@ export class ProxyManagerService implements OnModuleInit {
       ...(customConfig.headers || {}),
     };
 
-    return axios.create({
-      timeout: 10000,
+    const instance = axios.create({
+      timeout: 12000,
       headers,
       ...proxyConfig,
       ...customConfig,
     });
+
+    // So'rov va javob loglarini real vaqtda qayd etuvchi Interceptorlar
+    instance.interceptors.request.use((config) => {
+      (config as any).metadata = { startTime: Date.now() };
+      const proxyHost = proxyConfig.proxy ? proxyConfig.proxy.host : 'DIRECT';
+      this.logger.log(
+        `🌐 [Proxy OUT] ${config.method?.toUpperCase()} ${config.url} | IP: ${proxyHost} ${sessionKey ? `| Session: ${sessionKey}` : ''}`
+      );
+      return config;
+    });
+
+    instance.interceptors.response.use(
+      (response) => {
+        const duration = Date.now() - ((response.config as any).metadata?.startTime || Date.now());
+        const proxyHost = proxyConfig.proxy ? proxyConfig.proxy.host : 'DIRECT';
+        this.logger.log(
+          `✅ [Proxy IN] ${response.status} OK | ${response.config.url} | IP: ${proxyHost} | Vaqt: ${duration}ms`
+        );
+        return response;
+      },
+      (error) => {
+        const duration = Date.now() - ((error.config as any)?.metadata?.startTime || Date.now());
+        const proxyHost = proxyConfig.proxy ? proxyConfig.proxy.host : 'DIRECT';
+        this.logger.warn(
+          `❌ [Proxy ERR] ${error.response?.status || 'NET_ERR'} | ${error.config?.url} | IP: ${proxyHost} | Vaqt: ${duration}ms | Xato: ${error.message}`
+        );
+        return Promise.reject(error);
+      }
+    );
+
+    return instance;
   }
 
   /**
