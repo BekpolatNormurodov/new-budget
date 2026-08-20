@@ -22,8 +22,8 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('port') || 3000;
 
-  await app.listen(port);
-  logger.log(`🚀 Open Budget Bot & Mini App Server running at: http://localhost:${port}`);
+  await app.listen(port, '0.0.0.0');
+  logger.log(`🚀 Open Budget Server running at: http://0.0.0.0:${port}`);
   logger.log(`📱 Mini App Web View: http://localhost:${port}/app`);
   logger.log(`👑 Admin Dashboard: http://localhost:${port}/admin-view`);
 }
