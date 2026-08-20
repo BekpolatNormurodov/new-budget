@@ -26,6 +26,7 @@ model BotInstance {
   isActive       Boolean   @default(true)
   status         String    @default("ONLINE") // ONLINE | STOPPED | ERROR
   avatarUrl      String?   @db.Text
+  description    String?   @db.Text // Ixtiyoriy izoh / eslatma
   lastError      String?   @db.Text
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt

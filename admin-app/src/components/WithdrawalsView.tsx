@@ -16,6 +16,7 @@ import { Pagination } from './Pagination';
 import { exportToCsv } from '../utils/exportToCsv';
 import { ReceiptViewerModal } from './ReceiptViewerModal';
 import { SmartFilterBar } from './SmartFilterBar';
+import { ProDropdown } from './ProDropdown';
 
 interface WithdrawalsViewProps {
   withdrawals: WithdrawalItem[];
@@ -200,23 +201,23 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
               value={search}
               onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
               placeholder="Karta raqami, ism, karta egasi yoki telefon..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 shadow-inner"
             />
           </div>
 
-          {/* Payment Method Dropdown */}
-          <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-300">
-            <CreditCard className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
-            <select
+          {/* Payment Method ProDropdown */}
+          <div>
+            <ProDropdown
+              options={[
+                { value: 'ALL', label: 'Barcha To\'lovlar', badge: `${withdrawals.length}` },
+                { value: 'UZCARD', label: 'UZCARD', badge: '8600' },
+                { value: 'HUMO', label: 'HUMO', badge: '9860' },
+                { value: 'PAYNET', label: 'PAYNET', badge: 'Tel' },
+              ]}
               value={methodFilter}
-              onChange={(e) => { setMethodFilter(e.target.value); setCurrentPage(1); }}
-              className="w-full bg-transparent text-white focus:outline-none cursor-pointer"
-            >
-              <option value="ALL" className="bg-slate-900">Barcha To'lovlar</option>
-              <option value="UZCARD" className="bg-slate-900">UZCARD</option>
-              <option value="HUMO" className="bg-slate-900">HUMO</option>
-              <option value="PAYNET" className="bg-slate-900">PAYNET</option>
-            </select>
+              onChange={(val) => { setMethodFilter(val); setCurrentPage(1); }}
+              icon={<CreditCard className="w-3.5 h-3.5" />}
+            />
           </div>
         </div>
       </div>

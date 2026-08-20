@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { BotInstanceItem } from '../types';
 import { formatSum } from '../utils/format';
+import { ProDropdown } from './ProDropdown';
 
 interface BotsViewProps {
   bots: BotInstanceItem[];
@@ -71,18 +72,18 @@ export const BotsView: React.FC<BotsViewProps> = ({
             />
           </div>
 
-          {/* Status Filter Dropdown */}
-          <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-300">
-            <Filter className="w-3.5 h-3.5 text-slate-500" />
-            <select
+          {/* Status Filter ProDropdown */}
+          <div className="w-48">
+            <ProDropdown
+              options={[
+                { value: 'ALL', label: 'Barcha Holatlar', badge: `${bots.length}` },
+                { value: 'ONLINE', label: '🟢 Faol (Online)', badge: `${bots.filter(b => b.status === 'ONLINE').length}` },
+                { value: 'STOPPED', label: '⏸ To\'xtatilgan', badge: `${bots.filter(b => b.status !== 'ONLINE').length}` },
+              ]}
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="bg-transparent text-white focus:outline-none cursor-pointer"
-            >
-              <option value="ALL" className="bg-slate-900">Barcha Holatlar ({bots.length})</option>
-              <option value="ONLINE" className="bg-slate-900">🟢 Faol (Online)</option>
-              <option value="STOPPED" className="bg-slate-900">⏸ To'xtatilgan</option>
-            </select>
+              onChange={(val) => setStatusFilter(val as any)}
+              icon={<Filter className="w-3.5 h-3.5" />}
+            />
           </div>
         </div>
 
@@ -153,6 +154,11 @@ export const BotsView: React.FC<BotsViewProps> = ({
                           {bot.botUsername ? `@${bot.botUsername}` : bot.name}
                         </p>
                         <p className="text-[10px] text-slate-500 font-mono">ID: {bot.mahallaId}</p>
+                        {bot.description && (
+                          <p className="text-[11px] text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded-lg border border-slate-700/60 mt-1 line-clamp-1 italic">
+                            💬 {bot.description}
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -299,6 +305,9 @@ export const BotsView: React.FC<BotsViewProps> = ({
                           <div>
                             <p className="font-bold text-white">{bot.mahallaName}</p>
                             <p className="text-[11px] text-slate-400">{bot.botUsername ? `@${bot.botUsername}` : bot.name}</p>
+                            {bot.description && (
+                              <p className="text-[10px] text-slate-400 italic mt-0.5">💬 {bot.description}</p>
+                            )}
                           </div>
                         </div>
                       </td>

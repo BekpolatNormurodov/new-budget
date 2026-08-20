@@ -271,6 +271,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     voteReward?: number;
     refBonus?: number;
     avatarUrl?: string;
+    description?: string;
   }) {
     const parsed = this.openBudgetService.parseInitiativeUrl(params.openBudgetUrl);
 
@@ -304,6 +305,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         voteReward: params.voteReward || 30000,
         refBonus: params.refBonus || 5000,
         avatarUrl: avatarUrl || '/assets/open_budget_avatar.jpg',
+        description: params.description ? params.description.trim() : null,
         isActive: true,
         status: 'ONLINE',
       },

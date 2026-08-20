@@ -26,6 +26,7 @@ export interface BotInstanceItem {
   isActive: boolean;
   status: string;
   avatarUrl?: string;
+  description?: string;
   isLiveRunning?: boolean;
   createdAt?: string;
 }
