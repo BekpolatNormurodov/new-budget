@@ -20,7 +20,7 @@ import {
 import { DashboardStats, BotInstanceItem, VoteItem, WithdrawalItem } from '../types';
 import { formatSum } from '../utils/format';
 
-import { SEASON_DAYS } from './SeasonCalendarFilter';
+import { SEASON_DAYS } from './SmartFilterBar';
 
 interface DashboardViewProps {
   stats: DashboardStats | null;
@@ -54,7 +54,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="flex items-center gap-2">
               <h4 className="text-xs sm:text-sm font-bold text-white">Open Budget 2026 — Ovoz Berish Mavsumi</h4>
               <span className="text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                22-Avgust — 1-Sentabr
+                22-Avgust — 31-Avgust (10 Kun)
               </span>
             </div>
             <p className="text-[11px] sm:text-xs text-slate-400">
