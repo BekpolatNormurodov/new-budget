@@ -1,11 +1,14 @@
 version: '3.8'
 
 services:
-  # Yagona umumiy MySQL 8.0 ma'lumotlar bazasi
+  # =========================================================================
+  # 1. MySQL 8.0 Ma'lumotlar Bazasi (Persistent Data + utf8mb4 Charset)
+  # =========================================================================
   mysql_db:
     image: mysql:8.0
     container_name: open_budget_mysql
-    restart: always
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-khurshid-2827}
       MYSQL_DATABASE: open_budget
@@ -16,18 +19,21 @@ services:
     networks:
       - open_budget_network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-khurshid-2827}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
 
-  # NestJS Multi-Bot Orchestrator & React Admin Dashboard
+  # =========================================================================
+  # 2. NestJS Multi-Bot Orchestrator & React Admin Dashboard
+  # =========================================================================
   bot_orchestrator:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: open_budget_orchestrator
-    restart: always
+    restart: unless-stopped
     depends_on:
       mysql_db:
         condition: service_healthy
@@ -35,16 +41,24 @@ services:
       NODE_ENV: production
       PORT: 3000
       DATABASE_URL: mysql://root:${DB_ROOT_PASSWORD:-khurshid-2827}@mysql_db:3306/open_budget
+      
+      # Asosiy Birlamchi Bot va Admin Sozlamalari
       BOT_TOKEN: ${BOT_TOKEN:-8973530886:AAFjlBqhJgVaKseHVs1Eved6_ARENGeCAoc}
       ADMIN_PHONE: ${ADMIN_PHONE:-+998901234567}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin_password}
       ADMIN_TELEGRAM_IDS: ${ADMIN_TELEGRAM_IDS:-8140304652,2053690211,5957905121}
+      
+      # Mukofot & To'lov Stavkalari
       VOTE_REWARD: ${VOTE_REWARD:-30000}
       REFERRAL_BONUS: ${REFERRAL_BONUS:-5000}
       MIN_WITHDRAWAL: ${MIN_WITHDRAWAL:-10000}
+      
+      # Avtomatlashtirish & Tizim Monitoringi (Har 30 daqiqada tekshiruv)
       VOTE_AUTO_APPROVE_HOURS: ${VOTE_AUTO_APPROVE_HOURS:-2}
       HEALTH_CHECK_INTERVAL_MINUTES: ${HEALTH_CHECK_INTERVAL_MINUTES:-30}
       HEALTH_CHECK_ENABLED: ${HEALTH_CHECK_ENABLED:-true}
+      
+      # Tashqi Servis & Proxy Sozlamalari
       EXTERNAL_VOTING_API_URL: ${EXTERNAL_VOTING_API_URL:-}
       EXTERNAL_VOTING_API_KEY: ${EXTERNAL_VOTING_API_KEY:-}
       EXTERNAL_SERVICE_ENABLED: ${EXTERNAL_SERVICE_ENABLED:-false}
@@ -53,14 +67,26 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./public:/app/public
-      - ./logs:/app/logs
+      - app_receipts:/app/public/receipts
+      - app_avatars:/app/public/avatars
+      - app_logs:/app/logs
     networks:
       - open_budget_network
 
+# =========================================================================
+# Persistent Volumes (Ma'lumotlar, Cheklar va Avatarlar yo'qolmasligi uchun)
+# =========================================================================
 volumes:
   mysql_data:
+    name: open_budget_mysql_data
+  app_receipts:
+    name: open_budget_receipts_data
+  app_avatars:
+    name: open_budget_avatars_data
+  app_logs:
+    name: open_budget_logs_data
 
 networks:
   open_budget_network:
+    name: open_budget_network
     driver: bridge

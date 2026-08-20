@@ -22,7 +22,7 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Install Tesseract & Graphics libraries if needed for OCR
+# Install Tesseract & Graphics libraries for CAPTCHA OCR
 RUN apk add --no-cache tesseract-ocr vips
 
 COPY package*.json ./
@@ -33,12 +33,14 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 
-RUN mkdir -p /app/logs /app/public/receipts /app/public/avatars
+RUN chmod +x /app/docker-entrypoint.sh && \
+    mkdir -p /app/logs /app/public/receipts /app/public/avatars
 
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/admin/stats || exit 1
 
-CMD ["node", "dist/main"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
