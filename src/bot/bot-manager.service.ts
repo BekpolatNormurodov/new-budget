@@ -24,6 +24,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BotManagerService.name);
   private activeBots: Map<number, ActiveBot> = new Map();
   private autoApproveInterval: any = null;
+  private supervisorInterval: any = null;
   private smsTimeouts: Map<string, NodeJS.Timeout> = new Map(); // key: "botId_userId"
   private votingSessionTimeouts: Map<string, NodeJS.Timeout> = new Map(); // key: "botId_userId"
 
@@ -79,10 +80,12 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     await this.seedInitialBotIfEmpty();
     await this.launchAllActiveBots();
     this.startVoteAutoApprover();
+    this.startBotSupervisor();
   }
 
   async onModuleDestroy() {
     if (this.autoApproveInterval) clearInterval(this.autoApproveInterval);
+    if (this.supervisorInterval) clearInterval(this.supervisorInterval);
     for (const [id, activeBot] of this.activeBots.entries()) {
       try {
         activeBot.bot.stop('SIGTERM');
@@ -469,9 +472,36 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Alohida har bir botni doimiy kuzatuvchi va avtomat tiriltiruvchi Supervisor
+   */
+  private startBotSupervisor() {
+    this.supervisorInterval = setInterval(async () => {
+      try {
+        const expectedBots = await this.prisma.botInstance.findMany({
+          where: { isActive: true },
+        });
+
+        for (const botRecord of expectedBots) {
+          if (!this.activeBots.has(botRecord.id)) {
+            this.logger.warn(`🤖 [Bot Supervisor] Bot #${botRecord.id} (${botRecord.name}) to'xtab qolgan. Avtomatik qayta ishga tushirilmoqda...`);
+            await this.startBotInstance(botRecord);
+          }
+        }
+      } catch (err: any) {
+        this.logger.error(`Bot Supervisor monitoringida xatolik: ${err.message}`);
+      }
+    }, 60000); // Har 60 soniyada tekshiradi
+  }
+
+  /**
    * Har bir alohida bot uchun xabarlar va menyularni sozlash
    */
   private setupBotHandlers(bot: Telegraf, botRecord: any) {
+    // Alohida bot uchun xatoliklarni xavfsiz izolyatsiya qilish (boshqa botlarga ta'sir qilmaydi)
+    bot.catch((err: any, ctx: Context) => {
+      this.logger.error(`[Bot #${botRecord.id} - ${botRecord.name}] Update xatoligi: ${err?.message || err}`);
+    });
+
     // 1. /start komandasi
     bot.start(async (ctx) => {
       try {

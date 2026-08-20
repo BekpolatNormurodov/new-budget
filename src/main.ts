@@ -17,6 +17,8 @@ async function bootstrap() {
     credentials: true,
   });
 
+  app.enableShutdownHooks();
+
   const configService = app.get(ConfigService);
   const port = configService.get<number>('port') || 3000;
 
