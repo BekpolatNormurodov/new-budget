@@ -9,6 +9,8 @@ import {
   Download,
   FileCheck,
   CreditCard,
+  User,
+  Clock,
 } from 'lucide-react';
 import { WithdrawalItem, BotInstanceItem } from '../types';
 import { formatSum } from '../utils/format';
@@ -134,13 +136,13 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
       />
 
       {/* 2. Status Tabs, Method Filter, Search and Actions */}
-      <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-4">
+      <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-3.5">
         {/* Status Tabs and Export Action */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
-          <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 flex-wrap">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3.5">
+          <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 flex-wrap w-full sm:w-auto">
             <button
               onClick={() => { setStatusTab('PENDING'); setCurrentPage(1); }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1 sm:flex-none ${
                 statusTab === 'PENDING'
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm'
                   : 'text-slate-400 hover:text-white'
@@ -150,7 +152,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
             </button>
             <button
               onClick={() => { setStatusTab('APPROVED'); setCurrentPage(1); }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1 sm:flex-none ${
                 statusTab === 'APPROVED'
                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm'
                   : 'text-slate-400 hover:text-white'
@@ -160,7 +162,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
             </button>
             <button
               onClick={() => { setStatusTab('REJECTED'); setCurrentPage(1); }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1 sm:flex-none ${
                 statusTab === 'REJECTED'
                   ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 shadow-sm'
                   : 'text-slate-400 hover:text-white'
@@ -170,7 +172,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
             </button>
             <button
               onClick={() => { setStatusTab('ALL'); setCurrentPage(1); }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1 sm:flex-none ${
                 statusTab === 'ALL'
                   ? 'bg-slate-800 text-white border border-slate-700'
                   : 'text-slate-400 hover:text-white'
@@ -182,7 +184,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
 
           <button
             onClick={handleExportCsv}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl border border-slate-700 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl border border-slate-700 transition-colors self-end sm:self-auto"
             title="Excel / CSV ga yuklab olish"
           >
             <Download className="w-4 h-4 text-slate-400" />
@@ -221,9 +223,137 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
         </div>
       </div>
 
-      {/* Table Card */}
+      {/* Main Container: Mobile Case Cards (< md) + Desktop Table (>= md) */}
       <div className="rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Case Cards View (< md screens) */}
+        <div className="block md:hidden divide-y divide-slate-800/80">
+          {paginatedWithdrawals.length === 0 ? (
+            <div className="py-12 text-center text-slate-500 text-xs px-4">
+              <Wallet className="w-8 h-8 mx-auto mb-2 text-slate-600 opacity-50" />
+              Tanlangan sana va filter bo'yicha pul yechish arizalari topilmadi.
+            </div>
+          ) : (
+            paginatedWithdrawals.map((w) => {
+              const formattedCard = w.accountDetails.length === 16
+                ? w.accountDetails.replace(/(\d{4})/g, '$1 ').trim()
+                : w.accountDetails;
+
+              return (
+                <div key={w.id} className="p-4 space-y-3 hover:bg-slate-800/30 transition-colors">
+                  {/* Card Header: Amount & Status */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <span className="text-base font-black text-rose-400">{formatSum(w.amount)} so'm</span>
+                      <span className="text-[10px] text-slate-500 ml-1.5 font-mono">#{w.id}</span>
+                    </div>
+
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        w.status === 'APPROVED'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          : w.status === 'REJECTED'
+                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                          : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      }`}
+                    >
+                      {w.status === 'APPROVED'
+                        ? '✅ To\'langan'
+                        : w.status === 'REJECTED'
+                        ? '❌ Rad etilgan'
+                        : '⏳ Kutilmoqda'}
+                    </span>
+                  </div>
+
+                  {/* Card Body: User, Card Details & Holder */}
+                  <div className="space-y-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 text-xs">
+                    {/* Card Number Row with 1-Touch Copy */}
+                    <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-800/60">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-bold text-slate-300 uppercase">
+                          {w.paymentMethod}
+                        </span>
+                        <span className="font-mono font-bold text-white text-sm tracking-wider">
+                          {formattedCard}
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={() => copyToClipboard(w.accountDetails)}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors flex items-center gap-1 text-[11px]"
+                        title="Karta raqamidan nusxa olish"
+                      >
+                        {copiedCard === w.accountDetails ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                        <span>{copiedCard === w.accountDetails ? 'Nusxalandi' : 'Nusxa'}</span>
+                      </button>
+                    </div>
+
+                    {/* User & Card Holder Info */}
+                    <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+                      <div>
+                        <span className="text-[10px] text-slate-500 block">Mijoz:</span>
+                        <span className="font-medium text-slate-200 truncate block">
+                          {w.user?.firstName || 'Foydalanuvchi'}
+                        </span>
+                        {w.user?.phone && (
+                          <span className="text-slate-400 font-mono text-[10px]">+{w.user.phone}</span>
+                        )}
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-slate-500 block">Karta Egasi:</span>
+                        <span className="font-medium text-slate-300 truncate block">
+                          {w.cardHolder || '-'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Time & Receipt Link */}
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-800/60">
+                      <span>{new Date(w.createdAt).toLocaleString('uz-UZ')}</span>
+                      {w.receiptUrl && (
+                        <button
+                          onClick={() => setViewingReceipt(w)}
+                          className="text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1"
+                        >
+                          <FileCheck className="w-3 h-3" />
+                          Chekni Ko'rish
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card Actions for Pending */}
+                  {w.status === 'PENDING' && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={() => onOpenApproveModal(w)}
+                        className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-md transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <FileCheck className="w-4 h-4" />
+                        <span>Chek Yuklash & To'lash</span>
+                      </button>
+
+                      <button
+                        onClick={() => onRejectWithdrawal(w.id)}
+                        className="px-3.5 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-xl border border-rose-500/20 transition-colors flex items-center justify-center"
+                        title="Rad etish"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop Table View (>= md screens) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-300">
             <thead className="bg-slate-800/80 text-slate-400 font-semibold border-b border-slate-800 uppercase text-[10px] tracking-wider">
               <tr>

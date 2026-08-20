@@ -6,6 +6,10 @@ import {
   Clock,
   Download,
   Zap,
+  Phone,
+  User,
+  Calendar,
+  Building2,
 } from 'lucide-react';
 import { VoteItem, BotInstanceItem } from '../types';
 import { formatSum } from '../utils/format';
@@ -126,13 +130,13 @@ export const VotesView: React.FC<VotesViewProps> = ({
       />
 
       {/* 2. Status Tabs, Search Bar and Actions */}
-      <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-4">
+      <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-3.5">
         {/* Status Tabs and Quick Actions */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
-          <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 flex-wrap">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3.5">
+          <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 flex-wrap w-full sm:w-auto">
             <button
               onClick={() => { setStatusTab('PENDING'); setCurrentPage(1); }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1 sm:flex-none ${
                 statusTab === 'PENDING'
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm'
                   : 'text-slate-400 hover:text-white'
@@ -142,7 +146,7 @@ export const VotesView: React.FC<VotesViewProps> = ({
             </button>
             <button
               onClick={() => { setStatusTab('VERIFIED'); setCurrentPage(1); }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1 sm:flex-none ${
                 statusTab === 'VERIFIED'
                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm'
                   : 'text-slate-400 hover:text-white'
@@ -152,7 +156,7 @@ export const VotesView: React.FC<VotesViewProps> = ({
             </button>
             <button
               onClick={() => { setStatusTab('ALL'); setCurrentPage(1); }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1 sm:flex-none ${
                 statusTab === 'ALL'
                   ? 'bg-slate-800 text-white border border-slate-700'
                   : 'text-slate-400 hover:text-white'
@@ -162,11 +166,11 @@ export const VotesView: React.FC<VotesViewProps> = ({
             </button>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
             {pendingVotes.length > 0 && (
               <button
                 onClick={onApproveAll}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-600/20 transition-all active:scale-95"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-600/20 transition-all active:scale-95"
               >
                 <Zap className="w-4 h-4 fill-current" />
                 <span>Barchasini Tasdiqlash ({pendingVotes.length})</span>
@@ -175,11 +179,11 @@ export const VotesView: React.FC<VotesViewProps> = ({
 
             <button
               onClick={handleExportCsv}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl border border-slate-700 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl border border-slate-700 transition-colors flex-shrink-0"
               title="Excel / CSV ga yuklab olish"
             >
               <Download className="w-4 h-4 text-slate-400" />
-              <span>Eksport</span>
+              <span className="hidden xs:inline">Eksport</span>
             </button>
           </div>
         </div>
@@ -191,15 +195,92 @@ export const VotesView: React.FC<VotesViewProps> = ({
             type="text"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-            placeholder="Telefon raqami, ism, username yoki mahalla nomi bo'yicha qidirish..."
+            placeholder="Telefon raqami, ism, username yoki mahalla..."
             className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
           />
         </div>
       </div>
 
-      {/* Table Card */}
+      {/* Main Container: Mobile Case Cards (< md) + Desktop Table (>= md) */}
       <div className="rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Case Cards View (< md screens) */}
+        <div className="block md:hidden divide-y divide-slate-800/80">
+          {paginatedVotes.length === 0 ? (
+            <div className="py-12 text-center text-slate-500 text-xs px-4">
+              <Vote className="w-8 h-8 mx-auto mb-2 text-slate-600 opacity-50" />
+              Tanlangan sana va filter bo'yicha ovozlar topilmadi.
+            </div>
+          ) : (
+            paginatedVotes.map((vote) => (
+              <div key={vote.id} className="p-4 space-y-3 hover:bg-slate-800/30 transition-colors">
+                {/* Mobile Card Header */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                      <Phone className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <span className="font-mono font-bold text-white text-sm">+{vote.phone}</span>
+                      <span className="text-[10px] text-slate-500 ml-1.5 font-mono">#{vote.id}</span>
+                    </div>
+                  </div>
+
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      vote.status === 'VERIFIED'
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    }`}
+                  >
+                    {vote.status === 'VERIFIED' ? '✅ Tasdiqlangan' : '⏳ Kutilmoqda'}
+                  </span>
+                </div>
+
+                {/* Mobile Card Body Details */}
+                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                  <div>
+                    <span className="text-[10px] text-slate-500 block">Foydalanuvchi:</span>
+                    <span className="font-medium text-slate-200 truncate block">
+                      {vote.user?.firstName || 'Foydalanuvchi'}
+                    </span>
+                    {vote.user?.username && (
+                      <span className="text-[10px] text-indigo-400 font-mono">@{vote.user.username}</span>
+                    )}
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] text-slate-500 block">Mukofot:</span>
+                    <span className="font-bold text-emerald-400">+{formatSum(vote.rewardAmount || 30000)} so'm</span>
+                  </div>
+
+                  <div className="col-span-2 pt-1 border-t border-slate-800/60 flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400 flex items-center gap-1">
+                      <Building2 className="w-3 h-3 text-slate-500" />
+                      {vote.botInstance?.mahallaName || 'Bosh Mahalla'}
+                    </span>
+                    <span className="text-slate-500 text-[10px]">
+                      {new Date(vote.createdAt).toLocaleString('uz-UZ')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Mobile Card Action */}
+                {vote.status !== 'VERIFIED' && (
+                  <button
+                    onClick={() => onApproveVote(vote.id)}
+                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-md transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Ovozni Tasdiqlash (+30 000 so'm)</span>
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop Table View (>= md screens) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-300">
             <thead className="bg-slate-800/80 text-slate-400 font-semibold border-b border-slate-800 uppercase text-[10px] tracking-wider">
               <tr>

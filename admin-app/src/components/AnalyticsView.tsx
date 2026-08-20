@@ -251,7 +251,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
       {/* 2-Column Split: Daily Timeline Table & Mahalla Comparison */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Daily Timeline Breakdown Table (2 Columns) */}
+        {/* Daily Timeline Breakdown Container (2 Columns) */}
         <div className="lg:col-span-2 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl overflow-hidden flex flex-col">
           <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900">
             <div className="flex items-center gap-2">
@@ -261,7 +261,48 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             <span className="text-xs text-slate-400 font-medium">Jami: {dailyBreakdown.length} kun</span>
           </div>
 
-          <div className="overflow-x-auto flex-1">
+          {/* Mobile Daily Cards View (< md) */}
+          <div className="block md:hidden divide-y divide-slate-800/80">
+            {dailyBreakdown.length === 0 ? (
+              <div className="py-10 text-center text-slate-500 text-xs px-4">
+                Tanlangan davrda ma'lumotlar mavjud emas.
+              </div>
+            ) : (
+              dailyBreakdown.map((row) => (
+                <div key={row.date} className="p-3.5 space-y-2 hover:bg-slate-800/30 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                      {row.date}
+                    </span>
+                    <span className="font-black text-indigo-400 text-xs">
+                      {formatSum(row.votes)} ta ovoz
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 bg-slate-950/60 p-2 rounded-xl text-center text-xs">
+                    <div>
+                      <span className="text-[9px] text-slate-500 block">To'langan</span>
+                      <span className="font-bold text-emerald-400 text-[11px] block">{formatSum(row.paid)} so'm</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-slate-500 block">Mijozlar</span>
+                      <span className="font-medium text-slate-200 text-[11px] block">{row.users} ta</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-slate-500 block">1 Ovoz narxi</span>
+                      <span className="font-medium text-slate-400 text-[11px] block">
+                        {row.votes > 0 ? `${formatSum(Math.round(row.paid / row.votes))} so'm` : '-'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Desktop Table View (>= md) */}
+          <div className="hidden md:block overflow-x-auto flex-1">
             <table className="w-full text-left text-xs text-slate-300">
               <thead className="bg-slate-800/80 text-slate-400 font-semibold uppercase text-[10px]">
                 <tr>
