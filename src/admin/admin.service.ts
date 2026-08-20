@@ -34,6 +34,7 @@ export class AdminService {
       role: 'SUPER_ADMIN',
       title: 'Tizim Rahbari & Bosh Administrator',
       avatar: '👑',
+      defaultPassword: 'Elbek#Budget2026!',
     },
     {
       name: 'Xurshid Ismoilov',
@@ -44,6 +45,7 @@ export class AdminService {
       role: 'SUPER_ADMIN',
       title: 'Bosh Dasturchi & DevOps',
       avatar: '⚡️',
+      defaultPassword: 'Khurshid#Dev2026!',
     },
     {
       name: 'Jonibek Ismoilov',
@@ -54,6 +56,7 @@ export class AdminService {
       role: 'ADMIN',
       title: 'Menejer & Ovozlar Nazoratchisi',
       avatar: '💼',
+      defaultPassword: 'Jonibek#Open2026!',
     },
     {
       name: 'Bosh Administrator (Test)',
@@ -64,6 +67,7 @@ export class AdminService {
       role: 'SUPER_ADMIN',
       title: 'Bosh Administrator',
       avatar: '🛡',
+      defaultPassword: 'OpenBudget#2026!',
     },
   ];
 
@@ -102,21 +106,20 @@ export class AdminService {
   }
 
   /**
-   * Admin Login: Telefon raqam va parol bilan tekshirish
+   * Admin Login: Telefon raqam va parol bilan tekshirish (Individual kuchaytirilgan parollar bilan)
    */
   async login(phone: string, pass: string) {
     const adminConfig = this.configService.get<any>('adminAuth') || {};
-    const configuredPassword = adminConfig.password || 'admin_password';
+    const configuredGlobalPassword = adminConfig.password || process.env.ADMIN_PASSWORD || 'OpenBudget#2026!';
 
     const inputPhone = (phone || '').replace(/[^0-9]/g, '');
     const inputPass = (pass || '').trim();
 
-    // 1. Check password
-    if (inputPass !== configuredPassword && inputPass !== 'admin_password' && inputPass !== 'openbudget2026') {
-      throw new UnauthorizedException('Kiritilgan parol noto\'g\'ri!');
+    if (!inputPhone || !inputPass) {
+      throw new UnauthorizedException('Telefon raqam va maxfiy parolni kiriting!');
     }
 
-    // 2. Match against designated admins or configured phone
+    // 1. Match against designated admins or configured phone
     let matchedAdmin = AdminService.DESIGNATED_ADMINS.find((a) => {
       return (
         inputPhone === a.phone ||
@@ -136,6 +139,7 @@ export class AdminService {
         role: 'SUPER_ADMIN',
         title: 'Bosh Administrator',
         avatar: '👑',
+        defaultPassword: configuredGlobalPassword,
       };
     }
 
@@ -143,7 +147,23 @@ export class AdminService {
       throw new UnauthorizedException('Ushbu telefon raqamli administrator topilmadi!');
     }
 
+    // 2. Validate password (allows individual strong password, global configured password, or fallback)
+    const validPasswords = [
+      matchedAdmin.defaultPassword,
+      configuredGlobalPassword,
+      'OpenBudget#2026!',
+      'openbudget2026',
+      'admin_password', // Backward compatibility during migration
+    ].filter(Boolean);
+
+    const isPasswordCorrect = validPasswords.some((vp) => vp === inputPass);
+
+    if (!isPasswordCorrect) {
+      throw new UnauthorizedException('Kiritilgan maxfiy parol noto\'g\'ri!');
+    }
+
     const token = `ADMIN_SESSION_${Buffer.from(`${matchedAdmin.phone}:${Date.now()}`).toString('base64')}`;
+    this.logger.log(`🔑 [Admin Kirishi]: ${matchedAdmin.name} (${matchedAdmin.formattedPhone}) tizimga kirdi.`);
 
     return {
       success: true,

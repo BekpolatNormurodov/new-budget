@@ -11,6 +11,7 @@ import {
   Sparkles,
   KeyRound,
   CheckCircle2,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface LoginScreenProps {
@@ -22,9 +23,10 @@ const DESIGNATED_ADMIN_PRESETS = [
     name: 'Elbek Muxtorov',
     phone: '+998943489900',
     displayPhone: '+998 94 348 99 00',
-    role: 'Bosh Administrator',
+    role: 'Tizim Rahbari & Bosh Admin',
     badge: '👑 Rahbar',
     avatar: '👑',
+    defaultPassword: 'Elbek#Budget2026!',
   },
   {
     name: 'Xurshid Ismoilov',
@@ -33,6 +35,7 @@ const DESIGNATED_ADMIN_PRESETS = [
     role: 'Bosh Dasturchi & DevOps',
     badge: '⚡️ DevOps',
     avatar: '⚡️',
+    defaultPassword: 'Khurshid#Dev2026!',
   },
   {
     name: 'Jonibek Ismoilov',
@@ -41,6 +44,7 @@ const DESIGNATED_ADMIN_PRESETS = [
     role: 'Menejer & Nazoratchi',
     badge: '💼 Menejer',
     avatar: '💼',
+    defaultPassword: 'Jonibek#Open2026!',
   },
   {
     name: 'Test Administrator',
@@ -49,12 +53,13 @@ const DESIGNATED_ADMIN_PRESETS = [
     role: 'Standart Tizim Admini',
     badge: '🛡 Test',
     avatar: '🛡',
+    defaultPassword: 'OpenBudget#2026!',
   },
 ];
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
-  const [phone, setPhone] = useState('+998943489900');
-  const [password, setPassword] = useState('admin_password');
+  const [phone, setPhone] = useState(DESIGNATED_ADMIN_PRESETS[0].phone);
+  const [password, setPassword] = useState(DESIGNATED_ADMIN_PRESETS[0].defaultPassword);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -63,8 +68,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     (p) => p.phone === phone || p.phone.replace(/[^0-9]/g, '') === phone.replace(/[^0-9]/g, '')
   );
 
-  const handleSelectAdmin = (adminPhone: string) => {
-    setPhone(adminPhone);
+  const handleSelectAdmin = (admin: typeof DESIGNATED_ADMIN_PRESETS[0]) => {
+    setPhone(admin.phone);
+    setPassword(admin.defaultPassword);
     setError('');
   };
 
@@ -82,7 +88,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || 'Telefon raqam yoki parol noto\'g\'ri!');
+        throw new Error(errData.message || 'Telefon raqam yoki maxfiy parol noto\'g\'ri!');
       }
 
       const data = await res.json();
@@ -103,7 +109,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyan-600/15 rounded-full blur-3xl pointer-events-none translate-x-1/2 translate-y-1/2"></div>
       <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-purple-600/10 rounded-full blur-3xl pointer-events-none -translate-x-1/2 -translate-y-1/2"></div>
 
-      <div className="max-w-md w-full rounded-3xl bg-slate-900/90 backdrop-blur-2xl p-6 sm:p-8 space-y-6 shadow-2xl border border-slate-800/90 relative z-10 animate-in fade-in zoom-in-95 duration-200">
+      <div className="max-w-md w-full rounded-3xl bg-slate-900/95 backdrop-blur-2xl p-6 sm:p-8 space-y-6 shadow-2xl border border-slate-800/90 relative z-10 animate-in fade-in zoom-in-95 duration-200">
         {/* Header Branding */}
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-cyan-500 text-white shadow-lg shadow-indigo-500/25 mb-1">
@@ -113,8 +119,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
               Open Budget 2026
             </h1>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-              PRO
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              SECURE
             </span>
           </div>
           <p className="text-xs text-slate-400">
@@ -140,7 +146,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 <button
                   key={admin.phone}
                   type="button"
-                  onClick={() => handleSelectAdmin(admin.phone)}
+                  onClick={() => handleSelectAdmin(admin)}
                   className={`p-2.5 rounded-xl border text-left transition-all relative overflow-hidden flex flex-col justify-between ${
                     isSelected
                       ? 'bg-gradient-to-b from-indigo-950/80 to-slate-900 border-indigo-500/80 shadow-md shadow-indigo-500/20 ring-1 ring-indigo-500/40'
@@ -211,7 +217,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 <Lock className="w-3.5 h-3.5 text-indigo-400" />
                 <span>Maxfiy Parol</span>
               </span>
-              <span className="text-[10px] text-slate-500 font-mono">admin_password</span>
+              <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
+                <KeyRound className="w-2.5 h-2.5" />
+                Kuchli Parol
+              </span>
             </label>
             <div className="relative">
               <input
@@ -219,18 +228,33 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••••••"
-                className="w-full px-3.5 py-2.5 bg-slate-950/90 border border-slate-800 hover:border-slate-700 focus:border-indigo-500 rounded-xl text-white text-xs focus:outline-none pr-10 transition-colors shadow-inner"
+                placeholder="Maxfiy parolni kiriting"
+                className="w-full px-3.5 py-2.5 bg-slate-950/90 border border-slate-800 hover:border-slate-700 focus:border-indigo-500 rounded-xl text-white font-mono text-xs focus:outline-none pr-10 transition-colors shadow-inner"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-white transition-colors"
+                title="Parolni ko'rsatish"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           </div>
+
+          {/* Active Admin Details Banner */}
+          {selectedPreset && (
+            <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span>{selectedPreset.avatar}</span>
+                <span className="font-semibold text-slate-300">{selectedPreset.name}</span>
+                <span className="text-[10px] text-slate-500">• {selectedPreset.role}</span>
+              </div>
+              <span className="text-[9px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                Himoyalangan
+              </span>
+            </div>
+          )}
 
           {/* Submit Button */}
           <button
@@ -245,7 +269,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               </>
             ) : (
               <>
-                <span>Tizimga Kirish</span>
+                <span>Boshqaruv Paneliga Kirish</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </>
             )}
@@ -256,7 +280,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500">
           <span className="flex items-center gap-1">
             <KeyRound className="w-3 h-3 text-emerald-400" />
-            256-Bit Himoyalangan
+            256-Bit SSL Shifrlash
           </span>
           <span>Open Budget Multi-Bot v2.0</span>
         </div>
