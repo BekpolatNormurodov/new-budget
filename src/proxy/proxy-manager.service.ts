@@ -168,18 +168,79 @@ export class ProxyManagerService implements OnModuleInit {
   /**
    * Istalgan so'rov uchun ideal darajada tayyorlangan Axios Instance yaratish
    */
+  // Haqiqiy brauzer User-Agent lari (Anti-bot himoyasidan o'tish uchun)
+  private readonly USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36',
+  ];
+
+  /**
+   * Realistik brauzer sarlavhalarini olish
+   */
+  public getRandomBrowserHeaders(): Record<string, string> {
+    const userAgent = this.USER_AGENTS[Math.floor(Math.random() * this.USER_AGENTS.length)];
+    return {
+      'User-Agent': userAgent,
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'uz-UZ,uz;q=0.9,ru;q=0.8,en;q=0.7',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Connection': 'keep-alive',
+      'sec-ch-ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+      'sec-ch-ua-mobile': userAgent.includes('Mobile') ? '?1' : '?0',
+      'sec-ch-ua-platform': userAgent.includes('Windows') ? '"Windows"' : (userAgent.includes('Mac') ? '"macOS"' : '"Android"'),
+    };
+  }
+
+  /**
+   * Istalgan so'rov uchun ideal darajada tayyorlangan Axios Instance yaratish
+   */
   public createAxiosClient(sessionKey?: string, customConfig: any = {}) {
     const proxyConfig = this.getAxiosConfig(sessionKey);
+    const headers = {
+      ...this.getRandomBrowserHeaders(),
+      ...(customConfig.headers || {}),
+    };
+
     return axios.create({
       timeout: 10000,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
-        ...(customConfig.headers || {}),
-      },
+      headers,
       ...proxyConfig,
       ...customConfig,
     });
+  }
+
+  /**
+   * Avtomatik xatolikdan tiklanish (Auto-Failover / Retry):
+   * Agar joriy proxyda xatolik yuz bersa, avtomatik boshqa toza proxydan qayta urinadi
+   */
+  public async requestWithRetry<T = any>(
+    requestFn: (client: typeof axios) => Promise<T>,
+    sessionKey?: string,
+    maxRetries = 3,
+  ): Promise<T> {
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const client = this.createAxiosClient(sessionKey);
+        return await requestFn(client as any);
+      } catch (err: any) {
+        lastError = err;
+        this.logger.warn(`⚠️ [Proxy Retry ${attempt}/${maxRetries}] So'rov xatoligi [${err.message}]. Keyingi proxyga o'tilmoqda...`);
+
+        // Agar bu sticky sessiya bo'lsa va xato bersa, yangi toza proxy biriktiramiz
+        if (sessionKey) {
+          this.sessionMap.delete(sessionKey);
+        }
+
+        // Kichik tanaffus (200ms)
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    }
+
+    throw lastError;
   }
 
   /**
@@ -254,6 +315,7 @@ export class ProxyManagerService implements OnModuleInit {
       total: this.proxyPool.length,
       alive: this.proxyPool.filter((p) => p.isAlive).length,
       dead: this.proxyPool.filter((p) => !p.isAlive).length,
+      activeStickySessions: this.sessionMap.size,
       pool: this.proxyPool.map((p) => ({
         host: p.host,
         port: p.port,
