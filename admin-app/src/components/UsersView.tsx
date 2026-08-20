@@ -205,25 +205,20 @@ export const UsersView: React.FC<UsersViewProps> = ({
           ) : (
             paginatedUsers.map((u) => (
               <div key={u.id} className="p-3.5 space-y-2.5 hover:bg-slate-800/30 transition-colors">
-                {/* Header: Avatar, Name & Status */}
+                {/* Header: Name, Telegram & Status */}
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-bold text-xs">
-                      {u.firstName ? u.firstName.charAt(0).toUpperCase() : <User className="w-3.5 h-3.5" />}
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-white text-xs">{u.firstName || 'Foydalanuvchi'}</span>
+                      {u.role === 'ADMIN' && (
+                        <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 text-[9px] font-bold">
+                          ADMIN
+                        </span>
+                      )}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-1">
-                        <span className="font-semibold text-white text-xs">{u.firstName || 'Foydalanuvchi'}</span>
-                        {u.role === 'ADMIN' && (
-                          <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 text-[9px] font-bold">
-                            ADMIN
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-slate-400 font-mono">
-                        {u.username ? `@${u.username}` : `TG: ${u.telegramId}`}
-                      </span>
-                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
+                      {u.username ? `@${u.username}` : `TG: ${u.telegramId}`}
+                    </span>
                   </div>
 
                   <span
@@ -315,23 +310,18 @@ export const UsersView: React.FC<UsersViewProps> = ({
                 paginatedUsers.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-800/30 transition-colors">
                     <td className="p-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-bold text-xs">
-                          {u.firstName ? u.firstName.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-white">
-                            {u.firstName || 'Foydalanuvchi'}
-                            {u.role === 'ADMIN' && (
-                              <span className="ml-1.5 px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 text-[9px] font-bold">
-                                ADMIN
-                              </span>
-                            )}
-                          </p>
-                          <p className="text-[11px] text-slate-400 font-mono">
-                            {u.username ? `@${u.username}` : `TG: ${u.telegramId}`}
-                          </p>
-                        </div>
+                      <div>
+                        <p className="font-semibold text-white">
+                          {u.firstName || 'Foydalanuvchi'}
+                          {u.role === 'ADMIN' && (
+                            <span className="ml-1.5 px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 text-[9px] font-bold">
+                              ADMIN
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[11px] text-slate-400 font-mono">
+                          {u.username ? `@${u.username}` : `TG: ${u.telegramId}`}
+                        </p>
                       </div>
                     </td>
 
