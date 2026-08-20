@@ -16,8 +16,8 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
-  const [phone, setPhone] = useState('+998901234567');
-  const [password, setPassword] = useState('admin123');
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -36,7 +36,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || 'Telefon raqam yoki parol noto\'g\'ri!');
+        throw new Error(errData.message || 'Telefon raqam yoki maxfiy parol noto\'g\'ri!');
       }
 
       const data = await res.json();
@@ -94,6 +94,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             <input
               type="text"
               required
+              autoFocus
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+998 90 123 45 67"
@@ -127,23 +128,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             </div>
           </div>
 
-          {/* Clean Quick Credentials Hint Box */}
-          <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 text-[11px] text-slate-400 space-y-1">
-            <div className="flex justify-between items-center">
-              <span>📱 Login:</span>
-              <span className="font-mono text-white font-bold">{phone}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span>🔑 Parol:</span>
-              <span className="font-mono text-indigo-300 font-bold">{password}</span>
-            </div>
-          </div>
-
           {/* Submit Button */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 active:scale-98 cursor-pointer"
+            className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 active:scale-98 cursor-pointer mt-2"
           >
             {loading ? (
               <>
