@@ -34,7 +34,9 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
   const [search, setSearch] = useState('');
   const [statusTab, setStatusTab] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'>('PENDING');
   const [methodFilter, setMethodFilter] = useState<string>('ALL');
-  const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | 'YESTERDAY'>('ALL');
+  const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | 'YESTERDAY' | 'CUSTOM'>('ALL');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [copiedCard, setCopiedCard] = useState<string | null>(null);
   const [viewingReceipt, setViewingReceipt] = useState<WithdrawalItem | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -58,8 +60,13 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
       if (methodFilter !== 'ALL' && w.paymentMethod !== methodFilter) return false;
 
       // Date filter
+      const wDate = w.createdAt.slice(0, 10);
       if (dateFilter === 'TODAY' && !w.createdAt.startsWith(todayStr)) return false;
       if (dateFilter === 'YESTERDAY' && !w.createdAt.startsWith(yesterday)) return false;
+      if (dateFilter === 'CUSTOM') {
+        if (startDate && wDate < startDate) return false;
+        if (endDate && wDate > endDate) return false;
+      }
 
       // Search query
       if (search.trim()) {
@@ -74,7 +81,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
 
       return true;
     });
-  }, [withdrawals, statusTab, methodFilter, dateFilter, search]);
+  }, [withdrawals, statusTab, methodFilter, dateFilter, startDate, endDate, search]);
 
   const paginatedWithdrawals = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
@@ -204,6 +211,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
               <option value="ALL" className="bg-slate-900">Barcha Sanalar</option>
               <option value="TODAY" className="bg-slate-900">Bugungi arizalar</option>
               <option value="YESTERDAY" className="bg-slate-900">Kecha berilgan</option>
+              <option value="CUSTOM" className="bg-slate-900">📅 Maxsus kalendar oralig'i</option>
             </select>
           </div>
 
@@ -212,6 +220,33 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
             Topildi: <b className="text-white ml-1 font-bold">{filteredWithdrawals.length} ta</b>
           </div>
         </div>
+
+        {/* Custom Calendar Date Range Pickers (if dateFilter === 'CUSTOM') */}
+        {dateFilter === 'CUSTOM' && (
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-indigo-500/20 text-xs text-slate-300 flex-wrap animate-in fade-in duration-200">
+            <span className="text-indigo-400 font-semibold flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5" /> Kalendar oralig'i:
+            </span>
+            <div className="flex items-center gap-2">
+              <span>Dan:</span>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1); }}
+                className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white [color-scheme:dark]"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span>Gacha:</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => { setEndDate(e.target.value); setCurrentPage(1); }}
+                className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white [color-scheme:dark]"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Table Card */}

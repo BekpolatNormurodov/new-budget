@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   LayoutDashboard,
   Bot,
@@ -6,6 +5,7 @@ import {
   Wallet,
   Users,
   Activity,
+  CalendarRange,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -15,8 +15,8 @@ import {
 import { AdminUser, DashboardStats } from '../types';
 
 interface SidebarProps {
-  activeTab: 'dashboard' | 'bots' | 'votes' | 'withdrawals' | 'users' | 'health';
-  setActiveTab: (tab: 'dashboard' | 'bots' | 'votes' | 'withdrawals' | 'users' | 'health') => void;
+  activeTab: 'dashboard' | 'bots' | 'votes' | 'withdrawals' | 'users' | 'analytics' | 'health';
+  setActiveTab: (tab: 'dashboard' | 'bots' | 'votes' | 'withdrawals' | 'users' | 'analytics' | 'health') => void;
   stats: DashboardStats | null;
   adminUser: AdminUser | null;
   onLogout: () => void;
@@ -39,6 +39,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Boshqaruv Paneli',
       icon: LayoutDashboard,
       badge: null,
+    },
+    {
+      id: 'analytics',
+      label: 'Kalendar & Analitika',
+      icon: CalendarRange,
+      badge: 'PRO',
+      badgeColor: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
     },
     {
       id: 'bots',

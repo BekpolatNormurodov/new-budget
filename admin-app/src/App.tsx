@@ -15,6 +15,7 @@ import { BotsView } from './components/BotsView';
 import { VotesView } from './components/VotesView';
 import { WithdrawalsView } from './components/WithdrawalsView';
 import { UsersView } from './components/UsersView';
+import { AnalyticsView } from './components/AnalyticsView';
 import { HealthView } from './components/HealthView';
 
 export function App() {
@@ -24,7 +25,7 @@ export function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'bots' | 'votes' | 'withdrawals' | 'users' | 'health'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'bots' | 'votes' | 'withdrawals' | 'users' | 'analytics' | 'health'>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [bots, setBots] = useState<BotInstanceItem[]>([]);
@@ -369,6 +370,7 @@ export function App() {
   const getTabTitle = () => {
     switch (activeTab) {
       case 'dashboard': return 'Boshqaruv Paneli & Statistika';
+      case 'analytics': return 'Kalendar & Kengaytirilgan Analitika';
       case 'bots': return 'Botlar Menejeri & Mahallalar';
       case 'votes': return 'Ovozlar Ro\'yxati & Tasdiqlash';
       case 'withdrawals': return 'Pul Yechish So\'rovlari';
@@ -380,6 +382,7 @@ export function App() {
   const getTabSubtitle = () => {
     switch (activeTab) {
       case 'dashboard': return 'Umumiy moliyaviy oqim, ovozlar va mahalla progressi';
+      case 'analytics': return 'Sana oralig\'i, kalendar va mahalla bo\'yicha chuqur dinamika';
       case 'bots': return 'Ko\'p botli orchestrator va mahallalar ovoz yig\'ish rejasi';
       case 'votes': return 'SMS orqali kutilayotgan va tasdiqlangan barcha ovozlar';
       case 'withdrawals': return 'Foydalanuvchilarning pul yechish arizalari va cheklar';
@@ -429,6 +432,16 @@ export function App() {
               onApproveVote={handleApproveVote}
               onOpenApproveWithdrawal={setApprovingWithdrawal}
               onOpenEditBot={setEditingBot}
+            />
+          )}
+
+          {activeTab === 'analytics' && (
+            <AnalyticsView
+              stats={stats}
+              bots={bots}
+              votes={pendingVotes}
+              withdrawals={withdrawals}
+              users={users}
             />
           )}
 

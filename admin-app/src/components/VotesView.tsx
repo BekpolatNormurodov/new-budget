@@ -34,13 +34,14 @@ export const VotesView: React.FC<VotesViewProps> = ({
   const [search, setSearch] = useState('');
   const [statusTab, setStatusTab] = useState<'PENDING' | 'VERIFIED' | 'ALL'>('PENDING');
   const [selectedBotId, setSelectedBotId] = useState<string>('ALL');
-  const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | 'YESTERDAY'>('ALL');
+  const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | 'YESTERDAY' | 'CUSTOM'>('ALL');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
   // Combine or select votes based on statusTab
   const combinedVotes = useMemo(() => {
-    // If allVotes is provided, use that; otherwise use pendingVotes
     const list = allVotes.length > 0 ? allVotes : pendingVotes;
     return list;
   }, [allVotes, pendingVotes]);
@@ -61,8 +62,13 @@ export const VotesView: React.FC<VotesViewProps> = ({
       }
 
       // Date filter
+      const vDate = v.createdAt.slice(0, 10);
       if (dateFilter === 'TODAY' && !v.createdAt.startsWith(todayStr)) return false;
       if (dateFilter === 'YESTERDAY' && !v.createdAt.startsWith(yesterday)) return false;
+      if (dateFilter === 'CUSTOM') {
+        if (startDate && vDate < startDate) return false;
+        if (endDate && vDate > endDate) return false;
+      }
 
       // Search
       if (search.trim()) {
@@ -75,7 +81,7 @@ export const VotesView: React.FC<VotesViewProps> = ({
 
       return true;
     });
-  }, [combinedVotes, statusTab, selectedBotId, dateFilter, search, bots]);
+  }, [combinedVotes, statusTab, selectedBotId, dateFilter, startDate, endDate, search, bots]);
 
   // Paginated records
   const paginatedVotes = useMemo(() => {
@@ -192,7 +198,7 @@ export const VotesView: React.FC<VotesViewProps> = ({
             </select>
           </div>
 
-          {/* Date Filter Dropdown */}
+          {/* Date Preset Filter Dropdown */}
           <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300">
             <Calendar className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
             <select
@@ -203,6 +209,7 @@ export const VotesView: React.FC<VotesViewProps> = ({
               <option value="ALL" className="bg-slate-900">Barcha Sanalar</option>
               <option value="TODAY" className="bg-slate-900">Bugungi ovozlar</option>
               <option value="YESTERDAY" className="bg-slate-900">Kecha berilgan</option>
+              <option value="CUSTOM" className="bg-slate-900">📅 Maxsus kalendar oralig'i</option>
             </select>
           </div>
 
@@ -211,6 +218,33 @@ export const VotesView: React.FC<VotesViewProps> = ({
             Topildi: <b className="text-white ml-1 font-bold">{filteredVotes.length} ta</b>
           </div>
         </div>
+
+        {/* Custom Calendar Date Range Pickers (if dateFilter === 'CUSTOM') */}
+        {dateFilter === 'CUSTOM' && (
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-indigo-500/20 text-xs text-slate-300 flex-wrap animate-in fade-in duration-200">
+            <span className="text-indigo-400 font-semibold flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5" /> Kalendar oralig'i:
+            </span>
+            <div className="flex items-center gap-2">
+              <span>Dan:</span>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1); }}
+                className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white [color-scheme:dark]"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span>Gacha:</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => { setEndDate(e.target.value); setCurrentPage(1); }}
+                className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white [color-scheme:dark]"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Table Card */}
