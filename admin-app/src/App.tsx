@@ -1,4 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import {
+  LayoutDashboard,
+  Bot,
+  Vote,
+  Wallet,
+  CalendarRange,
+} from 'lucide-react';
 import { BotInstanceItem, VoteItem, WithdrawalItem, UserItem, DashboardStats, ToastItem, AdminUser } from './types';
 import { formatSum, formatMoney } from './utils/format';
 import { ToastContainer } from './components/ToastContainer';
@@ -27,6 +34,7 @@ export function App() {
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'bots' | 'votes' | 'withdrawals' | 'users' | 'analytics' | 'health'>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [bots, setBots] = useState<BotInstanceItem[]>([]);
   const [pendingVotes, setPendingVotes] = useState<VoteItem[]>([]);
@@ -197,7 +205,6 @@ export function App() {
         body: JSON.stringify(updatedData),
       });
       if (!res.ok) throw new Error();
-      const data = await res.json();
       showToast(`✅ Bot sozlamalari yangilandi!`, 'success');
       setEditingBot(null);
       loadAllData();
@@ -392,8 +399,8 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex">
-      {/* Smart Sidebar */}
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col lg:flex-row pb-16 lg:pb-0">
+      {/* Smart Sidebar (Desktop & Mobile Drawer) */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -402,12 +409,14 @@ export function App() {
         onLogout={handleLogout}
         isCollapsed={isSidebarCollapsed}
         setIsCollapsed={setIsSidebarCollapsed}
+        isMobileOpen={isMobileOpen}
+        setIsMobileOpen={setIsMobileOpen}
       />
 
       {/* Main Content Area */}
       <div
-        className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out ${
-          isSidebarCollapsed ? 'pl-20' : 'pl-64'
+        className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out pl-0 ${
+          isSidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64'
         }`}
       >
         {/* Smart Header */}
@@ -419,12 +428,13 @@ export function App() {
           loading={loading}
           onRefresh={loadAllData}
           onOpenAddBot={() => setShowAddBotModal(true)}
+          onOpenMobileMenu={() => setIsMobileOpen(true)}
           globalSearch={globalSearch}
           setGlobalSearch={setGlobalSearch}
         />
 
         {/* Dynamic Tab Views */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-3 sm:p-5 lg:p-8 max-w-7xl w-full mx-auto">
           {activeTab === 'dashboard' && (
             <DashboardView
               stats={stats}
@@ -487,6 +497,40 @@ export function App() {
           )}
         </main>
       </div>
+
+      {/* Mobile Bottom Quick Bar for Phones (lg:hidden) */}
+      <nav className="fixed bottom-0 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur-xl border-t border-slate-800 flex items-center justify-around py-2 px-1 lg:hidden">
+        {[
+          { id: 'dashboard', label: 'Boshqaruv', icon: LayoutDashboard },
+          { id: 'analytics', label: 'Analitika', icon: CalendarRange },
+          { id: 'bots', label: 'Botlar', icon: Bot, badge: stats ? `${stats.onlineBotsCount}` : null },
+          { id: 'votes', label: 'Ovozlar', icon: Vote, badge: stats?.pendingVotesCount || null },
+          { id: 'withdrawals', label: 'Yechish', icon: Wallet, badge: stats?.pendingWithdrawalsCount || null },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex flex-col items-center justify-center p-1.5 rounded-xl transition-all relative flex-1 ${
+                isActive ? 'text-indigo-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <div className="relative">
+                <Icon className={`w-5 h-5 transition-transform ${isActive ? 'scale-110' : ''}`} />
+                {tab.badge && (
+                  <span className="absolute -top-1.5 -right-2 px-1.5 py-0.2 text-[9px] font-black bg-rose-500 text-white rounded-full">
+                    {tab.badge}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] tracking-tight mt-0.5">{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
 
       {/* Modals */}
       {showAddBotModal && (
