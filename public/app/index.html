@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="uz" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>Open Budget | Ishonchli</title>
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            },
+            accent: {
+              cyan: '#06b6d4',
+              emerald: '#10b981',
+              amber: '#f59e0b',
+              purple: '#a855f7',
+            }
+          },
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Glassmorphism and Custom Glow */
+    .glass-card {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-input {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .neon-glow-primary {
+      box-shadow: 0 0 25px -5px rgba(99, 102, 241, 0.4);
+    }
+    .neon-glow-success {
+      box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.4);
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="bg-[#0b0f19] text-slate-100 min-h-screen flex flex-col font-sans select-none overflow-x-hidden antialiased pb-24">
+
+  <!-- TOP HEADER -->
+  <header class="sticky top-0 z-40 px-4 py-3 bg-[#0b0f19]/80 backdrop-blur-md border-b border-slate-800/80 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <div class="relative">
+        <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 p-[2px] shadow-lg">
+          <div class="w-full h-full bg-slate-900 rounded-full flex items-center justify-center overflow-hidden" id="userAvatar">
+            <span class="text-sm font-bold text-indigo-400" id="userInitials">OB</span>
+          </div>
+        </div>
+        <span class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></span>
+      </div>
+      <div>
+        <div class="flex items-center space-x-1.5">
+          <h1 class="text-sm font-bold text-white tracking-wide" id="userName">Foydalanuvchi</h1>
+          <span class="px-1.5 py-0.5 text-[10px] font-semibold tracking-wider uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-md">Rasmiy</span>
+        </div>
+        <p class="text-xs text-slate-400 font-medium">Open Budget 2026</p>
+      </div>
+    </div>
+
+    <!-- Live Status Indicator -->
+    <div class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+      <span class="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">Jonli</span>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 px-4 py-4 space-y-4 max-w-md mx-auto w-full">
+
+    <!-- HERO BALANCE CARD -->
+    <div class="relative overflow-hidden rounded-3xl p-5 bg-gradient-to-br from-indigo-900/60 via-slate-900/80 to-slate-950/90 border border-indigo-500/30 neon-glow-primary">
+      <div class="absolute -right-12 -top-12 w-36 h-36 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="absolute -left-12 -bottom-12 w-36 h-36 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div class="flex justify-between items-start mb-2">
+        <span class="text-xs font-semibold uppercase tracking-wider text-indigo-300">Asosiy Balans</span>
+        <span class="text-xs bg-indigo-500/20 text-indigo-200 px-2 py-0.5 rounded-full font-medium" id="totalVotesBadge">0 ta ovoz</span>
+      </div>
+
+      <div class="flex items-baseline space-x-2 my-2">
+        <span class="text-3xl font-extrabold text-white tracking-tight" id="balanceDisplay">0</span>
+        <span class="text-sm font-semibold text-indigo-300">so'm</span>
+      </div>
+
+      <!-- Action Buttons in Card -->
+      <div class="grid grid-cols-2 gap-2.5 mt-4 pt-4 border-t border-slate-700/50">
+        <button onclick="switchTab('vote')" class="flex items-center justify-center space-x-2 py-2.5 px-3 rounded-2xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-bold text-xs shadow-md transition active:scale-95">
+          <i data-lucide="vote" class="w-4 h-4"></i>
+          <span>Ovoz berish</span>
+        </button>
+        <button onclick="switchTab('wallet')" class="flex items-center justify-center space-x-2 py-2.5 px-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 text-indigo-300 border border-indigo-500/20 font-bold text-xs transition active:scale-95">
+          <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+          <span>Pul yechish</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- CAMPAIGN STATUS BANNER (MAHALLA) -->
+    <div class="glass-card rounded-2xl p-4 flex flex-col space-y-2.5">
+      <div class="flex justify-between items-center text-xs">
+        <div class="flex items-center space-x-2">
+          <span class="p-1.5 rounded-lg bg-amber-500/20 text-amber-400">
+            <i data-lucide="map-pin" class="w-4 h-4"></i>
+          </span>
+          <div>
+            <span class="font-bold text-slate-200" id="mahallaNameDisplay">Navbahor MFY</span>
+            <p class="text-[10px] text-slate-400 font-mono">ID: <span id="mahallaIdDisplay">055495798013</span></p>
+          </div>
+        </div>
+        <a id="openBudgetUrlLink" href="https://openbudget.uz" target="_blank" class="flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 text-[11px] font-bold transition">
+          <span>Ko'rish</span>
+          <i data-lucide="external-link" class="w-3 h-3"></i>
+        </a>
+      </div>
+
+      <!-- Progress Bar -->
+      <div class="space-y-1 pt-1">
+        <div class="flex justify-between text-[11px] text-slate-400">
+          <span>Yig'ilgan ovozlar:</span>
+          <span class="font-bold text-white"><span id="currVotes">1,420</span> / <span id="targetVotes">5,000</span></span>
+        </div>
+        <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+          <div id="progressBar" class="h-full bg-gradient-to-r from-indigo-500 via-cyan-400 to-emerald-400 rounded-full transition-all duration-500" style="width: 28.4%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 1: VOTE SECTION -->
+    <section id="tab-vote" class="space-y-4 tab-content">
+      <div class="glass-card rounded-3xl p-5 space-y-4">
+        <div class="flex items-center space-x-3">
+          <div class="p-2.5 rounded-2xl bg-indigo-500/20 text-indigo-400">
+            <i data-lucide="smartphone" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <h2 class="text-base font-bold text-white">Ovoz berish</h2>
+            <p class="text-xs text-slate-400">Telefon raqamingiz orqali tasdiqlang</p>
+          </div>
+        </div>
+
+        <!-- Phone Step -->
+        <div id="voteStepPhone" class="space-y-3">
+          <label class="block text-xs font-semibold text-slate-300">Telefon raqam</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-sm font-bold">
+              +998
+            </div>
+            <input 
+              type="tel" 
+              id="phoneInput" 
+              placeholder="90 123 45 67" 
+              maxlength="9" 
+              class="w-full pl-16 pr-4 py-3.5 glass-input rounded-2xl text-white font-bold text-sm tracking-wider focus:outline-none focus:ring-2 focus:ring-indigo-500 transition placeholder:text-slate-500"
+            >
+          </div>
+          <button 
+            id="btnSendSms"
+            onclick="handleRequestSms()" 
+            class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 text-white font-bold text-sm shadow-lg shadow-indigo-500/20 hover:opacity-95 transition active:scale-[0.98] flex items-center justify-center space-x-2"
+          >
+            <span>SMS Kod Yuborish</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- SMS Verification Step (Hidden initially) -->
+        <div id="voteStepSms" class="space-y-4 hidden">
+          <div class="p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 flex items-center space-x-2">
+            <i data-lucide="info" class="w-4 h-4 shrink-0"></i>
+            <span><strong id="sentPhoneDisplay">+998...</strong> raqamiga yuborilgan 6 xonali kodni kiriting:</span>
+          </div>
+
+          <div>
+            <input 
+              type="number" 
+              id="smsCodeInput" 
+              placeholder="123456" 
+              maxlength="6" 
+              class="w-full text-center py-3.5 glass-input rounded-2xl text-white font-extrabold text-xl tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-emerald-500 transition placeholder:text-slate-600"
+            >
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <button 
+              onclick="resetVoteStep()" 
+              class="py-3 rounded-2xl bg-slate-800 text-slate-300 font-bold text-xs hover:bg-slate-700 transition"
+            >
+              Orqaga
+            </button>
+            <button 
+              id="btnVerifySms"
+              onclick="handleVerifySms()" 
+              class="py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-500/20 hover:opacity-95 transition active:scale-95 flex items-center justify-center space-x-1.5"
+            >
+              <i data-lucide="check-circle" class="w-4 h-4"></i>
+              <span>Tasdiqlash</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: WALLET SECTION -->
+    <section id="tab-wallet" class="space-y-4 tab-content hidden">
+      <div class="glass-card rounded-3xl p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="p-2.5 rounded-2xl bg-emerald-500/20 text-emerald-400">
+              <i data-lucide="wallet" class="w-6 h-6"></i>
+            </div>
+            <div>
+              <h2 class="text-base font-bold text-white">Hamyon & Pul yechish</h2>
+              <p class="text-xs text-slate-400">Uzcard, Humo, Paynet</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Withdraw Form -->
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5">To'lov turi</label>
+            <div class="grid grid-cols-3 gap-2">
+              <button type="button" onclick="selectPaymentMethod('UZCARD')" id="btnMethodUZCARD" class="payment-method-btn py-2.5 px-2 rounded-xl text-xs font-bold text-center border border-indigo-500 bg-indigo-500/20 text-white transition">
+                Uzcard
+              </button>
+              <button type="button" onclick="selectPaymentMethod('HUMO')" id="btnMethodHUMO" class="payment-method-btn py-2.5 px-2 rounded-xl text-xs font-bold text-center border border-slate-700 bg-slate-800/60 text-slate-400 transition">
+                Humo
+              </button>
+              <button type="button" onclick="selectPaymentMethod('PAYNET')" id="btnMethodPAYNET" class="payment-method-btn py-2.5 px-2 rounded-xl text-xs font-bold text-center border border-slate-700 bg-slate-800/60 text-slate-400 transition">
+                Paynet
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1" id="accountLabel">Karta raqami (16 ta raqam)</label>
+            <input 
+              type="text" 
+              id="withdrawAccountInput" 
+              placeholder="8600 0000 0000 0000" 
+              class="w-full px-4 py-3 glass-input rounded-2xl text-white font-bold text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition placeholder:text-slate-500"
+            >
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Summa (so'm)</label>
+            <input 
+              type="number" 
+              id="withdrawAmountInput" 
+              placeholder="10000" 
+              min="10000" 
+              class="w-full px-4 py-3 glass-input rounded-2xl text-white font-bold text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition placeholder:text-slate-500"
+            >
+            <p class="text-[11px] text-slate-400 mt-1">Minimal yechish summasi: 10 000 so'm</p>
+          </div>
+
+          <button 
+            onclick="handleWithdrawSubmit()" 
+            class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 hover:opacity-95 transition active:scale-[0.98] flex items-center justify-center space-x-2"
+          >
+            <i data-lucide="send" class="w-4 h-4"></i>
+            <span>So'rov Yuborish</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Recent Transactions -->
+      <div class="glass-card rounded-3xl p-5 space-y-3">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">So'nggi Tranzaksiyalar</h3>
+        <div id="transactionsList" class="space-y-2 text-xs">
+          <p class="text-slate-500 text-center py-4">Hozircha tranzaksiyalar yo'q</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: REFERRAL SECTION -->
+    <section id="tab-referral" class="space-y-4 tab-content hidden">
+      <div class="glass-card rounded-3xl p-5 space-y-4">
+        <div class="flex items-center space-x-3">
+          <div class="p-2.5 rounded-2xl bg-purple-500/20 text-purple-400">
+            <i data-lucide="users" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <h2 class="text-base font-bold text-white">Do'stlarni Taklif Qilish</h2>
+            <p class="text-xs text-slate-400">Har bir do'st uchun +1 000 so'm bonus</p>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <label class="block text-xs font-semibold text-slate-300">Shaxsiy havolangiz:</label>
+          <div class="flex items-center space-x-2">
+            <input 
+              type="text" 
+              id="refLinkInput" 
+              readonly 
+              class="w-full px-3.5 py-3 glass-input rounded-2xl text-xs text-indigo-300 font-mono focus:outline-none"
+            >
+            <button 
+              onclick="copyRefLink()" 
+              class="p-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white transition active:scale-95 shrink-0 shadow-md"
+            >
+              <i data-lucide="copy" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <button 
+          onclick="shareRefLink()" 
+          class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 text-white font-bold text-sm shadow-lg shadow-purple-500/20 hover:opacity-95 transition active:scale-[0.98] flex items-center justify-center space-x-2"
+        >
+          <i data-lucide="share-2" class="w-4 h-4"></i>
+          <span>Telegramda Ulashish</span>
+        </button>
+      </div>
+
+      <!-- Referrals Count Card -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="glass-card rounded-2xl p-4 text-center">
+          <span class="text-xs text-slate-400 font-medium">Takliflar soni</span>
+          <p class="text-2xl font-extrabold text-white mt-1" id="refCountDisplay">0</p>
+        </div>
+        <div class="glass-card rounded-2xl p-4 text-center">
+          <span class="text-xs text-slate-400 font-medium">Ishlangan bonus</span>
+          <p class="text-2xl font-extrabold text-emerald-400 mt-1" id="refBonusEarned">0 so'm</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: LEADERBOARD SECTION -->
+    <section id="tab-leaderboard" class="space-y-4 tab-content hidden">
+      <div class="glass-card rounded-3xl p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="p-2.5 rounded-2xl bg-amber-500/20 text-amber-400">
+              <i data-lucide="trophy" class="w-6 h-6"></i>
+            </div>
+            <div>
+              <h2 class="text-base font-bold text-white">Peshqadamlar</h2>
+              <p class="text-xs text-slate-400">Mavsumning Top 10 yetakchilari</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="leaderboardList" class="space-y-2.5 text-xs">
+          <!-- Dynamically filled -->
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- BOTTOM NAVIGATION BAR -->
+  <nav class="fixed bottom-0 left-0 right-0 z-50 bg-[#0b0f19]/90 backdrop-blur-lg border-t border-slate-800/80 px-4 py-2">
+    <div class="max-w-md mx-auto grid grid-cols-4 gap-1">
+      <button onclick="switchTab('vote')" id="nav-vote" class="nav-btn flex flex-col items-center justify-center py-1.5 rounded-2xl text-indigo-400 font-bold transition">
+        <i data-lucide="vote" class="w-5 h-5 mb-1"></i>
+        <span class="text-[10px]">Ovoz</span>
+      </button>
+      <button onclick="switchTab('wallet')" id="nav-wallet" class="nav-btn flex flex-col items-center justify-center py-1.5 rounded-2xl text-slate-400 hover:text-slate-200 transition">
+        <i data-lucide="wallet" class="w-5 h-5 mb-1"></i>
+        <span class="text-[10px]">Hamyon</span>
+      </button>
+      <button onclick="switchTab('referral')" id="nav-referral" class="nav-btn flex flex-col items-center justify-center py-1.5 rounded-2xl text-slate-400 hover:text-slate-200 transition">
+        <i data-lucide="users" class="w-5 h-5 mb-1"></i>
+        <span class="text-[10px]">Do'stlar</span>
+      </button>
+      <button onclick="switchTab('leaderboard')" id="nav-leaderboard" class="nav-btn flex flex-col items-center justify-center py-1.5 rounded-2xl text-slate-400 hover:text-slate-200 transition">
+        <i data-lucide="trophy" class="w-5 h-5 mb-1"></i>
+        <span class="text-[10px]">Reyting</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      tg.setHeaderColor?.('#0b0f19');
+      tg.setBackgroundColor?.('#0b0f19');
+    }
+
+    let currentUser = null;
+    let currentConfig = null;
+    let selectedMethod = 'UZCARD';
+    let currentSessionId = null;
+
+    function haptic(type = 'medium') {
+      if (tg?.HapticFeedback) {
+        tg.HapticFeedback.impactOccurred(type);
+      }
+    }
+
+    function switchTab(tabName) {
+      haptic('light');
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.nav-btn').forEach(el => {
+        el.classList.remove('text-indigo-400', 'font-bold');
+        el.classList.add('text-slate-400');
+      });
+
+      const activeTab = document.getElementById(`tab-${tabName}`);
+      const activeNav = document.getElementById(`nav-${tabName}`);
+      if (activeTab) activeTab.classList.remove('hidden');
+      if (activeNav) {
+        activeNav.classList.add('text-indigo-400', 'font-bold');
+        activeNav.classList.remove('text-slate-400');
+      }
+
+      if (tabName === 'leaderboard') loadLeaderboard();
+      lucide.createIcons();
+    }
+
+    function selectPaymentMethod(method) {
+      haptic('light');
+      selectedMethod = method;
+      document.querySelectorAll('.payment-method-btn').forEach(btn => {
+        btn.classList.remove('border-indigo-500', 'bg-indigo-500/20', 'text-white');
+        btn.classList.add('border-slate-700', 'bg-slate-800/60', 'text-slate-400');
+      });
+      const activeBtn = document.getElementById(`btnMethod${method}`);
+      if (activeBtn) {
+        activeBtn.classList.add('border-indigo-500', 'bg-indigo-500/20', 'text-white');
+        activeBtn.classList.remove('border-slate-700', 'bg-slate-800/60', 'text-slate-400');
+      }
+
+      const label = document.getElementById('accountLabel');
+      const input = document.getElementById('withdrawAccountInput');
+      if (method === 'PAYNET') {
+        label.innerText = 'Telefon raqam (Paynet)';
+        input.placeholder = '90 123 45 67';
+      } else {
+        label.innerText = `Karta raqami (${method} - 16 ta raqam)`;
+        input.placeholder = method === 'UZCARD' ? '8600 0000 0000 0000' : '9860 0000 0000 0000';
+      }
+    }
+
+    function formatSum(val) {
+      if (val === undefined || val === null) return '0';
+      const num = typeof val === 'string' ? parseInt(val.replace(/[^0-9]/g, ''), 10) || 0 : val;
+      return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    }
+
+    async function loadUserData() {
+      const userParam = tg?.initDataUnsafe?.user;
+      const telegramId = userParam?.id?.toString() || new URLSearchParams(window.location.search).get('telegramId') || '123456789';
+
+      try {
+        const res = await fetch(`/api/app/user?telegramId=${telegramId}`);
+        const data = await res.json();
+        if (data.user) {
+          currentUser = data.user;
+          currentConfig = data.config;
+
+          document.getElementById('userName').innerText = currentUser.firstName || 'Foydalanuvchi';
+          if (userParam && userParam.photo_url) {
+            document.getElementById('userAvatar').innerHTML = `<img src="${userParam.photo_url}" class="w-full h-full object-cover rounded-full" alt="Avatar" />`;
+          } else {
+            document.getElementById('userInitials').innerText = (currentUser.firstName || 'OB').slice(0, 2).toUpperCase();
+          }
+          document.getElementById('balanceDisplay').innerText = formatSum(currentUser.balance);
+          document.getElementById('totalVotesBadge').innerText = `${formatSum(currentUser.totalVotes || 0)} ta ovoz`;
+          document.getElementById('rewardPerVoteText').innerText = `+${formatSum(currentConfig.voteReward || 30000)} so'm / ovoz`;
+
+          const botUsername = currentConfig.botUsername || 'openbudjet_ishonch_2026_bot';
+          const refLink = `https://t.me/${botUsername}?start=ref_${currentUser.referralCode}`;
+          document.getElementById('refLinkInput').value = refLink;
+          document.getElementById('refCountDisplay').innerText = formatSum(currentUser.referrals?.length || 0);
+          document.getElementById('refBonusEarned').innerText = `${formatSum((currentUser.referrals?.length || 0) * (currentConfig.refBonus || 5000))} so'm`;
+
+          renderTransactions(currentUser.withdrawals || []);
+        }
+
+        // Faol mahallani yuklash
+        const initRes = await fetch('/api/app/initiative');
+        const initData = await initRes.json();
+        if (initData) {
+          document.getElementById('mahallaNameDisplay').innerText = initData.mahallaName || initData.title;
+          document.getElementById('mahallaIdDisplay').innerText = initData.mahallaId || initData.openBudgetId;
+          if (initData.url) {
+            document.getElementById('openBudgetUrlLink').href = initData.url;
+          }
+          document.getElementById('currVotes').innerText = formatSum(initData.currentVotes || 0);
+          document.getElementById('targetVotes').innerText = formatSum(initData.targetVotes || 5000);
+          const pct = Math.min(100, Math.round(((initData.currentVotes || 0) / (initData.targetVotes || 5000)) * 100));
+          document.getElementById('progressBar').style.width = `${pct}%`;
+        }
+      } catch (err) {
+        console.error('User data loading error:', err);
+      }
+    }
+
+    function renderTransactions(list) {
+      const container = document.getElementById('transactionsList');
+      if (!list.length) {
+        container.innerHTML = '<p class="text-slate-500 text-center py-4">Hozircha tranzaksiyalar yo\'q</p>';
+        return;
+      }
+
+      container.innerHTML = list.map(item => {
+        const statusColors = {
+          PENDING: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+          APPROVED: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+          REJECTED: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
+        };
+        const statusLabels = {
+          PENDING: 'Kutilmoqda',
+          APPROVED: 'To\'landi',
+          REJECTED: 'Rad etildi',
+        };
+
+        return `
+          <div class="flex items-center justify-between p-3 rounded-2xl bg-slate-900/60 border border-slate-800">
+            <div class="flex items-center space-x-2.5">
+              <div class="p-2 rounded-xl bg-slate-800 text-slate-300">
+                <i data-lucide="arrow-down-left" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <p class="font-bold text-white">${formatSum(item.amount)} so'm</p>
+                <p class="text-[11px] text-slate-400">${item.paymentMethod} • ${item.accountDetails}</p>
+              </div>
+            </div>
+            <span class="px-2 py-0.5 text-[10px] font-bold uppercase rounded-lg border ${statusColors[item.status] || 'text-slate-400'}">
+              ${statusLabels[item.status] || item.status}
+            </span>
+          </div>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    async function handleRequestSms() {
+      const phoneInput = document.getElementById('phoneInput');
+      const rawPhone = phoneInput.value.replace(/[^0-9]/g, '');
+
+      if (rawPhone.length !== 9) {
+        alert('Iltimos 9 ta raqamdan iborat telefon raqamingizni kiriting (masalan 90 123 45 67)');
+        return;
+      }
+
+      haptic('medium');
+      const btn = document.getElementById('btnSendSms');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="animate-spin mr-2">⏳</span> Kutilmoqda...';
+
+      try {
+        const res = await fetch('/api/app/request-sms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: `998${rawPhone}` }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          currentSessionId = data.sessionId;
+          document.getElementById('sentPhoneDisplay').innerText = `+998 ${rawPhone}`;
+          document.getElementById('voteStepPhone').classList.add('hidden');
+          document.getElementById('voteStepSms').classList.remove('hidden');
+        } else {
+          alert(data.error || 'SMS so\'rovida xatolik yuz berdi');
+        }
+      } catch (err) {
+        alert('Serverga ulanishda xatolik yuz berdi');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>SMS Kod Yuborish</span><i data-lucide="arrow-right" class="w-4 h-4"></i>';
+        lucide.createIcons();
+      }
+    }
+
+    async function handleVerifySms() {
+      const smsCode = document.getElementById('smsCodeInput').value.trim();
+      const rawPhone = document.getElementById('phoneInput').value.replace(/[^0-9]/g, '');
+      const userParam = tg?.initDataUnsafe?.user;
+      const telegramId = userParam?.id?.toString() || new URLSearchParams(window.location.search).get('telegramId') || '123456789';
+
+      if (!smsCode || smsCode.length < 4) {
+        alert('Iltimos to\'liq SMS kodni kiriting');
+        return;
+      }
+
+      haptic('medium');
+      const btn = document.getElementById('btnVerifySms');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="animate-spin mr-1">⏳</span> Tekshirilmoqda...';
+
+      try {
+        const res = await fetch('/api/app/verify-sms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            telegramId,
+            phone: `998${rawPhone}`,
+            smsCode,
+            sessionId: currentSessionId,
+          }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 },
+          });
+          haptic('heavy');
+          alert(`🎉 ${data.message}\n+${data.reward.toLocaleString('uz-UZ')} so'm hisobingizga qo'shildi!`);
+          resetVoteStep();
+          await loadUserData();
+        } else {
+          alert(data.error || 'Kodni tasdiqlashda xatolik');
+        }
+      } catch (err) {
+        alert('Kodni tekshirishda xatolik yuz berdi');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="check-circle" class="w-4 h-4"></i><span>Tasdiqlash</span>';
+        lucide.createIcons();
+      }
+    }
+
+    function resetVoteStep() {
+      document.getElementById('voteStepPhone').classList.remove('hidden');
+      document.getElementById('voteStepSms').classList.add('hidden');
+      document.getElementById('smsCodeInput').value = '';
+      currentSessionId = null;
+    }
+
+    async function handleWithdrawSubmit() {
+      const amount = parseInt(document.getElementById('withdrawAmountInput').value, 10);
+      const accountDetails = document.getElementById('withdrawAccountInput').value.trim();
+      const userParam = tg?.initDataUnsafe?.user;
+      const telegramId = userParam?.id?.toString() || new URLSearchParams(window.location.search).get('telegramId') || '123456789';
+
+      if (!amount || amount < 10000) {
+        alert('Minimal pul yechish summasi 10 000 so\'m');
+        return;
+      }
+      if (!accountDetails) {
+        alert('Iltimos karta yoki telefon raqamingizni kiriting');
+        return;
+      }
+
+      haptic('medium');
+      try {
+        const res = await fetch('/api/app/withdraw', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            telegramId,
+            amount,
+            paymentMethod: selectedMethod,
+            accountDetails,
+          }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          alert('✅ Pul yechish so\'rovi muvaffaqiyatli qabul qilindi! Admin tasdiqlashi bilan to\'lab beriladi.');
+          document.getElementById('withdrawAmountInput').value = '';
+          document.getElementById('withdrawAccountInput').value = '';
+          await loadUserData();
+        } else {
+          alert(data.message || data.error || 'Pul yechishda xatolik');
+        }
+      } catch (err) {
+        alert('So\'rov yuborishda xatolik');
+      }
+    }
+
+    function copyRefLink() {
+      const input = document.getElementById('refLinkInput');
+      input.select();
+      navigator.clipboard.writeText(input.value);
+      haptic('medium');
+      alert('Referal havola nusxalandi! Do\'stlaringizga yuboring.');
+    }
+
+    function shareRefLink() {
+      const link = document.getElementById('refLinkInput').value;
+      const text = encodeURIComponent("🔥 Ochiq Budjetda ovoz berib pul ishlang! Har bir ovoz uchun 200,000 so'mgacha mukofot!\n\nHoziroq kiring: " + link);
+      if (tg?.openTelegramLink) {
+        tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${text}`);
+      } else {
+        window.open(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${text}`, '_blank');
+      }
+    }
+
+    async function loadLeaderboard() {
+      try {
+        const res = await fetch('/api/app/leaderboard');
+        const list = await res.json();
+        const container = document.getElementById('leaderboardList');
+
+        const medals = ['🥇', '🥈', '🥉'];
+        container.innerHTML = list.map((item, idx) => `
+          <div class="flex items-center justify-between p-3 rounded-2xl ${idx < 3 ? 'bg-indigo-900/30 border border-indigo-500/30' : 'bg-slate-900/60 border border-slate-800'}">
+            <div class="flex items-center space-x-3">
+              <span class="text-base font-bold w-6 text-center">${medals[idx] || (idx + 1)}</span>
+              <div>
+                <p class="font-bold text-white">${item.firstName || 'Foydalanuvchi'}</p>
+                <p class="text-[11px] text-slate-400">${item._count?.referrals || 0} ta taklif • ${item.totalVotes || 0} ta ovoz</p>
+              </div>
+            </div>
+            <span class="font-extrabold text-emerald-400">${(item.totalEarned || 0).toLocaleString('uz-UZ')} so'm</span>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error('Leaderboard error:', err);
+      }
+    }
+
+    // Init
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      loadUserData();
+    });
+  </script>
+</body>
+</html>

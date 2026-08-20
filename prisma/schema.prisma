@@ -1,0 +1,164 @@
+// Prisma schema for Multi-Bot Open Budget System (MySQL)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model BotInstance {
+  id             Int       @id @default(autoincrement())
+  name           String    // e.g. "Navbahor MFY Boti"
+  token          String    @unique
+  botUsername    String?
+  mahallaId      String    // 12 xonali Mahalla ID, masalan: "055495798013"
+  mahallaName    String    // masalan: "Navbahor MFY"
+  openBudgetUrl  String    @db.Text // Open budget direct link
+  boardId        String?   // e.g. "53"
+  initiativeUuid String?   // e.g. "7710ad19-6734-4df9-ab25-a5d2de6facbf"
+  targetVotes    Int       @default(5000)
+  currentVotes   Int       @default(0)
+  voteReward     Int       @default(30000)
+  refBonus       Int       @default(5000)
+  isActive       Boolean   @default(true)
+  status         String    @default("ONLINE") // ONLINE | STOPPED | ERROR
+  avatarUrl      String?   @db.Text
+  lastError      String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  votes          Vote[]
+  users          User[]
+}
+
+model User {
+  id              Int              @id @default(autoincrement())
+  telegramId      String           @unique
+  username        String?
+  firstName       String?
+  lastName        String?
+  phone           String?
+  balance         Int              @default(0)
+  totalEarned     Int              @default(0)
+  totalWithdrawn  Int              @default(0)
+  totalVotes      Int              @default(0)
+  referralCode    String           @unique
+  referredById    Int?
+  referrer        User?            @relation("UserReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals       User[]           @relation("UserReferrals")
+  botInstanceId   Int?             // Qaysi bot orqali birinchi kirgan
+  botInstance     BotInstance?     @relation(fields: [botInstanceId], references: [id], onDelete: SetNull)
+  role            String           @default("USER") // USER | ADMIN
+  isBanned        Boolean          @default(false)
+  step            String?          // For bot conversation state
+  tempData        String?          @db.Text // JSON state storage for multi-step flows
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  votes           Vote[]
+  withdrawals     Withdrawal[]
+  rewardsReceived ReferralReward[] @relation("RefereeRewards")
+  rewardsGiven    ReferralReward[] @relation("ReferrerRewards")
+}
+
+model Initiative {
+  id             Int      @id @default(autoincrement())
+  openBudgetId   String   @unique
+  mahallaId      String?
+  mahallaName    String?
+  boardId        String?
+  initiativeUuid String?
+  url            String?  @db.Text
+  title          String   @db.Text
+  region         String?
+  district       String?
+  category       String?
+  targetVotes    Int      @default(5000)
+  currentVotes   Int      @default(0)
+  pricePerVote   Int      @default(4500)
+  rewardPerVote  Int      @default(30000)
+  isActive       Boolean  @default(true)
+  isDefault      Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  votes          Vote[]
+}
+
+model Vote {
+  id             Int          @id @default(autoincrement())
+  userId         Int
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  botInstanceId  Int?
+  botInstance    BotInstance? @relation(fields: [botInstanceId], references: [id], onDelete: SetNull)
+  initiativeId   Int?
+  initiative     Initiative?  @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
+  phone          String       // Global unikal tekshiruv ushbu maydon bo'yicha qilinadi!
+  status         String       @default("PENDING_VERIFICATION") // PENDING | PENDING_VERIFICATION | VERIFIED | REJECTED | FAILED
+  rewardAmount   Int          @default(30000)
+  sessionId      String?
+  captchaAnswer  String?
+  smsCode        String?
+  errorMessage   String?      @db.Text
+  createdAt      DateTime     @default(now())
+  completedAt    DateTime?
+}
+
+model Withdrawal {
+  id             Int       @id @default(autoincrement())
+  userId         Int
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount         Int
+  paymentMethod  String    // UZCARD | HUMO | PAYNET
+  accountDetails String    // Card or Phone number
+  cardHolder     String?
+  status         String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  adminNote      String?   @db.Text
+  receiptUrl     String?   @db.Text
+  createdAt      DateTime  @default(now())
+  processedAt    DateTime?
+}
+
+model ReferralReward {
+  id          Int      @id @default(autoincrement())
+  referrerId  Int
+  refereeId   Int
+  referrer    User     @relation("ReferrerRewards", fields: [referrerId], references: [id], onDelete: Cascade)
+  referee     User     @relation("RefereeRewards", fields: [refereeId], references: [id], onDelete: Cascade)
+  amount      Int
+  reason      String   // "SIGNUP_BONUS" | "VOTE_BONUS"
+  createdAt   DateTime @default(now())
+}
+
+model SponsorChannel {
+  id          Int      @id @default(autoincrement())
+  channelId   String   @unique
+  title       String
+  username    String?
+  inviteLink  String   @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model BotSetting {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique
+  value       String   @db.Text
+  description String?  @db.Text
+  updatedAt   DateTime @updatedAt
+}
+
+model BroadcastMessage {
+  id          Int      @id @default(autoincrement())
+  text        String   @db.Text
+  photoUrl    String?  @db.Text
+  buttonText  String?
+  buttonUrl   String?  @db.Text
+  status      String   @default("PENDING") // PENDING | SENDING | COMPLETED | FAILED
+  sentCount   Int      @default(0)
+  failedCount Int      @default(0)
+  createdAt   DateTime @default(now())
+}

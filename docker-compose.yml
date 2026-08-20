@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # Yagona umumiy MySQL 8.0 ma'lumotlar bazasi
+  mysql_db:
+    image: mysql:8.0
+    container_name: open_budget_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-khurshid-2827}
+      MYSQL_DATABASE: open_budget
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - open_budget_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NestJS Multi-Bot Orchestrator & React Admin Dashboard
+  bot_orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: open_budget_orchestrator
+    restart: always
+    depends_on:
+      mysql_db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: mysql://root:${DB_ROOT_PASSWORD:-khurshid-2827}@mysql_db:3306/open_budget
+      BOT_TOKEN: ${BOT_TOKEN:-8973530886:AAFjlBqhJgVaKseHVs1Eved6_ARENGeCAoc}
+      ADMIN_PHONE: ${ADMIN_PHONE:-+998901234567}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin_password}
+      ADMIN_TELEGRAM_IDS: ${ADMIN_TELEGRAM_IDS:-8140304652,2053690211,5957905121}
+      VOTE_REWARD: ${VOTE_REWARD:-30000}
+      REFERRAL_BONUS: ${REFERRAL_BONUS:-5000}
+      MIN_WITHDRAWAL: ${MIN_WITHDRAWAL:-10000}
+      VOTE_AUTO_APPROVE_HOURS: ${VOTE_AUTO_APPROVE_HOURS:-2}
+      HEALTH_CHECK_INTERVAL_MINUTES: ${HEALTH_CHECK_INTERVAL_MINUTES:-30}
+      HEALTH_CHECK_ENABLED: ${HEALTH_CHECK_ENABLED:-true}
+      EXTERNAL_VOTING_API_URL: ${EXTERNAL_VOTING_API_URL:-}
+      EXTERNAL_VOTING_API_KEY: ${EXTERNAL_VOTING_API_KEY:-}
+      EXTERNAL_SERVICE_ENABLED: ${EXTERNAL_SERVICE_ENABLED:-false}
+      PROXY_ENABLED: ${PROXY_ENABLED:-false}
+      PROXY_LIST: ${PROXY_LIST:-}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./public:/app/public
+      - ./logs:/app/logs
+    networks:
+      - open_budget_network
+
+volumes:
+  mysql_data:
+
+networks:
+  open_budget_network:
+    driver: bridge

@@ -1,0 +1,128 @@
+import { Markup } from 'telegraf';
+import { BOT_BUTTONS } from './bot.constants';
+
+export class BotKeyboards {
+  /**
+   * Asosiy menyu klaviaturasi (Skrinshotdagi kabi ideal)
+   */
+  static mainMenu(isAdmin: boolean = false) {
+    const buttons = [
+      [BOT_BUTTONS.VOTE],
+      [BOT_BUTTONS.BALANCE, BOT_BUTTONS.WITHDRAW],
+      [BOT_BUTTONS.REFERRAL],
+    ];
+
+    if (isAdmin) {
+      buttons.push([BOT_BUTTONS.ADMIN_PANEL]);
+    }
+
+    return Markup.keyboard(buttons).resize();
+  }
+
+  /**
+   * Telefon raqamni yuborish klaviaturasi (ixtiyoriy kontakt ulashish bilan)
+   */
+  static phoneRequestKeyboard() {
+    return Markup.keyboard([
+      [Markup.button.contactRequest('📱 Kontaktni yuborish')],
+      [BOT_BUTTONS.CANCEL],
+    ]).resize();
+  }
+
+  /**
+   * Bekor qilish klaviaturasi
+   */
+  static cancelKeyboard() {
+    return Markup.keyboard([[BOT_BUTTONS.CANCEL]]).resize();
+  }
+
+  /**
+   * Pul yechish to'lov usullari inline tugmalari
+   */
+  static withdrawMethodsInline() {
+    return Markup.inlineKeyboard([
+      [Markup.button.callback('💳 Uzcard / Humo (Kartaga yechish)', 'withdraw_method_CARD')],
+      [Markup.button.callback('📱 Paynet (Telefon raqamga)', 'withdraw_method_PAYNET')],
+      [Markup.button.callback('❌ Bekor qilish', 'cancel_action')],
+    ]);
+  }
+
+  /**
+   * Referal bo'limi inline tugmalari
+   */
+  static referralInline(botUsername: string, refCode: string) {
+    const shareText = encodeURIComponent(
+      `🔥 Ochiq Budjetda ovoz berib pul ishlang! Har bir ovoz uchun 200,000 so'mgacha mukofot!\n\nHoziroq kiring: https://t.me/${botUsername}?start=ref_${refCode}`
+    );
+    return Markup.inlineKeyboard([
+      [
+        Markup.button.url(
+          '↗️ Do\'stlarga ulashish',
+          `https://t.me/share/url?url=https://t.me/${botUsername}?start=ref_${refCode}&text=${shareText}`
+        ),
+      ],
+      [
+        Markup.button.callback('📊 Takliflar statistikasi', 'referral_stats'),
+        Markup.button.callback('🔄 Yangilash', 'refresh_balance'),
+      ],
+    ]);
+  }
+
+  /**
+   * Balans bo'limi inline tugmalari
+   */
+  static balanceInline() {
+    const rows: any[][] = [
+      [
+        Markup.button.callback('💸 Pul yechish', 'start_withdraw'),
+        Markup.button.callback('🔄 Yangilash', 'refresh_balance'),
+      ],
+    ];
+
+    return Markup.inlineKeyboard(rows as any);
+  }
+
+  /**
+   * Admin paneli inline menyusi
+   */
+  static adminMenuInline() {
+    return Markup.inlineKeyboard([
+      [
+        Markup.button.callback('📊 Jonli Statistika', 'admin_stats'),
+        Markup.button.callback('💳 Pul yechish arizalari', 'admin_withdrawals'),
+      ],
+      [
+        Markup.button.callback('📢 Xabar yuborish (Broadcast)', 'admin_broadcast'),
+        Markup.button.callback('📢 Homiy kanallar', 'admin_channels'),
+      ],
+      [
+        Markup.button.callback('⚙️ Narxlar va Sozlamalar', 'admin_settings'),
+        Markup.button.callback('🗳 Tashabbuslar', 'admin_initiatives'),
+      ],
+      [Markup.button.callback('🔙 Asosiy menyu', 'back_to_main')],
+    ]);
+  }
+
+  /**
+   * Admin uchun pul yechish arizasini tasdiqlash/rad etish tugmalari
+   */
+  static adminWithdrawalAction(withdrawalId: number) {
+    return Markup.inlineKeyboard([
+      [
+        Markup.button.callback('✅ Tasdiqlash (To\'landi)', `adm_app_${withdrawalId}`),
+        Markup.button.callback('❌ Rad etish (Qaytarish)', `adm_rej_${withdrawalId}`),
+      ],
+    ]);
+  }
+
+  /**
+   * Homiy kanallar tekshiruvi inline tugmalari
+   */
+  static sponsorChannelsInline(channels: { title: string; inviteLink: string }[]) {
+    const rows: any[][] = channels.map((c, i) => [
+      Markup.button.url(`📢 ${i + 1}-Kanalga a'zo bo'lish`, c.inviteLink),
+    ]);
+    rows.push([Markup.button.callback('✅ A\'zo bo\'ldim (Tekshirish)', 'check_subscription')]);
+    return Markup.inlineKeyboard(rows as any);
+  }
+}

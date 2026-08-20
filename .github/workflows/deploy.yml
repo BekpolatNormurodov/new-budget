@@ -1,0 +1,36 @@
+name: Open Budget CI/CD Deployment
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js 20.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+
+    - name: Install Dependencies (Backend)
+      run: npm ci
+
+    - name: Install Dependencies (Admin App)
+      run: cd admin-app && npm ci
+
+    - name: Generate Prisma Client
+      run: npx prisma generate
+
+    - name: Build Project (Admin + NestJS)
+      run: npm run build
+
+    - name: Verify Docker Build (Optional)
+      run: docker build -t open-budget-orchestrator:latest .
