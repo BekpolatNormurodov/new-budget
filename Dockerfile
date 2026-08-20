@@ -3,6 +3,8 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+RUN apk add --no-cache openssl libc6-compat
+
 # Install dependencies
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -22,12 +24,13 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Install Tesseract & Graphics libraries for CAPTCHA OCR
-RUN apk add --no-cache tesseract-ocr vips
+# Install Tesseract, OpenSSL & Graphics libraries for CAPTCHA OCR
+RUN apk add --no-cache tesseract-ocr vips openssl libc6-compat
 
 COPY package*.json ./
 COPY prisma ./prisma/
 RUN npm ci --only=production
+RUN npx prisma generate
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
