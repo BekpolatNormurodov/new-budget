@@ -45,15 +45,24 @@ export const HealthView: React.FC<HealthViewProps> = ({ token, showToast }) => {
     try {
       const res = await fetch('/api/admin/health/trigger', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
       });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || 'Server tekshiruvida xatolik yuz berdi');
+      }
+
       const data = await res.json();
-      if (data.success) {
+      if (data && (data.report || data.success)) {
         setHealthData({ report: data.report, proxyStats: data.proxyStats });
         showToast('30-daqiqalik tizim tekshiruvi muvaffaqiyatli o\'tkazildi!', 'success');
       }
-    } catch (e) {
-      showToast('Tekshiruvni ishga tushirishda xatolik', 'error');
+    } catch (e: any) {
+      showToast(e.message || 'Tekshiruvni ishga tushirishda xatolik', 'error');
     } finally {
       setLoading(false);
     }

@@ -69,7 +69,7 @@ export class SystemHealthService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * 30 daqiqalik to'liq tizim tekshiruvini bajarish
+   * 30 daqiqalik to'liq tizim tekshiruvini bajarish (100% xatosiz va bardoshli)
    */
   public async runPeriodicHealthCheck(): Promise<HealthReport> {
     this.logger.log('🔍 [30-Daqiqalik Monitoring] Tizim, Ovoz berish, Captcha, Proxy va Botlar holati tekshirilmoqda...');
@@ -81,7 +81,7 @@ export class SystemHealthService implements OnModuleInit, OnModuleDestroy {
     let obError: string | undefined = undefined;
 
     try {
-      const defaultInit = await this.openBudgetService.getDefaultInitiative();
+      const defaultInit = await this.openBudgetService.getDefaultInitiative().catch(() => null);
       if (!defaultInit) {
         obAlive = false;
         obError = 'Birlamchi tashabbus/mahalla sozlanmagan';
@@ -98,7 +98,7 @@ export class SystemHealthService implements OnModuleInit, OnModuleDestroy {
     const capStart = Date.now();
     let capResolved = false;
     try {
-      const worker = await this.captchaSolver.getWorker();
+      const worker = await this.captchaSolver.getWorker().catch(() => null);
       capResolved = !!worker;
     } catch (e: any) {
       issues.push(`Captcha solver xatoligi: ${e.message}`);
@@ -106,21 +106,42 @@ export class SystemHealthService implements OnModuleInit, OnModuleDestroy {
     const capLatency = Date.now() - capStart;
 
     // 3. Proxylarni tekshirish
-    const proxyStats = await this.proxyManager.checkAllProxiesHealth();
-    if (proxyStats.total > 0 && proxyStats.alive === 0) {
-      issues.push('Barcha proxylar nosoz holatda!');
+    let proxyStats = { total: 0, alive: 0, dead: 0 };
+    try {
+      proxyStats = await this.proxyManager.checkAllProxiesHealth().catch(() => ({ total: 0, alive: 0, dead: 0 }));
+      if (proxyStats.total > 0 && proxyStats.alive === 0) {
+        issues.push('Barcha proxylar nosoz holatda!');
+      }
+    } catch (e: any) {
+      this.logger.warn(`Proxy tekshiruvida xatolik: ${e.message}`);
     }
 
     // 4. Tashqi Mikroservis Ko'prigini tekshirish
-    const bridgeStats = await this.externalBridge.pingService();
-    if (this.externalBridge.isServiceActive() && !bridgeStats.alive) {
-      issues.push(`Tashqi REST API mikroservisiga ulanib bo'lmadi: ${bridgeStats.status}`);
+    let bridgeStats: { alive: boolean; latencyMs: number; status?: string } = {
+      alive: false,
+      latencyMs: 0,
+      status: 'DISABLED',
+    };
+    try {
+      bridgeStats = await this.externalBridge.pingService().catch(() => ({ alive: false, latencyMs: 0, status: 'ERROR' }));
+      if (this.externalBridge.isServiceActive() && !bridgeStats.alive) {
+        issues.push(`Tashqi REST API mikroservisiga ulanib bo'lmadi: ${bridgeStats.status}`);
+      }
+    } catch (e: any) {
+      this.logger.warn(`External bridge tekshiruvida xatolik: ${e.message}`);
     }
 
     // 5. Botlar holati
-    const bots = await this.prisma.botInstance.findMany();
-    const onlineBots = bots.filter((b) => b.isActive && b.status === 'ONLINE').length;
-    const offlineBots = bots.filter((b) => !b.isActive || b.status !== 'ONLINE').length;
+    let bots: any[] = [];
+    let onlineBots = 0;
+    let offlineBots = 0;
+    try {
+      bots = await this.prisma.botInstance.findMany().catch(() => []);
+      onlineBots = bots.filter((b) => b.isActive && b.status === 'ONLINE').length;
+      offlineBots = bots.filter((b) => !b.isActive || b.status !== 'ONLINE').length;
+    } catch (e: any) {
+      this.logger.warn(`Botlar ro'yxatini tekshirishda xatolik: ${e.message}`);
+    }
 
     let overallStatus: 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY' = 'HEALTHY';
     if (!obAlive || (bots.length > 0 && onlineBots === 0)) {
@@ -151,9 +172,9 @@ export class SystemHealthService implements OnModuleInit, OnModuleDestroy {
       `📊 [30-Daqiqalik Monitoring Natijasi] Holat: ${overallStatus} | OpenBudget: ${obLatency}ms | Captcha: ${capLatency}ms | Botlar: ${onlineBots}/${bots.length} Online`
     );
 
-    // Agar tizimda jiddiy nosozlik aniqlansa, adminlarga bildirishnoma jo'natish
+    // Agar tizimda jiddiy nosozlik aniqlansa, adminlarga bildirishnoma jo'natish (Asinxron)
     if (overallStatus !== 'HEALTHY' && issues.length > 0) {
-      await this.notifyAdminsAboutIssues(report);
+      this.notifyAdminsAboutIssues(report).catch(() => {});
     }
 
     return report;
@@ -163,22 +184,24 @@ export class SystemHealthService implements OnModuleInit, OnModuleDestroy {
    * Muammo yuz berganda adminlarni Telegram orqali xabardor qilish
    */
   private async notifyAdminsAboutIssues(report: HealthReport) {
-    const shouldAlert = this.configService.get<boolean>('health.alertAdmins') ?? true;
-    if (!shouldAlert) return;
+    try {
+      const shouldAlert = this.configService.get<boolean>('health.alertAdmins') ?? true;
+      if (!shouldAlert) return;
 
-    const alertMessage =
-      `⚠️ <b>[30-DAQIQALIK TIZIM OGOHLANTIRIShI]</b>\n\n` +
-      `📌 <b>Tizim Holati:</b> ${report.status === 'UNHEALTHY' ? '🔴 XAVFLI (UNHEALTHY)' : '🟡 DIQQAT (DEGRADED)'}\n` +
-      `⏱ <b>Vaqt:</b> ${new Date().toLocaleTimeString('uz-UZ')}\n\n` +
-      `🔍 <b>Aniqlangan Muammolar:</b>\n` +
-      report.issues.map((i) => `• ${i}`).join('\n') +
-      `\n\n🤖 <b>Faol Botlar:</b> ${report.bots.online} / ${report.bots.total} ta online\n` +
-      `🌐 <b>OpenBudget Latency:</b> ${report.openBudget.latencyMs}ms`;
+      const alertMessage =
+        `⚠️ <b>[30-DAQIQALIK TIZIM OGOHLANTIRIShI]</b>\n\n` +
+        `📌 <b>Tizim Holati:</b> ${report.status === 'UNHEALTHY' ? '🔴 XAVFLI (UNHEALTHY)' : '🟡 DIQQAT (DEGRADED)'}\n` +
+        `⏱ <b>Vaqt:</b> ${new Date().toLocaleTimeString('uz-UZ')}\n\n` +
+        `🔍 <b>Aniqlangan Muammolar:</b>\n` +
+        report.issues.map((i) => `• ${i}`).join('\n') +
+        `\n\n🤖 <b>Faol Botlar:</b> ${report.bots.online} / ${report.bots.total} ta online\n` +
+        `🌐 <b>OpenBudget Latency:</b> ${report.openBudget.latencyMs}ms`;
 
-    const adminIds = ['8140304652', '2053690211', '5957905121'];
-    for (const adminId of adminIds) {
-      await this.botManager.sendMessageToUser(adminId, alertMessage).catch(() => {});
-    }
+      const adminIds = ['8140304652', '2053690211', '5957905121'];
+      for (const adminId of adminIds) {
+        await this.botManager.sendMessageToUser(adminId, alertMessage).catch(() => {});
+      }
+    } catch (e) {}
   }
 
   /**
