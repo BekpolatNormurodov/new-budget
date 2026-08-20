@@ -97,7 +97,7 @@ export class ExternalBridgeService {
     }
 
     try {
-      const axiosConfig = this.proxyManager.getAxiosConfig();
+      const axiosConfig = this.proxyManager.getAxiosConfig(params.phone);
       const res = await this.httpClient.post(
         '/api/vote/request-sms',
         {
@@ -141,7 +141,7 @@ export class ExternalBridgeService {
     }
 
     try {
-      const axiosConfig = this.proxyManager.getAxiosConfig();
+      const axiosConfig = this.proxyManager.getAxiosConfig(params.phone);
       const res = await this.httpClient.post(
         '/api/vote/verify-sms',
         {
@@ -154,6 +154,7 @@ export class ExternalBridgeService {
       );
 
       if (res.data?.success) {
+        this.proxyManager.releaseSession(params.phone);
         return { success: true, isExternal: true };
       }
       return {

@@ -21,7 +21,14 @@ export class ProxyManagerService implements OnModuleInit {
   private currentIndex = 0;
   private isEnabled = false;
 
-  constructor(private readonly configService: ConfigService) {}
+  // Sticky Session kesh: sessionKey (masalan: telefon yoki sessionId) -> ProxyItem
+  private sessionMap = new Map<string, { proxy: ProxyItem; expiresAt: number }>();
+  private readonly DEFAULT_SESSION_TTL_MS = 20 * 60 * 1000; // 20 daqiqa
+
+  constructor(private readonly configService: ConfigService) {
+    // Har 5 daqiqada muddati o'tgan sticky sessiyalarni tozalash (Garbage Collection)
+    setInterval(() => this.cleanupExpiredSessions(), 5 * 60 * 1000);
+  }
 
   onModuleInit() {
     this.loadProxies();
@@ -99,10 +106,51 @@ export class ProxyManagerService implements OnModuleInit {
   }
 
   /**
-   * Axios uchun proxy sozlamasini olish
+   * Sticky Session: Berilgan kalit (Telefon raqam, SessionId yoki BotId) uchun doimiy biriktirilgan proxyni olish
+   * Agar avval biriktirilgan bo'lsa, xuddi o'sha IP ni qaytaradi (SMS so'rash va Verify bir xil IP dan chiqishi uchun)
    */
-  public getAxiosConfig(): { proxy?: any } {
-    const proxy = this.getNextProxy();
+  public getStickyProxy(sessionKey: string, ttlMs = this.DEFAULT_SESSION_TTL_MS): ProxyItem | null {
+    if (!sessionKey || !this.isEnabled || this.proxyPool.length === 0) {
+      return this.getNextProxy();
+    }
+
+    const now = Date.now();
+    const existing = this.sessionMap.get(sessionKey);
+
+    if (existing && existing.expiresAt > now && existing.proxy.isAlive) {
+      // Sessiya muddatini yana uzaytirish
+      existing.expiresAt = now + ttlMs;
+      return existing.proxy;
+    }
+
+    // Yangi proxy biriktirish (Round-robin orqali)
+    const newProxy = this.getNextProxy();
+    if (newProxy) {
+      this.sessionMap.set(sessionKey, {
+        proxy: newProxy,
+        expiresAt: now + ttlMs,
+      });
+      this.logger.debug(`🔒 Sticky Session biriktirildi [${sessionKey}] -> IP: ${newProxy.host}`);
+    }
+
+    return newProxy;
+  }
+
+  /**
+   * Sessiya tugaganda sticky birikuvni bo'shatish
+   */
+  public releaseSession(sessionKey: string) {
+    if (sessionKey) {
+      this.sessionMap.delete(sessionKey);
+    }
+  }
+
+  /**
+   * Axios uchun to'liq sozlangan Proxy konfiguratsiyasini olish
+   * @param sessionKey Ixtiyoriy: Agar telefon raqam yoki session berilsa, Sticky Proxy ishlatiladi
+   */
+  public getAxiosConfig(sessionKey?: string): { proxy?: any } {
+    const proxy = sessionKey ? this.getStickyProxy(sessionKey) : this.getNextProxy();
     if (!proxy || proxy.protocol.startsWith('socks')) {
       return {};
     }
@@ -115,6 +163,35 @@ export class ProxyManagerService implements OnModuleInit {
         protocol: proxy.protocol,
       },
     };
+  }
+
+  /**
+   * Istalgan so'rov uchun ideal darajada tayyorlangan Axios Instance yaratish
+   */
+  public createAxiosClient(sessionKey?: string, customConfig: any = {}) {
+    const proxyConfig = this.getAxiosConfig(sessionKey);
+    return axios.create({
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        ...(customConfig.headers || {}),
+      },
+      ...proxyConfig,
+      ...customConfig,
+    });
+  }
+
+  /**
+   * Muddati o'tgan sessiyalarni tozalash
+   */
+  private cleanupExpiredSessions() {
+    const now = Date.now();
+    for (const [key, val] of this.sessionMap.entries()) {
+      if (val.expiresAt <= now) {
+        this.sessionMap.delete(key);
+      }
+    }
   }
 
   /**

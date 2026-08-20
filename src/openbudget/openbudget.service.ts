@@ -3,6 +3,7 @@ import axios from 'axios';
 import { ConfigService } from '@nestjs/config';
 import { CaptchaSolverService } from './captcha-solver.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProxyManagerService } from '../proxy/proxy-manager.service';
 
 export interface SendSmsResult {
   success: boolean;
@@ -27,6 +28,7 @@ export class OpenBudgetService {
     private readonly configService: ConfigService,
     private readonly captchaSolver: CaptchaSolverService,
     private readonly prisma: PrismaService,
+    private readonly proxyManager: ProxyManagerService,
   ) {
     this.baseUrl = this.configService.get<string>('openbudget.baseUrl') || 'https://openbudget.uz/api/v1';
   }
@@ -261,9 +263,12 @@ export class OpenBudgetService {
 
       if (enableLiveApi) {
         try {
+          const stickyAxiosConfig = this.proxyManager.getAxiosConfig(clean12);
+
           const captchaRes = await axios.get(`${this.baseUrl}/vote/captcha`, {
             responseType: 'arraybuffer',
-            timeout: 5000,
+            timeout: 6000,
+            ...stickyAxiosConfig,
           });
 
           const captchaBuffer = Buffer.from(captchaRes.data);
@@ -283,7 +288,7 @@ export class OpenBudgetService {
               board_id: initiative.boardId,
               captcha_result: solved.answer,
             },
-            { timeout: 8000 },
+            { timeout: 9000, ...stickyAxiosConfig },
           );
 
           return {
@@ -334,6 +339,8 @@ export class OpenBudgetService {
 
       if (enableLiveApi && sessionId) {
         try {
+          const stickyAxiosConfig = this.proxyManager.getAxiosConfig(clean12);
+
           const verifyRes = await axios.post(
             `${this.baseUrl}/vote/verify`,
             {
@@ -341,10 +348,11 @@ export class OpenBudgetService {
               code: code,
               session_id: sessionId,
             },
-            { timeout: 8000 },
+            { timeout: 9000, ...stickyAxiosConfig },
           );
 
           if (verifyRes.data?.status === 'success' || verifyRes.data?.success) {
+            this.proxyManager.releaseSession(clean12);
             return {
               success: true,
               message: 'Ovoz muvaffaqiyatli qabul qilindi!',
@@ -360,6 +368,7 @@ export class OpenBudgetService {
         }
       }
 
+      this.proxyManager.releaseSession(clean12);
       return {
         success: true,
         message: 'Ovoz muvaffaqiyatli qabul qilindi va tasdiqlandi!',
