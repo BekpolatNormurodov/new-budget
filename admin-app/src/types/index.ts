@@ -43,6 +43,7 @@ export interface VoteItem {
     firstName: string;
     username?: string;
     phone?: string;
+    telegramId?: string;
   };
   botInstance?: {
     id?: number;
@@ -69,6 +70,7 @@ export interface WithdrawalItem {
     username?: string;
     phone?: string;
     balance?: number;
+    telegramId?: string;
   };
 }
 
@@ -76,6 +78,7 @@ export interface UserItem {
   id: number;
   telegramId: string;
   firstName?: string;
+  lastName?: string;
   username?: string;
   phone?: string;
   balance: number;
@@ -95,6 +98,8 @@ export interface UserItem {
     mahallaName: string;
   };
 }
+
+export type TabType = 'dashboard' | 'bots' | 'votes' | 'withdrawals' | 'users' | 'health';
 
 export interface HealthReport {
   timestamp: string;
@@ -119,6 +124,7 @@ export interface ProxyStats {
     isAlive: boolean;
     latencyMs?: number;
     failCount: number;
+    lastCheckedAt?: string | Date;
   }>;
 }
 

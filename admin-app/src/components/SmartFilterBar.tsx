@@ -56,7 +56,6 @@ export const SmartFilterBar: React.FC<SmartFilterBarProps> = ({
     } else if (preset === 'YESTERDAY') {
       onDateChange(yesterdayStr, yesterdayStr, 'YESTERDAY');
     } else if (preset === 'SEASON') {
-      // Aniq 10 kun: 22-avgustdan 31-avgustgacha
       onDateChange('2026-08-22', '2026-08-31', 'SEASON');
     }
   };
@@ -94,7 +93,7 @@ export const SmartFilterBar: React.FC<SmartFilterBarProps> = ({
   ];
 
   return (
-    <div className="p-3 sm:p-4 rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-slate-800/90 shadow-2xl space-y-3">
+    <div className="p-3 sm:p-4 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200 dark:border-slate-800/90 shadow-xl dark:shadow-2xl space-y-3 transition-colors">
       {/* Top Controls: Pro UI Dropdown for Bot + Preset Chips */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
         {/* 1. Custom Pro Dropdown */}
@@ -112,10 +111,10 @@ export const SmartFilterBar: React.FC<SmartFilterBarProps> = ({
           <button
             type="button"
             onClick={() => handleApplyPreset('ALL')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
               activePreset === 'ALL' && !startDate && !endDate
-                ? 'bg-slate-800 text-white border border-slate-700 shadow-sm'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
+                ? 'bg-slate-800 dark:bg-slate-700 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/40'
             }`}
           >
             Barchasi
@@ -124,10 +123,10 @@ export const SmartFilterBar: React.FC<SmartFilterBarProps> = ({
           <button
             type="button"
             onClick={() => handleApplyPreset('TODAY')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
               activePreset === 'TODAY'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/40'
             }`}
           >
             🟢 Bugun
@@ -136,57 +135,57 @@ export const SmartFilterBar: React.FC<SmartFilterBarProps> = ({
           <button
             type="button"
             onClick={() => handleApplyPreset('YESTERDAY')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
               activePreset === 'YESTERDAY'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/40'
             }`}
           >
-            ⏳ Kecha
+            Kecha
           </button>
 
-          {/* 10-Day Season Preset (22-31 Avgust) */}
           <button
             type="button"
             onClick={() => handleApplyPreset('SEASON')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1 transition-all cursor-pointer ${
               isSeasonActive
-                ? 'bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 text-white shadow-md shadow-amber-500/25 scale-102'
-                : 'bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 border border-amber-500/30'
+                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-orange-500/25 ring-1 ring-amber-400/50'
+                : 'bg-amber-500/10 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/20'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5 fill-current text-amber-300" />
-            <span>10 Kunlik Mavsum (22-31 Avgust)</span>
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Mavsum (22–31-Avg)</span>
           </button>
 
-          {/* Reset Filters */}
           {(selectedBotId !== 'ALL' || startDate || endDate) && (
             <button
               type="button"
               onClick={handleReset}
-              className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all flex-shrink-0"
-              title="Filtrni tozalash"
+              className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 border border-slate-200 dark:border-slate-700 transition-colors flex-shrink-0 cursor-pointer"
+              title="Filtrlarni tozalash"
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
           )}
-
-          {totalFilteredCount !== undefined && (
-            <span className="text-[11px] text-slate-400 whitespace-nowrap hidden md:inline ml-1 font-medium">
-              {totalFilteredLabel}: <b className="text-white font-bold">{totalFilteredCount} ta</b>
-            </span>
-          )}
         </div>
       </div>
 
-      {/* 10-Kunlik Kunma-Kun Interaktiv Lenta (22-avgustdan 31-avgustgacha) */}
-      <div className="pt-2 border-t border-slate-800/70">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-          <div className="flex items-center gap-1 text-[10px] uppercase font-bold text-slate-500 whitespace-nowrap mr-1.5 flex-shrink-0">
-            <CalendarDays className="w-3.5 h-3.5 text-indigo-400" />
-            <span>10 KUN:</span>
+      {/* Bottom Timeline: 10 Daily Season Buttons (22-31 August 2026) */}
+      <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800/80 space-y-1.5">
+        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+          <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300">
+            <CalendarDays className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span>Ovoz Berish Mavsumi (Avgust 2026):</span>
           </div>
+          {totalFilteredCount !== undefined && (
+            <span className="font-semibold text-slate-700 dark:text-slate-300">
+              {totalFilteredLabel}: <strong className="text-indigo-600 dark:text-indigo-400 font-mono">{totalFilteredCount}</strong>
+            </span>
+          )}
+        </div>
 
+        {/* 10-day Pills Grid */}
+        <div className="grid grid-cols-5 sm:grid-cols-10 gap-1 sm:gap-1.5">
           {SEASON_DAYS.map((day) => {
             const isSelected = startDate === day.date && endDate === day.date;
 
@@ -195,14 +194,16 @@ export const SmartFilterBar: React.FC<SmartFilterBarProps> = ({
                 key={day.date}
                 type="button"
                 onClick={() => handleSelectDay(day.date)}
-                className={`flex flex-col items-center justify-center px-2.5 py-1 rounded-xl text-center transition-all flex-shrink-0 min-w-[58px] border ${
+                className={`flex flex-col items-center justify-center p-1.5 sm:py-2 rounded-xl transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-gradient-to-b from-indigo-600 to-indigo-700 text-white border-indigo-400/80 shadow-md shadow-indigo-600/30 scale-105'
-                    : 'bg-slate-950/70 hover:bg-slate-800 text-slate-400 hover:text-white border-slate-800/80 hover:border-slate-700'
+                    ? 'bg-gradient-to-tr from-indigo-600 to-indigo-700 text-white shadow-md shadow-indigo-600/30 scale-102 ring-2 ring-indigo-400/40'
+                    : 'bg-slate-100/90 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800/70 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
                 }`}
               >
-                <span className="text-[11px] font-bold tracking-tight">{day.label}</span>
-                <span className={`text-[9px] ${isSelected ? 'text-indigo-200' : 'text-slate-500'}`}>
+                <span className={`text-[11px] font-bold ${isSelected ? 'text-white' : 'text-slate-800 dark:text-slate-300'}`}>
+                  {day.label}
+                </span>
+                <span className={`text-[9px] font-mono ${isSelected ? 'text-indigo-200' : 'text-slate-400 dark:text-slate-500'}`}>
                   {day.dayNum}
                 </span>
               </button>

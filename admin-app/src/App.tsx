@@ -31,6 +31,25 @@ export function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    const saved = localStorage.getItem('ob_theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  });
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('ob_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
   const [activeTab, setActiveTab] = useState<'dashboard' | 'bots' | 'votes' | 'withdrawals' | 'users' | 'health'>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false);
@@ -396,7 +415,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col lg:flex-row pb-16 lg:pb-0">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col lg:flex-row pb-16 lg:pb-0 transition-colors">
       {/* Smart Sidebar (Desktop & Mobile Drawer) */}
       <Sidebar
         activeTab={activeTab}
@@ -408,6 +427,8 @@ export function App() {
         setIsCollapsed={setIsSidebarCollapsed}
         isMobileOpen={isMobileOpen}
         setIsMobileOpen={setIsMobileOpen}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       {/* Main Content Area */}
@@ -428,6 +449,8 @@ export function App() {
           onOpenMobileMenu={() => setIsMobileOpen(true)}
           globalSearch={globalSearch}
           setGlobalSearch={setGlobalSearch}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
 
         {/* Dynamic Tab Views */}
@@ -488,7 +511,7 @@ export function App() {
       </div>
 
       {/* Mobile Bottom Quick Bar for Phones (lg:hidden) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur-xl border-t border-slate-800 flex items-center justify-around py-2 px-1 lg:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 flex items-center justify-around py-2 px-1 lg:hidden transition-colors">
         {[
           { id: 'dashboard', label: 'Boshqaruv', icon: LayoutDashboard },
           { id: 'bots', label: 'Botlar', icon: Bot, badge: stats ? `${stats.onlineBotsCount}` : null },
@@ -503,8 +526,8 @@ export function App() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex flex-col items-center justify-center p-1.5 rounded-xl transition-all relative flex-1 ${
-                isActive ? 'text-indigo-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+              className={`flex flex-col items-center justify-center p-1.5 rounded-xl transition-all relative flex-1 cursor-pointer ${
+                isActive ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
               <div className="relative">
