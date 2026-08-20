@@ -125,42 +125,44 @@ export class ProxyManagerService implements OnModuleInit {
       return { total: 0, alive: 0, dead: 0 };
     }
 
-    this.logger.log(`🔍 ${this.proxyPool.length} ta proxylar salomatligi tekshirilmoqda...`);
+    this.logger.log(`🔍 ${this.proxyPool.length} ta proxylar salomatligi tekshirilmoqda (Parallel)...`);
     let alive = 0;
     let dead = 0;
 
-    for (const proxy of this.proxyPool) {
-      const startTime = Date.now();
-      try {
-        const proxyConfig: any = {
-          host: proxy.host,
-          port: proxy.port,
-          protocol: proxy.protocol,
-        };
-        if (proxy.auth?.username) {
-          proxyConfig.auth = {
-            username: proxy.auth.username,
-            password: proxy.auth.password || '',
+    await Promise.allSettled(
+      this.proxyPool.map(async (proxy) => {
+        const startTime = Date.now();
+        try {
+          const proxyConfig: any = {
+            host: proxy.host,
+            port: proxy.port,
+            protocol: 'http',
           };
+          if (proxy.auth?.username) {
+            proxyConfig.auth = {
+              username: proxy.auth.username,
+              password: proxy.auth.password || '',
+            };
+          }
+
+          const response = await axios.get('http://ipinfo.io/json', {
+            proxy: proxyConfig,
+            timeout: 4000,
+          });
+
+          proxy.isAlive = response.status >= 200 && response.status < 500;
+          proxy.latencyMs = Date.now() - startTime;
+          proxy.lastCheckedAt = new Date();
+          proxy.failCount = 0;
+          alive++;
+        } catch (err) {
+          proxy.isAlive = false;
+          proxy.failCount++;
+          proxy.lastCheckedAt = new Date();
+          dead++;
         }
-
-        const response = await axios.get('https://api.telegram.org', {
-          proxy: proxyConfig,
-          timeout: 6000,
-        });
-
-        proxy.isAlive = response.status >= 200 && response.status < 500;
-        proxy.latencyMs = Date.now() - startTime;
-        proxy.lastCheckedAt = new Date();
-        proxy.failCount = 0;
-        alive++;
-      } catch (err) {
-        proxy.isAlive = false;
-        proxy.failCount++;
-        proxy.lastCheckedAt = new Date();
-        dead++;
-      }
-    }
+      }),
+    );
 
     this.logger.log(`🛡 Proxy tekshiruvi yakunlandi: ${alive} ta faol, ${dead} ta nosoz.`);
     return { total: this.proxyPool.length, alive, dead };
