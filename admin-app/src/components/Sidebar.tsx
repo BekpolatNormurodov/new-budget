@@ -6,7 +6,6 @@ import {
   Wallet,
   Users,
   Activity,
-  CalendarRange,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -17,8 +16,8 @@ import {
 import { AdminUser, DashboardStats } from '../types';
 
 interface SidebarProps {
-  activeTab: 'dashboard' | 'bots' | 'votes' | 'withdrawals' | 'users' | 'analytics' | 'health';
-  setActiveTab: (tab: 'dashboard' | 'bots' | 'votes' | 'withdrawals' | 'users' | 'analytics' | 'health') => void;
+  activeTab: 'dashboard' | 'bots' | 'votes' | 'withdrawals' | 'users' | 'health';
+  setActiveTab: (tab: 'dashboard' | 'bots' | 'votes' | 'withdrawals' | 'users' | 'health') => void;
   stats: DashboardStats | null;
   adminUser: AdminUser | null;
   onLogout: () => void;
@@ -45,13 +44,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Boshqaruv Paneli',
       icon: LayoutDashboard,
       badge: null,
-    },
-    {
-      id: 'analytics',
-      label: 'Kalendar & Analitika',
-      icon: CalendarRange,
-      badge: 'PRO',
-      badgeColor: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
     },
     {
       id: 'bots',
@@ -117,14 +109,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div>
           <div className="flex items-center justify-between p-4 border-b border-slate-800">
             <div className="flex items-center gap-3 overflow-hidden">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 flex-shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 flex-shrink-0">
                 <Zap className="w-5 h-5 fill-current" />
               </div>
               <div className="overflow-hidden">
                 <h1 className="text-sm font-bold text-white tracking-wide flex items-center gap-1.5">
                   Open Budget <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">PRO</span>
                 </h1>
-                <p className="text-[11px] text-slate-400 font-medium">Multi-Bot Orchestrator</p>
+                <p className="text-[11px] text-slate-400 font-medium">Boshqaruv Paneli</p>
               </div>
             </div>
 
@@ -195,7 +187,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div className="overflow-hidden">
                 <p className="text-xs font-bold text-white truncate">{adminUser?.name || 'Administrator'}</p>
-                <p className="text-[10px] text-emerald-400 font-medium truncate">🟢 Online (Super Admin)</p>
+                <p className="text-[10px] text-emerald-400 font-medium truncate">🟢 Online (Admin)</p>
               </div>
             </div>
 
@@ -209,7 +201,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           <div className="text-center">
-            <p className="text-[10px] text-slate-500">Open Budget Master Server v2.6.0</p>
+            <p className="text-[10px] text-slate-500">Open Budget Pro Server v2.6.0</p>
           </div>
         </div>
       </aside>

@@ -24,7 +24,7 @@ import { SEASON_DAYS } from './SeasonCalendarFilter';
 
 interface DashboardViewProps {
   stats: DashboardStats | null;
-  onNavigateTab: (tab: 'dashboard' | 'bots' | 'votes' | 'withdrawals' | 'users' | 'analytics' | 'health') => void;
+  onNavigateTab: (tab: 'dashboard' | 'bots' | 'votes' | 'withdrawals' | 'users' | 'health') => void;
   onApproveVote: (id: number) => void;
   onOpenApproveWithdrawal: (item: WithdrawalItem) => void;
   onOpenEditBot: (bot: BotInstanceItem) => void;
@@ -43,31 +43,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const overallVotePercentage = Math.min(100, Math.round((stats.totalVotes / totalTargetVotes) * 100 * 10) / 10);
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-300">
       {/* Open Budget 10-Day Season Tracker Banner */}
-      <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900 border border-amber-500/30 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900 border border-amber-500/30 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 flex-shrink-0">
-            <Sparkles className="w-5 h-5 fill-current" />
+          <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 flex-shrink-0">
+            <Sparkles className="w-4 h-4 fill-current" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h4 className="text-sm font-bold text-white">Open Budget 2026 — Ovoz Berish Mavsumi</h4>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              <h4 className="text-xs sm:text-sm font-bold text-white">Open Budget 2026 — Ovoz Berish Mavsumi</h4>
+              <span className="text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
                 22-Avgust — 1-Sentabr
               </span>
             </div>
-            <p className="text-xs text-slate-400">
-              10 kunlik ovoz yig'ish tsikli. Har bir kun bo'yicha dinamika va monitoring faol.
+            <p className="text-[11px] sm:text-xs text-slate-400">
+              10 kunlik ovoz yig'ish tsikli. Har bir bo'limda sana va bot filtrlari faol.
             </p>
           </div>
         </div>
 
         <button
-          onClick={() => onNavigateTab('analytics')}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition-all flex-shrink-0"
+          onClick={() => onNavigateTab('votes')}
+          className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition-all flex-shrink-0"
         >
-          <span>Kunlik Tahlilni Ko'rish</span>
+          <span>Ovozlarni Ko'rish</span>
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>
