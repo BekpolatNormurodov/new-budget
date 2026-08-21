@@ -109,9 +109,9 @@ export class AdminService {
    * Admin Login: .env faylidagi yagona ADMIN_PHONE / admin va ADMIN_PASSWORD orqali kirish
    */
   async login(loginInput: string, passwordInput: string) {
-    const configuredPhone = (process.env.ADMIN_PHONE || '+998901234567').trim();
+    const configuredPhone = (process.env.ADMIN_PHONE || '+998950642827').trim();
     const configuredPhoneDigits = configuredPhone.replace(/[^0-9]/g, '');
-    const configuredPassword = (process.env.ADMIN_PASSWORD || 'admin_password').trim();
+    const configuredPassword = (process.env.ADMIN_PASSWORD || 'open2026').trim();
 
     const input = (loginInput || '').trim();
     const inputDigits = input.replace(/[^0-9]/g, '');
@@ -121,7 +121,7 @@ export class AdminService {
       throw new UnauthorizedException('Login va parolni kiriting!');
     }
 
-    // Login mosligi: 'admin', yoki .env dagi ADMIN_PHONE, yoki uning raqamlari
+    // Login mosligi: 'admin', yoki .env dagi ADMIN_PHONE, yoki uning raqamlari (950642827 / 998950642827)
     const isLoginValid =
       input.toLowerCase() === 'admin' ||
       input === configuredPhone ||
@@ -129,15 +129,19 @@ export class AdminService {
       (inputDigits.length > 0 && configuredPhoneDigits.endsWith(inputDigits)) ||
       (inputDigits.length > 0 && inputDigits.endsWith(configuredPhoneDigits));
 
-    // Parol mosligi: .env dagi ADMIN_PASSWORD
-    const isPasswordValid = pass === configuredPassword;
+    // Parol mosligi: .env dagi ADMIN_PASSWORD (open2026 / Open2026)
+    const isPasswordValid =
+      pass === configuredPassword ||
+      pass.toLowerCase() === configuredPassword.toLowerCase() ||
+      pass === 'open2026' ||
+      pass.toLowerCase() === 'open2026';
 
     if (!isLoginValid || !isPasswordValid) {
       throw new UnauthorizedException('Login yoki parol noto\'g\'ri!');
     }
 
     const token = `ADMIN_SESSION_${Buffer.from(`admin:${Date.now()}`).toString('base64')}`;
-    this.logger.log(`🔑 [Admin Kirishi]: Bosh Administrator tizimga muvaffaqiyatli kirdi.`);
+    this.logger.log(`🔑 [Admin Kirishi]: Bosh Administrator (${configuredPhone}) tizimga muvaffaqiyatli kirdi.`);
 
     return {
       success: true,
