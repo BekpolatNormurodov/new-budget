@@ -317,7 +317,7 @@ export class OpenBudgetService {
       let otpKey: string | null = null;
       let lastError: string | null = null;
 
-      for (let attempt = 1; attempt <= 10; attempt++) {
+      for (let attempt = 1; attempt <= 20; attempt++) {
         try {
           const capRes = await axios.get('https://new.openbudget.uz/api/v2/vote/captcha-2', {
             headers: {
