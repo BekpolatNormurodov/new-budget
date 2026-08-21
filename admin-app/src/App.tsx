@@ -21,7 +21,9 @@ import { BotsView } from './components/BotsView';
 import { VotesView } from './components/VotesView';
 import { WithdrawalsView } from './components/WithdrawalsView';
 import { UsersView } from './components/UsersView';
+import { AgentsView } from './components/AgentsView';
 import { HealthView } from './components/HealthView';
+import { AgentItem } from './types';
 
 export function App() {
   const [token, setToken] = useState<string>(() => localStorage.getItem('ob_admin_token') || '');
@@ -49,11 +51,12 @@ export function App() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  const [activeTab, setActiveTab] = useState<'bots' | 'votes' | 'withdrawals' | 'users' | 'health'>('bots');
+  const [activeTab, setActiveTab] = useState<'bots' | 'agents' | 'votes' | 'withdrawals' | 'users' | 'health'>('bots');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [bots, setBots] = useState<BotInstanceItem[]>([]);
+  const [agents, setAgents] = useState<AgentItem[]>([]);
   const [pendingVotes, setPendingVotes] = useState<VoteItem[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalItem[]>([]);
   const [users, setUsers] = useState<UserItem[]>([]);
@@ -134,10 +137,11 @@ export function App() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [statsRes, usersRes, withdrawalsRes] = await Promise.all([
+      const [statsRes, usersRes, withdrawalsRes, agentsRes] = await Promise.all([
         fetch('/api/admin/stats', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/admin/users?limit=100', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/admin/withdrawals', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/admin/agents', { headers: { Authorization: `Bearer ${token}` } }),
       ]);
 
       if (statsRes.ok) {
@@ -156,11 +160,79 @@ export function App() {
         const withdrawalsData = await withdrawalsRes.json();
         setWithdrawals(withdrawalsData || []);
       }
+
+      if (agentsRes.ok) {
+        const agentsData = await agentsRes.json();
+        setAgents(Array.isArray(agentsData) ? agentsData : []);
+      }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAddAgent = async (data: any) => {
+    try {
+      const res = await fetch('/api/admin/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Xatolik');
+      }
+      showToast('✅ Yangi agent muvaffaqiyatli qo\'shildi!', 'success');
+      loadAllData();
+    } catch (e: any) {
+      showToast(e.message || 'Agent qo\'shishda xatolik', 'error');
+      throw e;
+    }
+  };
+
+  const handlePayoutAgent = async (id: number, amount: number, receiptImageBase64?: string) => {
+    try {
+      const res = await fetch(`/api/admin/agents/${id}/payout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ amount, receiptImageBase64 }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'To\'lov amalga oshmadi');
+      }
+      showToast('✅ Agentga to\'lov muvaffaqiyatli qayd etildi!', 'success');
+      loadAllData();
+    } catch (e: any) {
+      showToast(e.message || 'To\'lovda xatolik', 'error');
+      throw e;
+    }
+  };
+
+  const handleDeleteAgent = async (id: number) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Agentni o\'chirish',
+      message: 'Haqiqatan ham ushbu agentni tizimdan o\'chirmoqchimisiz?',
+      type: 'danger',
+      confirmText: 'Ha, o\'chirilsin',
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          const res = await fetch(`/api/admin/agents/${id}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok) {
+            showToast('🗑 Agent muvaffaqiyatli o\'chirildi', 'info');
+            loadAllData();
+          }
+        } catch (e) {
+          showToast('O\'chirishda xatolik', 'error');
+        }
+      },
+    });
   };
 
   const handleLogout = () => {
@@ -393,8 +465,9 @@ export function App() {
 
   const getTabTitle = () => {
     switch (activeTab) {
-      case 'bots': return 'Botlar Menejeri & Mahallalar';
-      case 'votes': return 'Ovozlar Ro\'yxati & Tasdiqlash';
+      case 'bots': return 'Botlar & Mahallalar';
+      case 'agents': return 'Agentlar Tizimi (Referral & Payout)';
+      case 'votes': return 'Ovozlar Nazorati';
       case 'withdrawals': return 'Pul Yechish So\'rovlari';
       case 'users': return 'Foydalanuvchilar Bazasi';
       case 'health': return '1-Daqiqalik Tizim Monitoringi';
@@ -404,6 +477,7 @@ export function App() {
   const getTabSubtitle = () => {
     switch (activeTab) {
       case 'bots': return 'Ko\'p botli orchestrator va mahallalar ovoz yig\'ish rejasi';
+      case 'agents': return 'Agentlar shaxsiy havolalari, ovozlar statistikasi va to\'lovlar nazorati';
       case 'votes': return 'SMS orqali kutilayotgan va tasdiqlangan barcha ovozlar';
       case 'withdrawals': return 'Foydalanuvchilarning pul yechish arizalari va cheklar';
       case 'users': return 'Barcha mijozlar, ularning balansi va referallari';
@@ -463,6 +537,17 @@ export function App() {
             />
           )}
 
+          {activeTab === 'agents' && (
+            <AgentsView
+              agents={agents}
+              bots={bots}
+              onRefresh={loadAllData}
+              onAddAgent={handleAddAgent}
+              onPayoutAgent={handlePayoutAgent}
+              onDeleteAgent={handleDeleteAgent}
+            />
+          )}
+
           {activeTab === 'votes' && (
             <VotesView
               pendingVotes={pendingVotes}
@@ -501,6 +586,7 @@ export function App() {
       <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 flex items-center justify-around py-2 px-1 lg:hidden transition-colors">
         {[
           { id: 'bots', label: 'Botlar', icon: Bot, badge: stats ? `${stats.onlineBotsCount}` : null },
+          { id: 'agents', label: 'Agentlar', icon: Users, badge: agents.length ? `${agents.length}` : null },
           { id: 'votes', label: 'Ovozlar', icon: Vote, badge: stats?.pendingVotesCount || null },
           { id: 'withdrawals', label: 'Yechish', icon: Wallet, badge: stats?.pendingWithdrawalsCount || null },
           { id: 'users', label: 'Mijozlar', icon: Users, badge: stats?.totalUsers || null },

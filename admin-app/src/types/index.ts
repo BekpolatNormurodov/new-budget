@@ -100,7 +100,35 @@ export interface UserItem {
   };
 }
 
-export type TabType = 'bots' | 'votes' | 'withdrawals' | 'users' | 'health';
+export interface AgentItem {
+  id: number;
+  botInstanceId: number;
+  userId?: number;
+  name: string;
+  phone?: string;
+  telegramId?: string;
+  telegramUser?: string;
+  code: string;
+  rewardPerVote: number;
+  totalVotes: number;
+  totalEarned: number;
+  totalPaid: number;
+  balance: number;
+  lastReceiptUrl?: string;
+  isActive: boolean;
+  createdAt: string;
+  referralLink?: string;
+  referredUsersCount?: number;
+  votesCount?: number;
+  botInstance?: {
+    id: number;
+    name: string;
+    mahallaName: string;
+    botUsername?: string;
+  };
+}
+
+export type TabType = 'bots' | 'agents' | 'votes' | 'withdrawals' | 'users' | 'health';
 
 export interface HealthReport {
   timestamp: string;
