@@ -16,7 +16,7 @@ function askQuestion(query) {
   });
 }
 
-// 100% Aniq Doiraviy Island & Harf Segmentatsiyasi
+// 100% Aniq Doiraviy Island & Harf Segmentatsiyasi (300 DPI)
 async function solveFullCaptcha(rawBuffer, worker) {
   const { data, info } = await sharp(rawBuffer, { failOn: 'none' })
     .grayscale()
@@ -83,7 +83,10 @@ async function solveFullCaptcha(rawBuffer, worker) {
     }
   }
 
-  const digitPng = await sharp(digitCanvas, { raw: { width, height, channels: 1 } }).png().toBuffer();
+  const digitPng = await sharp(digitCanvas, { raw: { width, height, channels: 1 } })
+    .withMetadata({ density: 300 })
+    .png()
+    .toBuffer();
 
   const results = [];
   for (let i = 0; i < chars.length; i++) {
@@ -96,6 +99,7 @@ async function solveFullCaptcha(rawBuffer, worker) {
       .extend({ top: 20, bottom: 20, left: 20, right: 20, background: { r: 255, g: 255, b: 255 } })
       .resize(100, 100, { fit: 'contain', background: { r: 255, g: 255, b: 255 } })
       .threshold(128)
+      .withMetadata({ density: 300 })
       .png()
       .toBuffer();
 
@@ -132,12 +136,13 @@ async function main() {
   const phone = cleanPhone;
 
   console.log(`📱 Telefon raqam: +${phone}`);
-  console.log('⚙️  Tesseract OCR yuklanmoqda...');
+  console.log('⚙️  Tesseract OCR (300 DPI) yuklanmoqda...');
 
   const worker = await createWorker('eng');
   await worker.setParameters({
     tessedit_char_whitelist: '0123456789+-*',
     tessedit_pageseg_mode: '10',
+    user_defined_dpi: '300',
   });
 
   let otpKey = null;
@@ -215,14 +220,18 @@ async function main() {
 
       const token = verifyRes.data.access_token || verifyRes.data.token;
       if (token) {
-        console.log('\n👤 Shaxsiy profil ma\'lumotlari olinmoqda...');
+        console.log('\n👤 Shaxsiy profil ma\'lumotlari tekshirilmoqda...');
         const cleanToken = token.replace(/^bearer\s+/i, '').trim();
         const meRes = await axios.get('https://new.openbudget.uz/api/v1/users/me', {
-          headers: { Authorization: cleanToken },
+          headers: {
+            Authorization: cleanToken,
+            hl: 'uz',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+          },
           validateStatus: () => true,
           timeout: 8000,
         });
-        console.log('📋 Profil:', JSON.stringify(meRes.data, null, 2));
+        console.log('📋 Profil Javobi:', JSON.stringify(meRes.data, null, 2));
       }
     } else {
       console.log('\n❌ Tasdiqlashda xatolik:', JSON.stringify(verifyRes.data, null, 2));

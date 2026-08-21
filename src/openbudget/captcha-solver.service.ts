@@ -43,6 +43,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
     await worker.setParameters({
       tessedit_char_whitelist: '0123456789+-*/=xXlIoO| ',
       tessedit_pageseg_mode: '7' as any,
+      user_defined_dpi: '300' as any,
     });
 
     return worker;
