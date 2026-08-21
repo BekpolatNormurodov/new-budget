@@ -317,14 +317,14 @@ export class OpenBudgetService {
       let otpKey: string | null = null;
       let lastError: string | null = null;
 
-      for (let attempt = 1; attempt <= 15; attempt++) {
+      for (let attempt = 1; attempt <= 30; attempt++) {
         try {
           const capRes = await axios.get('https://new.openbudget.uz/api/v2/vote/captcha-2', {
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
               'Accept': 'application/json',
             },
-            timeout: 3500,
+            timeout: 3000,
           });
 
           const key = capRes.data?.captchaKey;
@@ -349,13 +349,13 @@ export class OpenBudgetService {
               {
                 headers: reqHeaders,
                 validateStatus: () => true,
-                timeout: 4000,
+                timeout: 3500,
               },
             );
 
             if ((otpRes.status === 200 || otpRes.status === 201) && (otpRes.data?.otpKey || otpRes.data?.key || otpRes.data?.token)) {
               otpKey = otpRes.data?.otpKey || otpRes.data?.key || otpRes.data?.token;
-              this.logger.log(`✅ [Real OpenBudget API] SMS yuborildi (+${clean12}) | otpKey: ${otpKey}`);
+              this.logger.log(`✅ [Real OpenBudget API] SMS yuborildi (+${clean12}) (Urinish #${attempt}) | otpKey: ${otpKey}`);
               break;
             } else if (otpRes.data?.message) {
               lastError = otpRes.data.message;
