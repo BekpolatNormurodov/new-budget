@@ -218,11 +218,22 @@ export const BotsView: React.FC<BotsViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Description / Extra Note Pill */}
+                  {/* 📜 Loyiha Nomi & OpenBudget Ajratilgan Summasi */}
                   {bot.description && (
-                    <div className="mb-4 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/60 dark:border-slate-800/60 text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                      <span className="text-indigo-500">💬</span>
-                      <span className="truncate italic">{bot.description}</span>
+                    <div className="mb-4 p-3 rounded-2xl bg-indigo-50/50 dark:bg-slate-950/70 border border-indigo-100 dark:border-indigo-900/30 text-xs space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1">
+                          <span>🏛 Loyiha Maqsadi:</span>
+                        </span>
+                        {bot.grantedAmount ? (
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                            💰 {formatSum(bot.grantedAmount)} so'm
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
+                        {bot.description}
+                      </p>
                     </div>
                   )}
 

@@ -29,7 +29,8 @@ model BotInstance {
   status         String    @default("ONLINE") // ONLINE | STOPPED | ERROR
   avatarUrl      String?   @db.Text
   adminContact   String?   // Admin mas'ul shaxs kontakt ma'lumoti (masalan: "@mahalla_admin" yoki "+998901234567")
-  description    String?   @db.Text // Ixtiyoriy izoh / eslatma
+  description    String?   @db.Text // Ixtiyoriy izoh / eslatma / loyiha nomi
+  grantedAmount  BigInt?   @default(0) // Loyiha qiymati / summasi (masalan: 1 240 000 000 so'm)
   lastError      String?   @db.Text
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt

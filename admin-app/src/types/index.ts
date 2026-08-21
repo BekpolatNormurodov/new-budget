@@ -29,6 +29,7 @@ export interface BotInstanceItem {
   avatarUrl?: string;
   description?: string;
   adminContact?: string;
+  grantedAmount?: number;
   isLiveRunning?: boolean;
   createdAt?: string;
 }

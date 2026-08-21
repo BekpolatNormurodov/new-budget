@@ -303,6 +303,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     adminContact?: string;
     avatarUrl?: string;
     description?: string;
+    grantedAmount?: number;
   }) {
     const parsed = this.openBudgetService.parseInitiativeUrl(params.openBudgetUrl);
 
@@ -339,6 +340,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         adminContact: params.adminContact ? params.adminContact.trim() : null,
         avatarUrl: avatarUrl || '/assets/open_budget_avatar.jpg',
         description: params.description ? params.description.trim() : null,
+        grantedAmount: params.grantedAmount ? BigInt(params.grantedAmount) : 0,
         isActive: true,
         status: 'ONLINE',
       },
@@ -429,6 +431,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
       result.push({
         ...b,
+        grantedAmount: b.grantedAmount ? Number(b.grantedAmount) : 0,
         currentVotes: verifiedVotes,
         pendingVotes,
         totalCollectedVotes: totalCollected,

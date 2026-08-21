@@ -39,6 +39,7 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
   const [refBonus, setRefBonus] = useState(5000);
   const [isRefActive, setIsRefActive] = useState<boolean>(true);
   const [description, setDescription] = useState('');
+  const [grantedAmount, setGrantedAmount] = useState<number>(0);
   const [adminContactsList, setAdminContactsList] = useState<any[]>([
     { name: 'Elbek Muxtorov', username: 'Elbek_Muxtorovv', phone: '998943489900' },
     { name: 'Jonibek Ismoilov', username: 'JONIBEKISMOILOV', phone: '998990652651' },
@@ -61,6 +62,7 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
       setRefBonus(bot.refBonus || 5000);
       setIsRefActive(bot.isRefActive !== false);
       setDescription(bot.description || '');
+      setGrantedAmount(bot.grantedAmount || 0);
       
       // Parse adminContact JSON or format
       if (bot.adminContact) {
@@ -116,6 +118,7 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
         if (data.openBudgetUrl) setOpenBudgetUrl(data.openBudgetUrl);
         if (data.targetVotes) setTargetVotes(data.targetVotes);
         if (data.description) setDescription(data.description);
+        if (data.grantedAmount) setGrantedAmount(data.grantedAmount);
       } else {
         setLookupError(data.error || 'Loyiha ma\'lumotlari topilmadi');
       }
@@ -140,6 +143,7 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
       refBonus: Number(refBonus),
       isRefActive,
       description,
+      grantedAmount: Number(grantedAmount) || 0,
       adminContact: cleanContacts.length > 0 ? JSON.stringify(cleanContacts) : undefined,
     });
   };
@@ -289,22 +293,43 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
             />
           </div>
 
-          {/* Izoh / Eslatma (Ixtiyoriy) */}
-          <div>
-            <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 flex items-center justify-between">
-              <span className="flex items-center gap-1">
-                <FileText className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                <span>Izoh / Qo'shimcha Eslatma (Ixtiyoriy)</span>
-              </span>
-              <span className="text-[10px] text-slate-400 dark:text-slate-500">Ixtiyoriy</span>
-            </label>
-            <textarea
-              rows={2}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Masalan: Bog'cha ta'miri loyihasi..."
-              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 placeholder-slate-400 dark:placeholder-slate-600 resize-none"
-            />
+          {/* Izoh / Loyiha Nomi & Qiymati */}
+          <div className="space-y-3">
+            <div>
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <FileText className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>Loyiha Nomi / Tavsifi (OpenBudget)</span>
+                </span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500">Avtomatik</span>
+              </label>
+              <textarea
+                rows={2}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Masalan: Bog'cha ta'miri loyihasi..."
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 placeholder-slate-400 dark:placeholder-slate-600 resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Loyiha Qiymati / Summasi (so'm)</span>
+                </span>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold font-mono">
+                  {grantedAmount ? `${Number(grantedAmount).toLocaleString('uz-UZ')} so'm` : '0'}
+                </span>
+              </label>
+              <input
+                type="number"
+                value={grantedAmount || ''}
+                onChange={(e) => setGrantedAmount(parseInt(e.target.value, 10) || 0)}
+                placeholder="Masalan: 1240000000"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-mono font-bold"
+              />
+            </div>
           </div>
 
           {/* 👥 Dynamic Multiple Admin Contacts */}

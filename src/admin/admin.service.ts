@@ -231,6 +231,7 @@ export class AdminService {
     isRefActive?: boolean;
     adminContact?: string;
     description?: string;
+    grantedAmount?: number;
   }) {
     return this.botManagerService.addAndStartNewBot(params);
   }
@@ -259,6 +260,7 @@ export class AdminService {
     adminContact?: string;
     avatarUrl?: string;
     description?: string;
+    grantedAmount?: number;
   }) {
     const existing = await this.prisma.botInstance.findUnique({ where: { id } });
     if (!existing) throw new Error('Bot topilmadi');
@@ -303,6 +305,7 @@ export class AdminService {
         ...(data.adminContact !== undefined && { adminContact: data.adminContact ? data.adminContact.trim() : null }),
         ...(avatarUrl !== undefined && { avatarUrl }),
         ...(data.description !== undefined && { description: data.description ? data.description.trim() : null }),
+        ...(data.grantedAmount !== undefined && { grantedAmount: BigInt(data.grantedAmount) }),
         currentVotes: actualVotesCount,
       },
     });

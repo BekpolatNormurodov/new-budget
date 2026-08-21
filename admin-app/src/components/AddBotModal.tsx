@@ -86,6 +86,7 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
       name: newBot.name || `${item.mahallaName || 'Mahalla'} Boti`,
       targetVotes: item.targetVotes || 5000,
       description: item.description || (item.region ? `📍 ${item.region}, ${item.district || ''}` : ''),
+      grantedAmount: item.grantedAmount || item.granted_amount || 0,
     });
   };
 
