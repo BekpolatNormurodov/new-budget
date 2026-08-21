@@ -1212,7 +1212,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
               this.smsTimeouts.set(timeoutKey, timeoutHandle);
 
               return ctx.reply(
-                `📩 Telefoningizga (+${phone}) 6 xonali yangi SMS kod yuborildi!\n\n⚠️ SMS kodni kiritish uchun sizda 2 daqiqa vaqt bor.\n\nIltimos, kelgan SMS kodni quyida yozib yuboring:`,
+                `🔄 Yangi SMS kod (+${phone}) raqamiga yuborildi!\n\nIltimos, yangi kelgan SMS kodni kiriting:`,
                 {
                   parse_mode: 'HTML',
                   ...BotKeyboards.smsWaitingInline(),
