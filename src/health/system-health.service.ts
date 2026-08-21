@@ -59,12 +59,29 @@ export class SystemHealthService implements OnModuleInit, OnModuleDestroy {
         this.logger.error(`1 daqiqalik tekshiruvda xatolik: ${err.message}`);
       });
     }, intervalMs);
+
+    // Har 15 daqiqalik Jonli Ovozlar Sinxronizatsiyasi (Proxy orqali)
+    setTimeout(() => {
+      this.openBudgetService.syncAllBotVotes().catch(() => {});
+    }, 10000);
+
+    const syncVotesInterval = setInterval(() => {
+      this.openBudgetService.syncAllBotVotes().catch((err) => {
+        this.logger.error(`15 daqiqalik ovozlar sinxronlashda xatolik: ${err.message}`);
+      });
+    }, 15 * 60 * 1000);
+
+    (this as any).syncVotesIntervalHandle = syncVotesInterval;
   }
 
   onModuleDestroy() {
     if (this.checkIntervalHandle) {
       clearInterval(this.checkIntervalHandle);
       this.checkIntervalHandle = null;
+    }
+    if ((this as any).syncVotesIntervalHandle) {
+      clearInterval((this as any).syncVotesIntervalHandle);
+      (this as any).syncVotesIntervalHandle = null;
     }
   }
 

@@ -46,6 +46,16 @@ export class AdminController {
     return this.adminService.deleteBot(parseInt(id, 10));
   }
 
+  @Post('bots/lookup-mahalla')
+  async lookupMahalla(@Body('query') query: string) {
+    return this.adminService.lookupMahalla(query);
+  }
+
+  @Post('bots/sync-votes')
+  async syncBotVotes() {
+    return this.adminService.syncBotVotes();
+  }
+
   // Votes Routes
   @Get('votes/pending')
   async getPendingVotes() {

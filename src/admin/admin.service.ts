@@ -588,4 +588,18 @@ export class AdminService {
   async getBroadcastHistory() {
     return this.botMarketingService.getBroadcastHistory();
   }
+
+  /**
+   * Mahalla ID yoki Havola orqali avtomatik ma'lumotlarni tortib olish (Proxy orqali)
+   */
+  async lookupMahalla(query: string) {
+    return this.openBudgetService.lookupMahallaOrInitiative(query);
+  }
+
+  /**
+   * Barcha faol botlar ovozlarini OpenBudgetdan 15 minutlik sinxronlash
+   */
+  async syncBotVotes() {
+    return this.openBudgetService.syncAllBotVotes();
+  }
 }

@@ -480,4 +480,151 @@ export class OpenBudgetService {
       };
     }
   }
+
+  /**
+   * Mahalla ID (12 xonali) yoki Havola kiritilganda OpenBudget API orqali avtomatik ma'lumotlarni tortib olish (PROXY orqali)
+   */
+  async lookupMahallaOrInitiative(query: string) {
+    const trimmed = (query || '').trim();
+    if (!trimmed) {
+      return { success: false, error: 'Mahalla ID yoki Havola kiritilmadi' };
+    }
+
+    try {
+      let initiativeUuid: string | undefined;
+      let boardId: string | undefined;
+      let publicId: string | undefined;
+
+      // 1. Agar to'g'ridan-to'g'ri 12 xonali Mahalla ID bo'lsa
+      if (/^\d{12}$/.test(trimmed)) {
+        publicId = trimmed;
+        // Public ID orqali UUID ni topish
+        const lookupRes = await this.proxyManager.requestWithRetry(async (client) => {
+          return client.get(`https://new.openbudget.uz/api/v1/initiatives/public/${publicId}`, { timeout: 8000 });
+        });
+
+        if (lookupRes?.data?.id) {
+          initiativeUuid = lookupRes.data.id;
+          boardId = String(lookupRes.data.board_id || '55');
+        } else {
+          return { success: false, error: `Ushbu Mahalla ID (${publicId}) bo'yicha OpenBudgetda faol loyiha topilmadi.` };
+        }
+      } else {
+        // 2. Havola kiritilgan bo'lsa
+        const parsed = this.parseInitiativeUrl(trimmed);
+        boardId = parsed.boardId || '55';
+        initiativeUuid = parsed.initiativeUuid;
+        publicId = parsed.mahallaId;
+
+        // Agar UUID emas, balki 12 xonali ID bo'lsa:
+        if (initiativeUuid && /^\d{12}$/.test(initiativeUuid)) {
+          publicId = initiativeUuid;
+          const lookupRes = await this.proxyManager.requestWithRetry(async (client) => {
+            return client.get(`https://new.openbudget.uz/api/v1/initiatives/public/${publicId}`, { timeout: 8000 });
+          });
+          if (lookupRes?.data?.id) {
+            initiativeUuid = lookupRes.data.id;
+            boardId = String(lookupRes.data.board_id || boardId);
+          }
+        }
+      }
+
+      if (!initiativeUuid) {
+        return { success: false, error: 'Loyiha identifikatorini aniqlab bo\'lmadi. Iltimos 12 xonali Mahalla ID yoki to\'liq havolani kiriting.' };
+      }
+
+      // 3. UUID orqali to'liq tafsilotlarni tortib olish
+      const detailRes = await this.proxyManager.requestWithRetry(async (client) => {
+        return client.get(`https://new.openbudget.uz/api/v1/initiatives/${initiativeUuid}`, { timeout: 8000 });
+      });
+
+      if (!detailRes?.data) {
+        return { success: false, error: 'OpenBudget loyiha ma\'lumotlarini qaytarmadi.' };
+      }
+
+      const data = detailRes.data;
+      const mahallaTitle = data.quarter_title ? `${data.quarter_title} MFY` : '';
+      const districtTitle = data.district_title || '';
+      const regionTitle = data.region_title || '';
+      const fullMahallaName = mahallaTitle ? `${mahallaTitle} (${districtTitle})` : (data.title || 'Ochiq Budjet Loyihasi');
+      const finalBoardId = String(data.board_id || boardId || '55');
+      const finalPublicId = data.public_id || publicId || (initiativeUuid.length === 12 ? initiativeUuid : '');
+      const openBudgetUrl = `https://new.openbudget.uz/uz/initiative-budget/active-initiatives/${finalBoardId}/${initiativeUuid}`;
+
+      return {
+        success: true,
+        mahallaId: finalPublicId,
+        mahallaName: fullMahallaName,
+        quarterTitle: data.quarter_title,
+        districtTitle,
+        regionTitle,
+        boardId: finalBoardId,
+        initiativeUuid,
+        openBudgetUrl,
+        currentVotes: data.vote_count || 0,
+        targetVotes: 5000,
+        description: data.description || '',
+        authorFullname: data.author_fullname || '',
+        stage: data.stage || 'PASSED',
+        grantedAmount: data.granted_amount || 0,
+      };
+    } catch (err: any) {
+      this.logger.error(`Lookup error for query "${query}":`, err.message);
+      return { success: false, error: `Ma'lumotlarni yuklashda xatolik: ${err.message}` };
+    }
+  }
+
+  /**
+   * Barcha faol botlarning ovozlar sonini OpenBudgetdan 15 minutlik yangilash (Cron orqali PROXY bilan)
+   */
+  async syncAllBotVotes() {
+    try {
+      const activeBots = await this.prisma.botInstance.findMany({
+        where: { isActive: true },
+      });
+
+      this.logger.log(`🔄 [15-Min Live Vote Sync] Jami ${activeBots.length} ta faol bot ovozlari yangilanmoqda...`);
+      let updatedCount = 0;
+
+      for (const bot of activeBots) {
+        let uuid = bot.initiativeUuid;
+        if (!uuid && bot.mahallaId && /^\d{12}$/.test(bot.mahallaId)) {
+          // Resolve UUID
+          const lRes = await this.lookupMahallaOrInitiative(bot.mahallaId);
+          if (lRes.success && lRes.initiativeUuid) {
+            uuid = lRes.initiativeUuid;
+            await this.prisma.botInstance.update({
+              where: { id: bot.id },
+              data: { initiativeUuid: uuid, boardId: lRes.boardId },
+            }).catch(() => {});
+          }
+        }
+
+        if (uuid) {
+          try {
+            const res = await this.proxyManager.requestWithRetry(async (client) => {
+              return client.get(`https://new.openbudget.uz/api/v1/initiatives/${uuid}`, { timeout: 7000 });
+            });
+
+            if (res?.data && typeof res.data.vote_count === 'number') {
+              const liveVotes = res.data.vote_count;
+              await this.prisma.botInstance.update({
+                where: { id: bot.id },
+                data: { currentVotes: liveVotes },
+              });
+              updatedCount++;
+            }
+          } catch (botSyncErr: any) {
+            this.logger.warn(`Bot #${bot.id} (${bot.mahallaName}) ovozlarini sinxronlashda xatolik: ${botSyncErr.message}`);
+          }
+        }
+      }
+
+      this.logger.log(`✅ [15-Min Live Vote Sync] ${updatedCount}/${activeBots.length} ta bot ovozlari muvaffaqiyatli yangilandi.`);
+      return { success: true, updatedCount, totalBots: activeBots.length };
+    } catch (e: any) {
+      this.logger.error('Vote sync error:', e);
+      return { success: false, error: e.message };
+    }
+  }
 }

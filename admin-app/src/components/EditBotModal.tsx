@@ -11,6 +11,10 @@ import {
   Upload,
   Trash2,
   FileText,
+  Search,
+  Sparkles,
+  CheckCircle2,
+  Loader2,
 } from 'lucide-react';
 import { BotInstanceItem } from '../types';
 
@@ -38,6 +42,12 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
   const [isRefActive, setIsRefActive] = useState<boolean>(true);
   const [description, setDescription] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string>('');
+
+  const [lookupQuery, setLookupQuery] = useState<string>('');
+  const [isLookingUp, setIsLookingUp] = useState<boolean>(false);
+  const [lookupResult, setLookupResult] = useState<any>(null);
+  const [lookupError, setLookupError] = useState<string>('');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -53,6 +63,9 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
       setIsRefActive(bot.isRefActive !== false);
       setDescription(bot.description || '');
       setAvatarUrl(bot.avatarUrl || '/assets/open_budget_avatar.jpg');
+      setLookupQuery(bot.mahallaId || '');
+      setLookupResult(null);
+      setLookupError('');
     }
   }, [bot, isOpen]);
 
@@ -70,6 +83,43 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
         setAvatarUrl(event.target?.result as string);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  // 1-Click Auto Lookup via OpenBudget Backend API (Proxy orqali)
+  const handleAutoLookup = async () => {
+    const q = lookupQuery.trim() || mahallaId.trim() || openBudgetUrl.trim();
+    if (!q) {
+      alert('Iltimos, Mahalla ID (12 ta raqam) yoki OpenBudget havolasini kiriting!');
+      return;
+    }
+
+    setIsLookingUp(true);
+    setLookupError('');
+    setLookupResult(null);
+
+    try {
+      const res = await fetch('/api/admin/bots/lookup-mahalla', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setLookupResult(data);
+        if (data.mahallaName) setMahallaName(data.mahallaName);
+        if (data.mahallaId) setMahallaId(data.mahallaId);
+        if (data.openBudgetUrl) setOpenBudgetUrl(data.openBudgetUrl);
+        if (data.targetVotes) setTargetVotes(data.targetVotes);
+        if (data.description) setDescription(data.description);
+      } else {
+        setLookupError(data.error || 'Loyiha ma\'lumotlari topilmadi');
+      }
+    } catch (e: any) {
+      setLookupError(e.message || 'Serverga ulanishda xatolik');
+    } finally {
+      setIsLookingUp(false);
     }
   };
 
@@ -92,15 +142,15 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 max-w-lg w-full space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 transition-colors">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 max-w-lg w-full space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95 transition-colors">
         <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
               <Sliders className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Bot va Mahalla Sozlamalarini Tahrirlash</h3>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">#{bot.id} • {bot.name}</p>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Bot Sozlamalarini Tahrirlash</h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">#{bot.id} - {bot.name}</p>
             </div>
           </div>
           <button
@@ -111,7 +161,68 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
           </button>
         </div>
 
-        {/* Bot Avatar Section */}
+        {/* ⚡️ SMART AUTO-LOOKUP BOX (Proxy orqali) */}
+        <div className="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/30 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span>Mahallani Qayta Yangilash / Qidiruv</span>
+            </span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-mono font-bold">
+              Proxy 🛡
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+              <input
+                type="text"
+                value={lookupQuery}
+                onChange={(e) => setLookupQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAutoLookup())}
+                placeholder="12 xonali Mahalla ID yoki Havola..."
+                className="w-full bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800/80 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-mono text-[11px]"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleAutoLookup}
+              disabled={isLookingUp}
+              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-50 shadow-sm"
+            >
+              {isLookingUp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              <span>{isLookingUp ? 'Yuklanmoqda...' : 'Yangilash'}</span>
+            </button>
+          </div>
+
+          {/* Success Banner */}
+          {lookupResult && (
+            <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-[11px] space-y-1 animate-in fade-in">
+              <div className="flex items-center justify-between font-bold">
+                <span className="flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>{lookupResult.mahallaName}</span>
+                </span>
+                <span className="font-mono bg-emerald-500/20 px-1.5 py-0.5 rounded text-[10px]">
+                  Joriy ovoz: {lookupResult.currentVotes} ta
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                📍 {lookupResult.regionTitle}, {lookupResult.districtTitle} (Mavsum #{lookupResult.boardId})
+              </p>
+            </div>
+          )}
+
+          {/* Error Banner */}
+          {lookupError && (
+            <p className="text-[11px] text-rose-500 font-semibold px-1">
+              ❌ {lookupError}
+            </p>
+          )}
+        </div>
+
+        {/* Bot Profile Image Upload */}
         <div className="p-3.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-500/20 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <img
@@ -124,7 +235,7 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
                 <Image className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                 <span>Bot Profil Rasmi</span>
               </h4>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">Individual profil rasmi</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">Ixtiyoriy bot avatari</p>
             </div>
           </div>
 
@@ -135,9 +246,9 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
               className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-[11px] transition flex items-center gap-1 shadow-sm cursor-pointer"
             >
               <Upload className="w-3 h-3" />
-              <span>O'zgartirish</span>
+              <span>Yuklash</span>
             </button>
-            {avatarUrl !== '/assets/open_budget_avatar.jpg' && (
+            {avatarUrl && (
               <button
                 type="button"
                 onClick={() => setAvatarUrl('/assets/open_budget_avatar.jpg')}
@@ -166,7 +277,6 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              placeholder="Masalan: Navbahor MFY Boti"
               className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-bold"
             />
           </div>
@@ -235,115 +345,68 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Masalan: 14-maktab yo'li loyihasi uchun, shtab rahbari: Alisher aka..."
+              placeholder="Masalan: Bog'cha ta'miri loyihasi..."
               className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 placeholder-slate-400 dark:placeholder-slate-600 resize-none"
             />
           </div>
 
-          {/* Ovoz Limiti (Target Votes) */}
-          <div className="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-500/20 space-y-1.5">
-            <label className="block text-indigo-700 dark:text-indigo-300 font-bold flex items-center gap-1.5 text-xs">
-              <Target className="w-4 h-4 text-indigo-600 dark:text-cyan-400" />
-              <span>Ovoz Yig'ish Rejasi (Target Limiti)</span>
-            </label>
-            <div className="flex items-center gap-3">
+          {/* Ovoz Limiti & Mukofotlar */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            <div>
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 flex items-center gap-1">
+                <Target className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />
+                <span>Reja (Ovoz)</span>
+              </label>
               <input
                 type="number"
-                min="10"
-                step="10"
                 value={targetVotes}
-                onChange={(e) => setTargetVotes(parseInt(e.target.value, 10))}
+                onChange={(e) => setTargetVotes(parseInt(e.target.value, 10) || 0)}
                 required
-                className="w-full bg-white dark:bg-slate-950 border border-indigo-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-indigo-600 dark:text-cyan-300 font-mono font-bold text-xs"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-bold"
               />
-              <span className="text-slate-500 dark:text-slate-400 font-semibold shrink-0 text-xs">ta ovoz</span>
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 flex items-center gap-1">
                 <DollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span>Ovoz Mukofoti (so'm)</span>
+                <span>Ovoz Mukofoti</span>
               </label>
               <input
                 type="number"
                 value={voteReward}
-                onChange={(e) => setVoteReward(parseInt(e.target.value, 10))}
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-slate-900 dark:text-white font-bold text-xs"
+                onChange={(e) => setVoteReward(parseInt(e.target.value, 10) || 0)}
+                required
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-bold text-emerald-600 dark:text-emerald-400"
               />
             </div>
             <div>
               <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 flex items-center gap-1">
-                <Gift className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                <span>Referal Bonusi (so'm)</span>
+                <Gift className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                <span>Referal Bonusi</span>
               </label>
               <input
                 type="number"
                 value={refBonus}
-                onChange={(e) => setRefBonus(parseInt(e.target.value, 10))}
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-slate-900 dark:text-white font-bold text-xs"
+                onChange={(e) => setRefBonus(parseInt(e.target.value, 10) || 0)}
+                required
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-bold text-purple-600 dark:text-purple-400"
               />
             </div>
-          </div>
-
-          {/* Referal Tizimi Holati Toggle */}
-          <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${
-                isRefActive
-                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
-                  : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-              }`}>
-                <Gift className="w-4 h-4" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                  <span>Referal Tizimi</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
-                    isRefActive
-                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                      : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
-                  }`}>
-                    {isRefActive ? 'FAOL (YOQILGAN)' : "TO'XTATILGAN (O'CHIRILGAN)"}
-                  </span>
-                </p>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                  {isRefActive
-                    ? "Foydalanuvchilar do'stlarini taklif qilib bonus olishi mumkin"
-                    : "Botda referal bo'limi to'xtatiladi, bonus berilmaydi"}
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsRefActive(!isRefActive)}
-              className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 ${
-                isRefActive ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'
-              }`}
-            >
-              <div
-                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                  isRefActive ? 'translate-x-6' : 'translate-x-0'
-                }`}
-              />
-            </button>
           </div>
 
           <div className="flex justify-end space-x-2 pt-3 border-t border-slate-200 dark:border-slate-800">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition cursor-pointer"
+              className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl transition cursor-pointer"
             >
               Bekor qilish
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/30 transition cursor-pointer"
+              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 transition active:scale-95 cursor-pointer flex items-center gap-1.5"
             >
-              Saqlash & Yangilash
+              <CheckCircle2 className="w-4 h-4" />
+              <span>O'zgarishlarni Saqlash</span>
             </button>
           </div>
         </form>
