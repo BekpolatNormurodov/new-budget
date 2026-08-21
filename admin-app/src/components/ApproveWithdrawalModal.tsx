@@ -49,54 +49,54 @@ export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
     : withdrawal.accountDetails;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="glass-modal rounded-3xl p-6 max-w-lg w-full space-y-4 border border-emerald-500/30 shadow-2xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95">
         <div className="flex justify-between items-center">
-          <h3 className="text-base font-bold text-white flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-emerald-400" />
+          <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <CheckCircle className="w-5 h-5 text-emerald-500" />
             <span>To'lovni Tasdiqlash & Chek Yuklash</span>
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white cursor-pointer">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Withdrawal details summary card */}
-        <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2.5 text-xs">
-          <div className="flex justify-between items-center pb-2 border-b border-slate-800">
-            <span className="text-slate-400 flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5 text-indigo-400" />
+        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-2.5 text-xs">
+          <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-800">
+            <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
               <span>Foydalanuvchi:</span>
             </span>
-            <span className="font-bold text-white">
+            <span className="font-bold text-slate-900 dark:text-white">
               {withdrawal.user?.firstName} (@{withdrawal.user?.username || 'yoq'})
             </span>
           </div>
 
-          <div className="flex justify-between items-center pb-2 border-b border-slate-800">
-            <span className="text-slate-400 flex items-center gap-1.5">
-              <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+          <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-800">
+            <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+              <DollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               <span>Summa:</span>
             </span>
-            <span className="text-sm font-black text-emerald-400">
+            <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
               {formatMoney(withdrawal.amount)}
             </span>
           </div>
 
-          <div className="flex justify-between items-center pb-2 border-b border-slate-800">
-            <span className="text-slate-400 flex items-center gap-1.5">
-              <CreditCard className="w-3.5 h-3.5 text-cyan-400" />
+          <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-800">
+            <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+              <CreditCard className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
               <span>Karta / Hisob ({withdrawal.paymentMethod}):</span>
             </span>
-            <span className="font-mono font-bold text-cyan-300">
+            <span className="font-mono font-bold text-cyan-600 dark:text-cyan-300">
               {formattedCard}
             </span>
           </div>
 
           {(withdrawal as any).cardHolder && (
             <div className="flex justify-between items-center">
-              <span className="text-slate-400">Karta Egasi:</span>
-              <span className="font-bold text-white uppercase">
+              <span className="text-slate-500 dark:text-slate-400">Karta Egasi:</span>
+              <span className="font-bold text-slate-900 dark:text-white uppercase">
                 {(withdrawal as any).cardHolder}
               </span>
             </div>
@@ -106,13 +106,13 @@ export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
           {/* Chek rasmini yuklash */}
           <div className="space-y-2">
-            <label className="block text-slate-300 font-bold flex items-center gap-1.5">
-              <Image className="w-4 h-4 text-cyan-400" />
+            <label className="block text-slate-700 dark:text-slate-300 font-bold flex items-center gap-1.5">
+              <Image className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
               <span>To'lov Cheki Skrinshotini Yuklash (Mijozga boradi)</span>
             </label>
 
             {receiptImage ? (
-              <div className="relative rounded-2xl overflow-hidden border border-emerald-500/40 bg-slate-900 p-2">
+              <div className="relative rounded-2xl overflow-hidden border border-emerald-500/40 bg-slate-100 dark:bg-slate-900 p-2">
                 <img
                   src={receiptImage}
                   alt="Chek rasmi"
@@ -130,13 +130,13 @@ export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
             ) : (
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-slate-700 hover:border-indigo-500/60 rounded-2xl p-6 text-center cursor-pointer transition bg-slate-900/50 hover:bg-slate-900/80 space-y-2"
+                className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500/60 rounded-2xl p-6 text-center cursor-pointer transition bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-100/80 dark:hover:bg-slate-900/80 space-y-2"
               >
-                <Upload className="w-8 h-8 text-indigo-400 mx-auto" />
-                <p className="font-semibold text-slate-300">
+                <Upload className="w-8 h-8 text-indigo-500 dark:text-indigo-400 mx-auto" />
+                <p className="font-semibold text-slate-700 dark:text-slate-300">
                   Chek rasmini yuklash uchun bu yerga bosing
                 </p>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">
                   (JPG, PNG, WebP — Payme / Click / Bank cheki)
                 </p>
               </div>
@@ -152,21 +152,21 @@ export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-slate-300 font-semibold mb-1">Izoh (Mijozga xabarda ko'rinadi)</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Izoh (Mijozga xabarda ko'rinadi)</label>
             <input
               type="text"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full px-3.5 py-2.5 glass-input rounded-xl text-white"
+              className="w-full px-3.5 py-2.5 glass-input rounded-xl"
               placeholder="To'lov muvaffaqiyatli amalga oshirildi"
             />
           </div>
 
-          <div className="flex justify-end space-x-2 pt-3 border-t border-slate-800">
+          <div className="flex justify-end space-x-2 pt-3 border-t border-slate-200 dark:border-slate-800">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-bold cursor-pointer hover:bg-slate-700 transition"
+              className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition"
             >
               Bekor qilish
             </button>

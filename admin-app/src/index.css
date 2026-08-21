@@ -9,7 +9,7 @@
 
   body {
     font-family: 'Plus Jakarta Sans', sans-serif;
-    transition: background-color 0.3s ease, color 0.3s ease;
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
 
   /* Dark mode body */
@@ -30,6 +30,26 @@
       radial-gradient(at 100% 100%, rgba(14, 165, 233, 0.06) 0px, transparent 50%);
     background-attachment: fixed;
     color: #0f172a;
+  }
+
+  /* Native Date Picker Calendars */
+  input[type="date"] {
+    color-scheme: light dark;
+  }
+  html.dark input[type="date"] {
+    color-scheme: dark;
+  }
+  html:not(.dark) input[type="date"] {
+    color-scheme: light;
+  }
+
+  html.dark input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.8) brightness(1.2);
+    cursor: pointer;
+  }
+  html:not(.dark) input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: none;
+    cursor: pointer;
   }
 }
 
@@ -55,6 +75,7 @@ html.dark .glass-modal {
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
 }
 
 html:not(.dark) .glass-modal {
@@ -63,6 +84,7 @@ html:not(.dark) .glass-modal {
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(203, 213, 225, 0.8);
   box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.15);
+  color: #0f172a;
 }
 
 /* Glass Inputs */

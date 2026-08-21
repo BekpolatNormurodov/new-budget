@@ -25,16 +25,16 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/60 dark:bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
       <div className="glass-modal rounded-3xl p-6 max-w-md w-full space-y-5 border shadow-2xl animate-in fade-in zoom-in-95 border-indigo-500/20">
         <div className="flex items-start gap-4">
           <div
             className={`p-3 rounded-2xl shrink-0 ${
               type === 'danger'
-                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
                 : type === 'warning'
-                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
             }`}
           >
             {type === 'danger' && <AlertOctagon className="w-6 h-6" />}
@@ -42,16 +42,16 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
             {type === 'success' && <CheckCircle2 className="w-6 h-6" />}
           </div>
           <div className="space-y-1">
-            <h3 className="text-base font-bold text-white">{title}</h3>
-            <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">{message}</p>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">{title}</h3>
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">{message}</p>
           </div>
         </div>
 
-        <div className="flex justify-end space-x-2 pt-3 border-t border-slate-800">
+        <div className="flex justify-end space-x-2 pt-3 border-t border-slate-200 dark:border-slate-800">
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition cursor-pointer"
           >
             {cancelText}
           </button>
