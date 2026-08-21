@@ -317,14 +317,15 @@ export class OpenBudgetService {
       let otpKey: string | null = null;
       let lastError: string | null = null;
 
-      for (let attempt = 1; attempt <= 30; attempt++) {
+      // Tezkor 5 ta urinish (Har biri 600ms, jami 3-4 soniyada yakunlanadi)
+      for (let attempt = 1; attempt <= 5; attempt++) {
         try {
           const capRes = await axios.get('https://new.openbudget.uz/api/v2/vote/captcha-2', {
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
               'Accept': 'application/json',
             },
-            timeout: 3000,
+            timeout: 2500,
           });
 
           const key = capRes.data?.captchaKey;
@@ -344,12 +345,12 @@ export class OpenBudgetService {
               {
                 phone_number: clean12,
                 captcha_key: key,
-                captcha_result: solved.answer,
+                captcha_result: Number(solved.answer),
               },
               {
                 headers: reqHeaders,
                 validateStatus: () => true,
-                timeout: 3500,
+                timeout: 3000,
               },
             );
 
@@ -359,13 +360,13 @@ export class OpenBudgetService {
               break;
             } else if (otpRes.data?.message) {
               lastError = otpRes.data.message;
-              if (/mavsum|pasport|avval|allaqachon/i.test(lastError || '')) {
+              if (/mavsum|pasport|avval|allaqachon|topilmadi|USER_NOT_FOUND/i.test(lastError || '')) {
                 throw new Error(lastError);
               }
             }
           }
         } catch (err: any) {
-          if (err.message && /mavsum|pasport|avval|allaqachon/i.test(err.message)) {
+          if (err.message && /mavsum|pasport|avval|allaqachon|topilmadi|USER_NOT_FOUND/i.test(err.message)) {
             throw err;
           }
         }
