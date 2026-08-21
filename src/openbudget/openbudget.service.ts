@@ -682,17 +682,10 @@ export class OpenBudgetService {
 
         if (uuid) {
           try {
-            let res: any;
-            try {
-              res = await axios.get(`https://new.openbudget.uz/api/v1/initiatives/${uuid}`, {
-                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-                timeout: 3500,
-              });
-            } catch (dErr) {
-              res = await this.proxyManager.requestWithRetry(async (client) => {
-                return client.get(`https://new.openbudget.uz/api/v1/initiatives/${uuid}`, { timeout: 4000 });
-              });
-            }
+            const res = await axios.get(`https://new.openbudget.uz/api/v1/initiatives/${uuid}`, {
+              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+              timeout: 6000,
+            }).catch(() => null);
 
             if (res?.data && typeof res.data.vote_count === 'number') {
               const liveVotes = res.data.vote_count;
