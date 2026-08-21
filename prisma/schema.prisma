@@ -211,3 +211,17 @@ model BroadcastMessage {
   status            String   @default("COMPLETED") // COMPLETED | FAILED
   createdAt         DateTime @default(now())
 }
+
+model SystemApiLog {
+  id           Int      @id @default(autoincrement())
+  action       String   // "SEND_OTP" | "VERIFY_OTP" | "CAPTCHA_SOLVE" | "VOTE_SYNC"
+  phone        String?
+  captchaKey   String?
+  captchaExpr  String?
+  captchaAns   Int?
+  httpStatus   Int?
+  responseBody String?  @db.Text
+  isSuccess    Boolean  @default(false)
+  errorMessage String?  @db.Text
+  createdAt    DateTime @default(now())
+}
