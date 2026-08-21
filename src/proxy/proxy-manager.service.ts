@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import * as http from 'http';
 import * as https from 'https';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 
 export interface ProxyItem {
   url: string;
@@ -173,14 +174,18 @@ export class ProxyManagerService implements OnModuleInit {
       };
     }
 
+    // HTTP va HTTPS uchun maxsus HttpsProxyAgent orqali to'g'ridan-to'g'ri tunnel ochish
+    const authPart = proxy.auth?.username
+      ? `${encodeURIComponent(proxy.auth.username)}:${encodeURIComponent(proxy.auth.password || '')}@`
+      : '';
+    const proxyUrl = `http://${authPart}${proxy.host}:${proxy.port}`;
+    const agent = new HttpsProxyAgent(proxyUrl);
+
     return {
       headers: baseHeaders,
-      proxy: {
-        host: proxy.host,
-        port: proxy.port,
-        ...(proxy.auth && { auth: proxy.auth }),
-        protocol: proxy.protocol,
-      },
+      httpAgent: agent,
+      httpsAgent: agent,
+      proxy: false, // Node.js da httpsAgent bilan proxy:false ishlatilishi 100% standart
     };
   }
 
@@ -319,20 +324,16 @@ export class ProxyManagerService implements OnModuleInit {
       this.proxyPool.map(async (proxy) => {
         const startTime = Date.now();
         try {
-          const proxyConfig: any = {
-            host: proxy.host,
-            port: proxy.port,
-            protocol: 'http',
-          };
-          if (proxy.auth?.username) {
-            proxyConfig.auth = {
-              username: proxy.auth.username,
-              password: proxy.auth.password || '',
-            };
-          }
+          const authPart = proxy.auth?.username
+            ? `${encodeURIComponent(proxy.auth.username)}:${encodeURIComponent(proxy.auth.password || '')}@`
+            : '';
+          const proxyUrl = `http://${authPart}${proxy.host}:${proxy.port}`;
+          const agent = new HttpsProxyAgent(proxyUrl);
 
           const response = await axios.get('http://ipinfo.io/json', {
-            proxy: proxyConfig,
+            httpAgent: agent,
+            httpsAgent: agent,
+            proxy: false,
             timeout: 4000,
           });
 
