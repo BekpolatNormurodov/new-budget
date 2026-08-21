@@ -25,8 +25,9 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     const cpuCount = os.cpus()?.length || 2;
-    this.poolSize = Math.max(2, Math.min(4, cpuCount));
-    this.logger.log(`⚡ Initializing Tesseract OCR Multi-Worker Pool (${this.poolSize} workers across ${cpuCount} CPU cores)...`);
+    // 6 ta CPU Core va 16GB RAM imkoniyatidan 100% to'liq foydalanish uchun poolSize ni 6 tagacha chiqaramiz
+    this.poolSize = Math.max(4, Math.min(8, cpuCount));
+    this.logger.log(`⚡ Initializing Tesseract OCR Multi-Worker Pool (${this.poolSize} parallel workers across ${cpuCount} CPU cores)...`);
 
     setTimeout(() => {
       this.initWorkerPool().catch((err) => {
