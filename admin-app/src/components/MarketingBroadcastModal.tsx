@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   X,
   Send,
@@ -21,8 +21,9 @@ import {
   Sparkles,
   MessageSquare,
   Layers,
-  ChevronRight,
-  HelpCircle,
+  Undo2,
+  Redo2,
+  Eraser,
 } from 'lucide-react';
 
 interface MarketingBroadcastModalProps {
@@ -42,6 +43,12 @@ interface BroadcastResult {
   durationMs: number;
 }
 
+const DEFAULT_AD_TEXT =
+  '🔥 <b>DIQQAT, KATTA IMKONIYAT!</b>\n\n' +
+  'Ochiq Budjet loyihasida ovoz berib <b>30 000 so\'m</b> kafolatlangan mukofotga ega bo\'ling!\n\n' +
+  '📌 <i>Barcha oila a\'zolaringiz raqamlaridan ham ovoz berishingiz mumkin!</i>\n\n' +
+  'Hoziroq quyidagi tugmalar orqali boshlang 👇';
+
 export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = ({
   isOpen,
   onClose,
@@ -52,41 +59,93 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
   const [selectedSlot, setSelectedSlot] = useState<'MORNING' | 'EVENING'>('MORNING');
 
   // Tab 2: Custom Ad State
-  const [adText, setAdText] = useState<string>(
-    '🔥 <b>DIQQAT, KATTA IMKONIYAT!</b>\n\n' +
-    'Ochiq Budjet loyihasida ovoz berib <b>30 000 so\'m</b> kafolatlangan mukofotga ega bo\'ling!\n\n' +
-    '📌 <i>Barcha oila a\'zolaringiz raqamlaridan ham ovoz berishingiz mumkin!</i>\n\n' +
-    'Hoziroq quyidagi tugmalar orqali boshlang 👇'
-  );
+  const [adText, setAdText] = useState<string>(DEFAULT_AD_TEXT);
   const [bannerImage, setBannerImage] = useState<string>('');
   const [buttons, setButtons] = useState<InlineButton[]>([
     { id: '1', text: '🗳 Hoziroq Ovoz Berish (+30 000)', url: 'https://t.me/open_budget_bot' },
-    { id: '2', text: '📢 Rasmiy Yangiliklar Kanali', url: 'https://t.me/' },
+    { id: '2', text: '📢 Rasmiy Telegram Kanal', url: 'https://t.me/' },
   ]);
+
+  // History stack for Undo/Redo (Ctrl+Z / Ctrl+Y)
+  const historyRef = useRef<string[]>([DEFAULT_AD_TEXT]);
+  const historyIndexRef = useRef<number>(0);
 
   const [loading, setLoading] = useState<boolean>(false);
   const [result, setResult] = useState<BroadcastResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  if (!isOpen) return null;
+  // Push new state to history stack
+  const pushToHistory = (newVal: string) => {
+    const nextHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
+    nextHistory.push(newVal);
+    if (nextHistory.length > 50) nextHistory.shift(); // keep max 50 states
+    historyRef.current = nextHistory;
+    historyIndexRef.current = nextHistory.length - 1;
+    setAdText(newVal);
+  };
 
-  // Insert HTML tag into textarea
-  const insertTag = (openTag: string, closeTag: string) => {
-    if (!textareaRef.current) return;
+  const handleUndo = () => {
+    if (historyIndexRef.current > 0) {
+      historyIndexRef.current -= 1;
+      const prevText = historyRef.current[historyIndexRef.current];
+      setAdText(prevText);
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIndexRef.current < historyRef.current.length - 1) {
+      historyIndexRef.current += 1;
+      const nextText = historyRef.current[historyIndexRef.current];
+      setAdText(nextText);
+    }
+  };
+
+  // Keyboard shortcut listener for Ctrl+Z and Ctrl+Y / Cmd+Z
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        handleRedo();
+      } else {
+        handleUndo();
+      }
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+      e.preventDefault();
+      handleRedo();
+    }
+  };
+
+  // Insert HTML tag into textarea cleanly with selection preservation
+  const insertTag = (openTag: string, closeTag: string, placeholder = 'matn') => {
     const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.focus();
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const selectedText = textarea.value.substring(start, end) || 'matn';
+    const hasSelection = start !== end;
+    const selectedText = hasSelection ? textarea.value.substring(start, end) : placeholder;
     const replacement = `${openTag}${selectedText}${closeTag}`;
 
     const newText = textarea.value.substring(0, start) + replacement + textarea.value.substring(end);
-    setAdText(newText);
+    pushToHistory(newText);
 
     setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + openTag.length, start + openTag.length + selectedText.length);
-    }, 50);
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const innerStart = start + openTag.length;
+        const innerEnd = innerStart + selectedText.length;
+        textareaRef.current.setSelectionRange(innerStart, innerEnd);
+      }
+    }, 20);
+  };
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setAdText(val);
+    // Debounce pushing normal typing to history
+    pushToHistory(val);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,38 +181,41 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
 
   // Preset Template loader
   const loadPresetTemplate = (type: 'vote' | 'withdraw' | 'ref') => {
+    let t = '';
+    let b: InlineButton[] = [];
+
     if (type === 'vote') {
-      setAdText(
+      t =
         '🔥 <b>DIQQAT, KATTA IMKONIYAT!</b>\n\n' +
         'Ochiq Budjet loyihasida ovoz berib <b>30 000 so\'m</b> kafolatlangan mukofotga ega bo\'ling!\n\n' +
         '📌 <i>Barcha oila a\'zolaringiz raqamlaridan ham ovoz berishingiz mumkin!</i>\n\n' +
-        'Hoziroq quyidagi tugmalar orqali boshlang 👇'
-      );
-      setButtons([
+        'Hoziroq quyidagi tugmalar orqali boshlang 👇';
+      b = [
         { id: '1', text: '🗳 Ovoz Berish (+30 000 so\'m)', url: 'https://t.me/open_budget_bot' },
         { id: '2', text: '📢 Rasmiy Telegram Kanal', url: 'https://t.me/' },
-      ]);
+      ];
     } else if (type === 'withdraw') {
-      setAdText(
+      t =
         '💳 <b>PULLARNI YECHIB OLISH ESLATMASI!</b>\n\n' +
         'Hisobingizda to\'plangan mukofot mablag\'larini <b>Uzcard, Humo yoki Paynet</b> orqali bir zumda yechib oling!\n\n' +
         'Minimal yechish summasi: <b>10 000 so\'m</b>\n' +
-        'To\'lovlar 100% kafolatlangan va tezkor amalga oshiriladi ✅'
-      );
-      setButtons([
+        'To\'lovlar 100% kafolatlangan va tezkor amalga oshiriladi ✅';
+      b = [
         { id: '1', text: '💳 Balansni Yechib Olish', url: 'https://t.me/open_budget_bot' },
         { id: '2', text: '🧾 To\'lov Isbotlari & Cheklar', url: 'https://t.me/' },
-      ]);
+      ];
     } else if (type === 'ref') {
-      setAdText(
+      t =
         '👥 <b>DO\'STLARINGIZNI TAKLIF QILING VA PUL ISHLANG!</b>\n\n' +
         'Har bir taklif qilgan do\'stingiz uchun <b>+5 000 so\'m</b> darhol hisobingizga tushadi!\n\n' +
-        'Qancha ko\'p do\'stingiz kelsa — shuncha ko\'p daromad olasiz 💰'
-      );
-      setButtons([
+        'Qancha ko\'p do\'stingiz kelsa — shuncha ko\'p daromad olasiz 💰';
+      b = [
         { id: '1', text: '🔗 Shaxsiy Referal Havolam', url: 'https://t.me/open_budget_bot' },
-      ]);
+      ];
     }
+
+    pushToHistory(t);
+    setButtons(b);
   };
 
   const handleSendBroadcast = async () => {
@@ -212,6 +274,8 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
     setResult(null);
     onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/70 dark:bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
@@ -273,7 +337,7 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
         <div className="p-5 overflow-y-auto flex-1">
           {!result ? (
             activeTab === 'custom_ad' ? (
-              /* TAB 1: CUSTOM AD (Split Layout: Editor on left, Real Telegram Mockup on right) */
+              /* TAB 1: CUSTOM AD (Split Layout) */
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
                 {/* Left Column: Composer Controls (7 cols) */}
                 <div className="lg:col-span-7 space-y-4">
@@ -358,84 +422,119 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
 
                   {/* Formatting Toolbar & Text Area */}
                   <div>
-                    <label className="text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5 flex items-center justify-between">
-                      <span>Reklama Matni (Telegram HTML)</span>
-                      <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">Teglar avtomatik ishlaydi</span>
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        Reklama Matni (Telegram HTML)
+                      </label>
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
+                        Ctrl+Z / Cmd+Z (Qaytish)
+                      </span>
+                    </div>
 
                     {/* Toolbar */}
-                    <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/90 rounded-t-2xl border border-slate-300 dark:border-slate-700 border-b-0 flex-wrap">
-                      <button
-                        type="button"
-                        onClick={() => insertTag('<b>', '</b>')}
-                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 text-xs font-bold cursor-pointer"
-                        title="Qalin (Bold) <b>"
-                      >
-                        <Bold className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertTag('<i>', '</i>')}
-                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 text-xs cursor-pointer"
-                        title="Qiya (Italic) <i>"
-                      >
-                        <Italic className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertTag('<u>', '</u>')}
-                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 text-xs cursor-pointer"
-                        title="Tagiga chizilgan <u>"
-                      >
-                        <Underline className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertTag('<s>', '</s>')}
-                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 text-xs cursor-pointer"
-                        title="O'chirilgan <s>"
-                      >
-                        <Strikethrough className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertTag('<code>', '</code>')}
-                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 text-xs cursor-pointer"
-                        title="Monospace Kod <code>"
-                      >
-                        <Code className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertTag('<span class="tg-spoiler">', '</span>')}
-                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 text-xs cursor-pointer"
-                        title="Spoiler (Yashirin)"
-                      >
-                        <EyeOff className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertTag('<blockquote>', '</blockquote>')}
-                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 text-xs cursor-pointer"
-                        title="Iqtibos (Quote)"
-                      >
-                        <Quote className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertTag('<a href="https://t.me/...">', '</a>')}
-                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 text-xs cursor-pointer"
-                        title="Matnli Havola <a>"
-                      >
-                        <Link className="w-3.5 h-3.5" />
-                      </button>
+                    <div className="flex items-center justify-between p-1 bg-slate-100 dark:bg-slate-800/90 rounded-t-2xl border border-slate-300 dark:border-slate-700 border-b-0 flex-wrap gap-0.5">
+                      <div className="flex items-center gap-0.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => insertTag('<b>', '</b>', 'qalin matn')}
+                          className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 text-xs font-bold cursor-pointer"
+                          title="Qalin (Bold) <b>"
+                        >
+                          <Bold className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => insertTag('<i>', '</i>', 'qiya matn')}
+                          className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 text-xs cursor-pointer"
+                          title="Qiya (Italic) <i>"
+                        >
+                          <Italic className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => insertTag('<u>', '</u>', 'tagi chizilgan')}
+                          className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 text-xs cursor-pointer"
+                          title="Tagiga chizilgan <u>"
+                        >
+                          <Underline className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => insertTag('<s>', '</s>', 'ochirilgan')}
+                          className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 text-xs cursor-pointer"
+                          title="O'chirilgan <s>"
+                        >
+                          <Strikethrough className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => insertTag('<code>', '</code>', 'kod')}
+                          className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 text-xs cursor-pointer"
+                          title="Monospace Kod <code>"
+                        >
+                          <Code className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => insertTag('<span class="tg-spoiler">', '</span>', 'yashirin')}
+                          className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 text-xs cursor-pointer"
+                          title="Spoiler (Yashirin)"
+                        >
+                          <EyeOff className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => insertTag('<blockquote>', '</blockquote>', 'iqtibos')}
+                          className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 text-xs cursor-pointer"
+                          title="Iqtibos (Quote)"
+                        >
+                          <Quote className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => insertTag('<a href="https://t.me/...">', '</a>', 'havola')}
+                          className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 text-xs cursor-pointer"
+                          title="Matnli Havola <a>"
+                        >
+                          <Link className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Undo / Redo / Clear Tools */}
+                      <div className="flex items-center gap-0.5 border-l border-slate-300 dark:border-slate-700 pl-1">
+                        <button
+                          type="button"
+                          onClick={handleUndo}
+                          className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-400 text-xs cursor-pointer"
+                          title="Orqaga qaytarish (Ctrl+Z)"
+                        >
+                          <Undo2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRedo}
+                          className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-400 text-xs cursor-pointer"
+                          title="Oldinga o'tish (Ctrl+Y)"
+                        >
+                          <Redo2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => pushToHistory('')}
+                          className="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-900/30 text-rose-500 rounded-lg text-xs cursor-pointer"
+                          title="Matnni tozalash"
+                        >
+                          <Eraser className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
                     <textarea
                       ref={textareaRef}
                       rows={5}
                       value={adText}
-                      onChange={(e) => setAdText(e.target.value)}
+                      onChange={handleTextChange}
+                      onKeyDown={handleKeyDown}
                       placeholder="Reklama matnini kiriting..."
                       className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-b-2xl p-3 text-slate-900 dark:text-white font-mono text-xs focus:outline-none focus:border-orange-500 transition-colors"
                       required
