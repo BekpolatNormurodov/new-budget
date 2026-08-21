@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import sharp from 'sharp';
+import * as sharpImport from 'sharp';
+const sharp = (sharpImport as any).default || sharpImport;
 import { createWorker, Worker } from 'tesseract.js';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -142,61 +143,104 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      // 2. Doira ichidagi raqamlarni ajratib olish
-      const digitCanvas = Buffer.alloc(width * height, 255);
+      // 2. Faqat qora doiralar (bloblar)
+      const isBlack = Array.from({ length: height }, () => Array(width).fill(false));
       for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
-          if (!bg[y][x] && data[y * width + x] > 160) {
-            digitCanvas[y * width + x] = 0;
-          }
+          if (!bg[y][x] && data[y * width + x] < 100) isBlack[y][x] = true;
         }
       }
 
-      // 3. Har bir belgi ustunlarini topish
-      const colCounts: number[] = [];
+      const visited = Array.from({ length: height }, () => Array(width).fill(false));
+      const circles: Array<{ minX: number; maxX: number; minY: number; maxY: number; count: number }> = [];
+
       for (let x = 0; x < width; x++) {
-        let count = 0;
         for (let y = 0; y < height; y++) {
-          if (digitCanvas[y * width + x] === 0) count++;
-        }
-        colCounts.push(count);
-      }
+          if (isBlack[y][x] && !visited[y][x]) {
+            const qC: [number, number][] = [[y, x]];
+            visited[y][x] = true;
+            let minX = x, maxX = x, minY = y, maxY = y, count = 0;
 
-      const chars: Array<{ start: number; end: number }> = [];
-      let inC = false;
-      let st = 0;
-      for (let x = 0; x < width; x++) {
-        if (colCounts[x] > 0) {
-          if (!inC) { inC = true; st = x; }
-        } else {
-          if (inC) {
-            inC = false;
-            if (x - st >= 2) chars.push({ start: st, end: x });
+            while (qC.length > 0) {
+              const [cy, cx] = qC.shift()!;
+              count++;
+              if (cx < minX) minX = cx;
+              if (cx > maxX) maxX = cx;
+              if (cy < minY) minY = cy;
+              if (cy > maxY) maxY = cy;
+
+              for (const [dy, dx] of [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+                const ny = cy + dy;
+                const nx = cx + dx;
+                if (ny >= 0 && ny < height && nx >= 0 && nx < width && isBlack[ny][nx] && !visited[ny][nx]) {
+                  visited[ny][nx] = true;
+                  qC.push([ny, nx]);
+                }
+              }
+            }
+
+            if (count >= 50 && (maxX - minX + 1) >= 8 && (maxY - minY + 1) >= 8) {
+              circles.push({ minX, maxX, minY, maxY, count });
+            }
           }
         }
       }
 
-      const digitPng = await sharp(digitCanvas, { raw: { width, height, channels: 1 }, failOn: 'none' })
-        .withMetadata({ density: 300 })
-        .png()
-        .toBuffer();
+      circles.sort((a, b) => a.minX - b.minX);
 
       const results: string[] = [];
-      for (let i = 0; i < chars.length; i++) {
-        const c = chars[i];
-        const cw = c.end - c.start;
-        if (cw < 2) continue;
+      for (let i = 0; i < circles.length; i++) {
+        const c = circles[i];
+        const border = 3;
+        const innerPoints: Array<{ y: number; x: number }> = [];
 
-        const charImg = await sharp(digitPng, { failOn: 'none' })
-          .extract({ left: c.start, top: 0, width: cw, height })
-          .extend({ top: 20, bottom: 20, left: 20, right: 20, background: { r: 255, g: 255, b: 255 } })
+        for (let y = c.minY + border; y <= c.maxY - border; y++) {
+          for (let x = c.minX + border; x <= c.maxX - border; x++) {
+            if (!bg[y][x] && data[y * width + x] > 140) {
+              innerPoints.push({ y, x });
+            }
+          }
+        }
+
+        if (innerPoints.length < 8) continue;
+
+        let minX = width, maxX = 0, minY = height, maxY = 0;
+        for (const p of innerPoints) {
+          if (p.x < minX) minX = p.x;
+          if (p.x > maxX) maxX = p.x;
+          if (p.y < minY) minY = p.y;
+          if (p.y > maxY) maxY = p.y;
+        }
+
+        const cw = maxX - minX + 1;
+        const ch = maxY - minY + 1;
+
+        if (cw > ch * 1.8 && ch <= 12) {
+          results.push('-');
+          continue;
+        }
+
+        const canvas = Buffer.alloc(cw * ch, 255);
+        for (const p of innerPoints) {
+          canvas[(p.y - minY) * cw + (p.x - minX)] = 0;
+        }
+
+        const png = await sharp(canvas, { raw: { width: cw, height: ch, channels: 1 }, failOn: 'none' })
+          .resize(cw * 5, ch * 5, { kernel: 'nearest' })
+          .extend({ top: 35, bottom: 35, left: 35, right: 35, background: { r: 255, g: 255, b: 255 } })
           .resize(100, 100, { fit: 'contain', background: { r: 255, g: 255, b: 255 } })
           .withMetadata({ density: 300 })
           .png()
           .toBuffer();
 
-        const res = await worker.recognize(charImg);
-        const txt = res.data.text.trim().replace(/[^0-9\+\-\*]/g, '');
+        const ret = await worker.recognize(png);
+        let txt = ret.data.text.trim().replace(/[^0-9\+\-\*]/g, '');
+        // Oxirgi tenglik (=) belgisini tashlab yuborish: agar bu oxirgi circle bo'lsa va '-' bo'lsa yoki results ichida allaqachon amal bo'lsa
+        const hasExistingOp = results.some(r => r === '+' || r === '-' || r === '*');
+        if (i === circles.length - 1 && hasExistingOp && (txt === '-' || txt === '1')) {
+          // Bu captcha oxiridagi '=' belgisi
+          continue;
+        }
         if (txt) results.push(txt);
       }
 
@@ -213,7 +257,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      if (op && opIdx > 0 && opIdx < results.length - 1) {
+      if (op && opIdx > 0 && opIdx < results.length) {
         const n1 = parseInt(results.slice(0, opIdx).join(''), 10);
         const n2 = parseInt(results.slice(opIdx + 1).join(''), 10);
         if (!isNaN(n1) && !isNaN(n2)) {
@@ -239,6 +283,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
 
       return null;
     } catch (err: any) {
+      this.logger.error('solveFullCaptchaWithWorker error:', err);
       return null;
     }
   }
