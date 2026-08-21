@@ -53,17 +53,39 @@ export class OpenBudgetService {
   }
 
   /**
-   * Open Budget havolasini tahlil qilish (Board ID va UUID ajratib olish)
+   * Open Budget havolasini tahlil qilish (Yangi new.openbudget.uz va klassik openbudget.uz formatlari)
    */
-  parseInitiativeUrl(url: string): { boardId?: string; initiativeUuid?: string } {
+  parseInitiativeUrl(url: string): { boardId?: string; initiativeUuid?: string; mahallaId?: string } {
     if (!url) return {};
-    const match = url.match(/\/initiative\/(\d+)\/([a-zA-Z0-9\-]+)/);
-    if (match) {
+    const trimmed = url.trim();
+
+    // 1. Klassik: /initiative/:boardId/:uuid (masalan: /initiative/53/7710ad19-6734-4df9-ab25-a5d2de6facbf)
+    const classicMatch = trimmed.match(/\/initiative\/(\d+)\/([a-zA-Z0-9\-]+)/);
+    if (classicMatch) {
       return {
-        boardId: match[1],
-        initiativeUuid: match[2],
+        boardId: classicMatch[1],
+        initiativeUuid: classicMatch[2],
       };
     }
+
+    // 2. Yangi new.openbudget.uz: /initiative/:publicId (masalan: /uz/initiative/055495798013 yoki UUID)
+    const newMatch = trimmed.match(/\/initiative\/([a-zA-Z0-9\-]+)/);
+    if (newMatch) {
+      const id = newMatch[1];
+      return {
+        initiativeUuid: id,
+        mahallaId: id.length === 12 && /^\d+$/.test(id) ? id : undefined,
+      };
+    }
+
+    // 3. To'g'ridan-to'g'ri 12 xonali Mahalla ID yoki UUID kiritilgan bo'lsa
+    if (/^\d{12}$/.test(trimmed)) {
+      return { mahallaId: trimmed, initiativeUuid: trimmed };
+    }
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
+      return { initiativeUuid: trimmed };
+    }
+
     return {};
   }
 
