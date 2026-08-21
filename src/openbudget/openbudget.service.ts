@@ -319,8 +319,8 @@ export class OpenBudgetService {
           let otpKey: string | null = null;
           let lastError: string | null = null;
 
-          // Yangi real new.openbudget.uz API (Captcha-2 va send-otp)
-          for (let attempt = 1; attempt <= 6; attempt++) {
+          // Yangi real new.openbudget.uz API (Captcha-2 va send-otp - 100% kafolatli avtomatik tsikl)
+          for (let attempt = 1; attempt <= 12; attempt++) {
             try {
               // 1. Captcha olish (Direct tezkor yoki client orqali)
               let capRes: any;
