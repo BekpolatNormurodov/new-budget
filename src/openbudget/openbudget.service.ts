@@ -488,26 +488,29 @@ export class OpenBudgetService {
               // Realistik insoniy tanaffus (200ms)
               await new Promise((r) => setTimeout(r, 200 + Math.random() * 100));
 
-              let verifyRes = await client.post(
-                'https://new.openbudget.uz/api/v2/vote/verify',
-                {
-                  phone_number: clean12,
-                  otp_key: sessionId,
-                  otp_code: code,
-                },
-                {
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                    'Origin': 'https://new.openbudget.uz',
-                    'Referer': 'https://new.openbudget.uz/',
-                  },
-                  validateStatus: () => true,
-                  timeout: 9000,
-                },
-              );
+              const reqHeaders = {
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Origin': 'https://new.openbudget.uz',
+                'Referer': 'https://new.openbudget.uz/',
+              };
 
-              if (verifyRes.status === 404 || verifyRes.status === 400) {
+              let verifyRes: any;
+              try {
+                verifyRes = await axios.post(
+                  'https://new.openbudget.uz/api/v1/login/verify-otp',
+                  {
+                    phone_number: clean12,
+                    otp_key: sessionId,
+                    otp_code: code,
+                  },
+                  {
+                    headers: reqHeaders,
+                    validateStatus: () => true,
+                    timeout: 4500,
+                  },
+                );
+              } catch (dErr) {
                 verifyRes = await client.post(
                   'https://new.openbudget.uz/api/v1/login/verify-otp',
                   {
@@ -516,14 +519,9 @@ export class OpenBudgetService {
                     otp_code: code,
                   },
                   {
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                      'Origin': 'https://new.openbudget.uz',
-                      'Referer': 'https://new.openbudget.uz/',
-                    },
+                    headers: reqHeaders,
                     validateStatus: () => true,
-                    timeout: 9000,
+                    timeout: 5000,
                   },
                 );
               }
