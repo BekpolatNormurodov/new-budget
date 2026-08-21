@@ -683,9 +683,13 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         if (!user) return;
 
         const refCount = await this.prisma.user.count({ where: { referredById: user.id } });
+        const botUsername =
+          freshBot?.botUsername ||
+          botRecord.botUsername ||
+          this.activeBots.get(botRecord.id)?.info?.username ||
+          '';
         const refBonus = freshBot?.refBonus || botRecord.refBonus || 5000;
-        const botUsername = freshBot?.botUsername || botRecord.botUsername || 'open_budget_bot';
-        const refLink = `https://t.me/${botUsername}?start=ref_${user.referralCode}`;
+        const refLink = botUsername ? `https://t.me/${botUsername}?start=ref_${user.referralCode}` : `https://t.me?start=ref_${user.referralCode}`;
 
         await ctx.reply(
           BOT_MESSAGES.REFERRAL(refLink, refCount, refBonus),
@@ -1279,6 +1283,28 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       }
 
       await this.clearAllTimeouts(botRecord.id, user.id);
+
+      // GLOBAL DEDUPLICATION DOUBLE-CHECK: Boshqa botda allaqachon ovoz berilganmi?
+      const existingAnywhere = await this.prisma.vote.findFirst({
+        where: {
+          phone,
+          status: { in: ['VERIFIED', 'PENDING_VERIFICATION'] },
+        },
+        include: { botInstance: true },
+      });
+
+      if (existingAnywhere) {
+        await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { step: null, tempData: null },
+        });
+        return ctx.reply(
+          `⚠️ <b>Ushbu telefon raqam (+${phone}) orqali allaqachon ${existingAnywhere.botInstance?.mahallaName || 'boshqa'} mahallasiga ovoz berilgan!</b>\n\n📌 <b>Ochiq Budjet qoidasi:</b> Bitta telefon raqam yoki fuqaro nomidan bir mavsumda faqat 1 marta ovoz berish mumkin.\n\nSiz boshqa yaqinlaringiz raqamlaridan ovoz berib pul ishlashingiz mumkin!`,
+          { parse_mode: 'HTML', ...BotKeyboards.mainMenu(user.role === 'ADMIN') }
+        );
+      }
+
       const voteReward = botRecord.voteReward || 30000;
 
       // Ovozni PENDING_VERIFICATION holatida saqlash
