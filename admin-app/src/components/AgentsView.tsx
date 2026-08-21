@@ -16,6 +16,9 @@ import {
   Building2,
   Clock,
   TrendingUp,
+  Share2,
+  Eye,
+  Sparkles,
 } from 'lucide-react';
 import { AgentItem, BotInstanceItem } from '../types';
 import { formatSum } from '../utils/format';
@@ -46,6 +49,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   const [payoutReceiptBase64, setPayoutReceiptBase64] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [previewAgent, setPreviewAgent] = useState<AgentItem | null>(null);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -60,6 +64,18 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     telegramId: '',
     rewardPerVote: 5000,
   });
+
+  const getFullReferralLink = (agent: AgentItem) => {
+    if (agent.referralLink && agent.referralLink.startsWith('http')) {
+      return agent.referralLink;
+    }
+    const bot = bots.find((b) => b.id === agent.botInstanceId) || agent.botInstance;
+    const botUsername = bot?.botUsername?.replace(/^@/, '');
+    if (botUsername) {
+      return `https://t.me/${botUsername}?start=${agent.code}`;
+    }
+    return `https://t.me/openbudjet_ishonch_2026_bot?start=${agent.code}`;
+  };
 
   const filteredAgents = useMemo(() => {
     return agents.filter((a) => {
@@ -85,9 +101,34 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   const totalPages = Math.ceil(filteredAgents.length / pageSize) || 1;
 
   const handleCopyLink = (link: string, code: string) => {
-    navigator.clipboard.writeText(link);
-    setCopiedCode(code);
-    setTimeout(() => setCopiedCode(null), 2000);
+    // 100% Reliable copy to clipboard across all browsers / HTTP/HTTPS
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(link).then(() => {
+        setCopiedCode(code);
+        setTimeout(() => setCopiedCode(null), 2500);
+      }).catch(() => fallbackCopy(link, code));
+    } else {
+      fallbackCopy(link, code);
+    }
+  };
+
+  const fallbackCopy = (text: string, code: string) => {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      setCopiedCode(code);
+      setTimeout(() => setCopiedCode(null), 2500);
+    } catch (err) {
+      prompt("Havolani nusxalang:", text);
+    }
+    document.body.removeChild(textArea);
   };
 
   const handleCreateAgentSubmit = async (e: React.FormEvent) => {
@@ -141,18 +182,18 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Top Bar with Stats & Controls */}
+      {/* Top Controls Bar */}
       <div className="p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3 w-full md:w-auto flex-wrap">
           {/* Search Input */}
-          <div className="relative flex-1 md:w-64">
+          <div className="relative flex-1 md:w-72">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-              placeholder="Agent nomi, kodi, username..."
-              className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+              placeholder="Agent ismi, referral kod, telefon..."
+              className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 shadow-sm"
             />
           </div>
 
@@ -160,7 +201,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           <select
             value={selectedBotId}
             onChange={(e) => { setSelectedBotId(e.target.value); setCurrentPage(1); }}
-            className="bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+            className="bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 shadow-sm"
           >
             <option value="ALL">Barcha Botlar & Mahallalar</option>
             {bots.map((b) => (
@@ -180,7 +221,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         </button>
       </div>
 
-      {/* Agents Table / Grid */}
+      {/* Agents Table */}
       <div className="bg-white dark:bg-slate-900/90 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-md overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
@@ -188,7 +229,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
               <tr>
                 <th className="p-3.5">Agent</th>
                 <th className="p-3.5">Bot / Mahalla</th>
-                <th className="p-3.5">Shaxsiy Havola (Referral)</th>
+                <th className="p-3.5">Shaxsiy Havola (Referral Link)</th>
                 <th className="p-3.5 text-center">Ovozlar / Kirganlar</th>
                 <th className="p-3.5 text-right">Ishlagan Summa</th>
                 <th className="p-3.5 text-right">To'langan</th>
@@ -199,55 +240,94 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
               {paginatedAgents.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-400">
-                    Agentlar topilmadi. "+ Yangi Agent Qo'shish" orqali yangi agent qo'shishingiz mumkin.
+                  <td colSpan={8} className="p-10 text-center text-slate-400 space-y-2">
+                    <Users className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600" />
+                    <p className="font-semibold">Hech qanday agent topilmadi</p>
+                    <p className="text-[11px] text-slate-400">Yangi agent qo'shish uchun yuqoridagi tugmani bosing.</p>
                   </td>
                 </tr>
               ) : (
                 paginatedAgents.map((agent) => {
-                  const refLink = agent.referralLink || (agent.botInstance?.botUsername
-                    ? `https://t.me/${agent.botInstance.botUsername}?start=${agent.code}`
-                    : `Kod: ${agent.code}`);
+                  const fullLink = getFullReferralLink(agent);
+                  const isCopied = copiedCode === agent.code;
 
                   return (
-                    <tr key={agent.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                    <tr key={agent.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                      {/* Agent Info */}
                       <td className="p-3.5">
                         <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                           <span>{agent.name}</span>
-                          <span className="text-[10px] font-mono font-normal px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
                             #{agent.id}
                           </span>
                         </div>
-                        <div className="text-[11px] text-slate-400 space-x-1.5">
-                          {agent.telegramUser && <span>@{agent.telegramUser}</span>}
+                        <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+                          {agent.telegramUser && <span className="font-medium text-slate-500">@{agent.telegramUser}</span>}
                           {agent.phone && <span>+{agent.phone}</span>}
                         </div>
                       </td>
 
+                      {/* Bot Info */}
                       <td className="p-3.5">
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">
+                        <span className="font-bold text-slate-800 dark:text-slate-200">
                           {agent.botInstance?.mahallaName || 'Mahalla'}
                         </span>
-                        <div className="text-[10px] text-slate-400">
+                        <div className="text-[10px] text-slate-400 font-mono">
                           @{agent.botInstance?.botUsername || 'bot'}
                         </div>
                       </td>
 
+                      {/* 🔗 IDEAL SMART REFERRAL LINK BOX */}
                       <td className="p-3.5">
-                        <div className="flex items-center gap-1.5">
-                          <code className="text-[11px] font-mono bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-indigo-600 dark:text-indigo-400 max-w-[180px] truncate">
-                            {refLink}
-                          </code>
-                          <button
-                            onClick={() => handleCopyLink(refLink, agent.code)}
-                            title="Nusxalash"
-                            className="p-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer"
-                          >
-                            {copiedCode === agent.code ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                          </button>
+                        <div className="flex flex-col gap-1.5 max-w-[280px]">
+                          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-950/90 border border-indigo-200 dark:border-indigo-900/40 rounded-xl p-1 shadow-inner">
+                            <input
+                              type="text"
+                              readOnly
+                              value={fullLink}
+                              onClick={(e) => (e.target as HTMLInputElement).select()}
+                              className="bg-transparent text-[11px] font-mono text-indigo-600 dark:text-indigo-300 flex-1 px-2 focus:outline-none select-all truncate"
+                            />
+                            <button
+                              onClick={() => handleCopyLink(fullLink, agent.code)}
+                              title={isCopied ? "Nusxalandi!" : "Havolani nusxalash"}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shrink-0 ${
+                                isCopied
+                                  ? 'bg-emerald-600 text-white shadow-sm'
+                                  : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                              }`}
+                            >
+                              {isCopied ? (
+                                <>
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Nusxalandi</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>Copy</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 px-1">
+                            <span className="font-mono font-bold text-slate-500 dark:text-slate-400">
+                              Kod: {agent.code}
+                            </span>
+                            <a
+                              href={fullLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-indigo-500 hover:underline flex items-center gap-0.5"
+                            >
+                              <span>Ochish</span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          </div>
                         </div>
                       </td>
 
+                      {/* Votes & Users */}
                       <td className="p-3.5 text-center">
                         <div className="font-bold text-slate-900 dark:text-white">
                           🗳 {agent.totalVotes || 0} ta
@@ -257,6 +337,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
                         </div>
                       </td>
 
+                      {/* Earned */}
                       <td className="p-3.5 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">
                         {formatSum(agent.totalEarned)} so'm
                         <div className="text-[10px] text-slate-400 font-normal">
@@ -264,16 +345,19 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
                         </div>
                       </td>
 
+                      {/* Paid */}
                       <td className="p-3.5 text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">
                         {formatSum(agent.totalPaid)} so'm
                       </td>
 
+                      {/* Balance */}
                       <td className="p-3.5 text-right">
                         <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-sm">
                           {formatSum(agent.balance)} so'm
                         </span>
                       </td>
 
+                      {/* Actions */}
                       <td className="p-3.5 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
@@ -281,15 +365,15 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
                               setPayoutAgentItem(agent);
                               setPayoutAmount(String(agent.balance || ''));
                             }}
-                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold transition flex items-center gap-1 shadow-sm cursor-pointer"
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm cursor-pointer"
                             title="To'lov qilish"
                           >
-                            <DollarSign className="w-3 h-3" />
+                            <DollarSign className="w-3.5 h-3.5" />
                             <span>To'lash</span>
                           </button>
                           <button
                             onClick={() => onDeleteAgent(agent.id)}
-                            className="p-1 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                            className="p-1.5 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
                             title="O'chirish"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -343,7 +427,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
                 <select
                   value={newAgent.botInstanceId}
                   onChange={(e) => setNewAgent({ ...newAgent, botInstanceId: Number(e.target.value) })}
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold"
                 >
                   {bots.map((b) => (
                     <option key={b.id} value={b.id}>
@@ -410,7 +494,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-xl text-slate-400 hover:bg-slate-800"
+                  className="px-4 py-2 rounded-xl text-slate-400 hover:bg-slate-800 cursor-pointer"
                 >
                   Bekor qilish
                 </button>
@@ -493,7 +577,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setPayoutAgentItem(null)}
-                  className="px-4 py-2 rounded-xl text-slate-400 hover:bg-slate-800"
+                  className="px-4 py-2 rounded-xl text-slate-400 hover:bg-slate-800 cursor-pointer"
                 >
                   Bekor qilish
                 </button>
