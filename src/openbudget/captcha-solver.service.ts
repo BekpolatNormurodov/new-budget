@@ -41,7 +41,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
     const worker = await createWorker('eng');
 
     await worker.setParameters({
-      tessedit_char_whitelist: '0123456789+-*',
+      tessedit_char_whitelist: '0123456789+-*lI|OQo',
       tessedit_pageseg_mode: '10' as any,
       user_defined_dpi: '300' as any,
     });
@@ -234,7 +234,8 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
           .toBuffer();
 
         const ret = await worker.recognize(png);
-        let txt = ret.data.text.trim().replace(/[^0-9\+\-\*]/g, '');
+        let txt = ret.data.text.trim().replace(/[^0-9\+\-\*lI|OQo]/g, '');
+        txt = txt.replace(/[lI|]/g, '1').replace(/[OQo]/g, '0');
         // Oxirgi tenglik (=) belgisini tashlab yuborish: agar bu oxirgi circle bo'lsa va '-' bo'lsa yoki results ichida allaqachon amal bo'lsa
         const hasExistingOp = results.some(r => r === '+' || r === '-' || r === '*');
         if (i === circles.length - 1 && hasExistingOp && (txt === '-' || txt === '1')) {
