@@ -38,27 +38,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async createSingleWorker(): Promise<Worker> {
-    const candidatePaths = [
-      path.resolve(process.cwd(), 'node_modules/@tesseract.js-data/eng/4.0.0_best_int'),
-      path.resolve(process.cwd(), 'node_modules/@tesseract.js-data/eng/4.0.0'),
-      path.resolve(__dirname, '../../node_modules/@tesseract.js-data/eng/4.0.0_best_int'),
-      path.resolve(__dirname, '../node_modules/@tesseract.js-data/eng/4.0.0_best_int'),
-    ];
-
-    let localData: string | undefined;
-    for (const p of candidatePaths) {
-      if (fs.existsSync(p)) {
-        localData = p;
-        break;
-      }
-    }
-
-    const workerOptions: any = { gzip: false };
-    if (localData) {
-      workerOptions.langPath = localData;
-    }
-
-    const worker = await createWorker('eng', 1, workerOptions);
+    const worker = await createWorker('eng');
 
     await worker.setParameters({
       tessedit_char_whitelist: '0123456789+-*/=xXlIoO| ',
