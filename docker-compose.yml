@@ -40,6 +40,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+      UV_THREADPOOL_SIZE: 128
+      NODE_OPTIONS: "--max-old-space-size=4096"
       DATABASE_URL: mysql://root:${DB_ROOT_PASSWORD:-khurshid-2827}@mysql_db:3306/open_budget
       
       # Asosiy Birlamchi Bot va Admin Sozlamalari
