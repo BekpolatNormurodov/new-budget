@@ -1,8 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
-import http from 'http';
-import https from 'https';
+import * as http from 'http';
+import * as https from 'https';
 
 export interface ProxyItem {
   url: string;
