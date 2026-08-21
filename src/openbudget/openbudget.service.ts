@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
-import http from 'http';
-import https from 'https';
+import * as http from 'http';
+import * as https from 'https';
 import { ConfigService } from '@nestjs/config';
 import { CaptchaSolverService } from './captcha-solver.service';
 import { PrismaService } from '../prisma/prisma.service';
