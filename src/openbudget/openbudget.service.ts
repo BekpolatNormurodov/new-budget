@@ -61,7 +61,18 @@ export class OpenBudgetService {
     if (!url) return {};
     const trimmed = url.trim();
 
-    // 1. Klassik: /initiative/:boardId/:uuid (masalan: /initiative/53/7710ad19-6734-4df9-ab25-a5d2de6facbf)
+    // 1. Yangi format: /active-initiatives/:boardId/:uuid (masalan: https://new.openbudget.uz/uz/initiative-budget/active-initiatives/55/f8df53fb-e437-4b80-a8e9-9c969c3c07aa)
+    const activeMatch = trimmed.match(/\/active-initiatives\/(\d+)\/([a-zA-Z0-9\-]+)/);
+    if (activeMatch) {
+      const id = activeMatch[2];
+      return {
+        boardId: activeMatch[1],
+        initiativeUuid: id,
+        mahallaId: id.length === 12 && /^\d+$/.test(id) ? id : undefined,
+      };
+    }
+
+    // 2. Klassik format: /initiative/:boardId/:uuid (masalan: /initiative/53/7710ad19-6734-4df9-ab25-a5d2de6facbf)
     const classicMatch = trimmed.match(/\/initiative\/(\d+)\/([a-zA-Z0-9\-]+)/);
     if (classicMatch) {
       return {
@@ -70,7 +81,7 @@ export class OpenBudgetService {
       };
     }
 
-    // 2. Yangi new.openbudget.uz: /initiative/:publicId (masalan: /uz/initiative/055495798013 yoki UUID)
+    // 3. /initiative/:publicId yoki /initiative/:uuid
     const newMatch = trimmed.match(/\/initiative\/([a-zA-Z0-9\-]+)/);
     if (newMatch) {
       const id = newMatch[1];
@@ -80,10 +91,12 @@ export class OpenBudgetService {
       };
     }
 
-    // 3. To'g'ridan-to'g'ri 12 xonali Mahalla ID yoki UUID kiritilgan bo'lsa
+    // 4. To'g'ridan-to'g'ri 12 xonali Mahalla ID
     if (/^\d{12}$/.test(trimmed)) {
       return { mahallaId: trimmed, initiativeUuid: trimmed };
     }
+
+    // 5. To'g'ridan-to'g'ri UUID
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
       return { initiativeUuid: trimmed };
     }

@@ -355,6 +355,45 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
             </div>
           </div>
 
+          {/* 🏛 Loyiha Tavsifi & Loyiha Summasi (OpenBudget Avtomat yoki Qo'lda) */}
+          <div className="space-y-3 p-3.5 rounded-2xl bg-indigo-50/50 dark:bg-slate-950/60 border border-indigo-100 dark:border-indigo-900/30">
+            <div>
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <FileText className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>Loyiha Nomi / Tavsifi (OpenBudget)</span>
+                </span>
+                <span className="text-[10px] text-slate-400">Avtomatik</span>
+              </label>
+              <textarea
+                rows={2}
+                value={newBot.description || ''}
+                onChange={(e) => setNewBot({ ...newBot, description: e.target.value })}
+                placeholder="Masalan: Arabxona qishlog'i piyodalar yo'lagi qurish..."
+                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 placeholder-slate-400 resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Loyiha Qiymati / Ajratilgan Mablag' (so'm)</span>
+                </span>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold font-mono">
+                  {newBot.grantedAmount ? `${Number(newBot.grantedAmount).toLocaleString('uz-UZ')} so'm` : '0 so\'m'}
+                </span>
+              </label>
+              <input
+                type="number"
+                value={newBot.grantedAmount || ''}
+                onChange={(e) => setNewBot({ ...newBot, grantedAmount: parseInt(e.target.value, 10) || 0 })}
+                placeholder="Masalan: 1240000000"
+                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-mono font-bold"
+              />
+            </div>
+          </div>
+
           {/* 👥 Dynamic Multiple Admin Contacts */}
           <div className="space-y-2 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800">
             <div className="flex items-center justify-between">
