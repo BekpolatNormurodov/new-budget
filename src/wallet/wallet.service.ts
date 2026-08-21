@@ -98,6 +98,21 @@ export class WalletService {
       }),
     ]);
 
+    // Agent hisobiga ovoz va komissiya yozish
+    if (vote.agentId && vote.agentReward > 0) {
+      await this.prisma.agent.update({
+        where: { id: vote.agentId },
+        data: {
+          totalVotes: { increment: 1 },
+          totalEarned: { increment: vote.agentReward },
+          balance: { increment: vote.agentReward },
+        },
+      }).catch((err) => {
+        this.logger.warn(`Agent #${vote.agentId} ga komissiya yozishda xatolik: ${err.message}`);
+      });
+      this.logger.log(`🤝 Agent #${vote.agentId} ga ovoz #${voteId} uchun +${vote.agentReward} so'm komissiya yozildi.`);
+    }
+
     // Initiative hisoblagichini oshirish
     if (vote.initiativeId) {
       await this.prisma.initiative.update({

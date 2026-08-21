@@ -1509,11 +1509,24 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
       const voteReward = botRecord.voteReward || 30000;
 
+      // Agar foydalanuvchi Agent referali orqali kirgan bo'lsa, agent ma'lumotlarini olish
+      let agentIdToAssign: number | null = null;
+      let agentRewardToAssign = 0;
+      if (user.agentId) {
+        const agentRec = await this.prisma.agent.findUnique({ where: { id: user.agentId } });
+        if (agentRec && agentRec.isActive) {
+          agentIdToAssign = agentRec.id;
+          agentRewardToAssign = agentRec.rewardPerVote || 5000;
+        }
+      }
+
       // Ovozni PENDING_VERIFICATION holatida va JWT Token bilan saqlash
       await this.prisma.vote.create({
         data: {
           userId: user.id,
           botInstanceId: botRecord.id,
+          agentId: agentIdToAssign,
+          agentReward: agentRewardToAssign,
           phone,
           status: 'PENDING_VERIFICATION',
           rewardAmount: voteReward,
