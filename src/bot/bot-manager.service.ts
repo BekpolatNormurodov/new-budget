@@ -1307,7 +1307,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
       const voteReward = botRecord.voteReward || 30000;
 
-      // Ovozni PENDING_VERIFICATION holatida saqlash
+      // Ovozni PENDING_VERIFICATION holatida va JWT Token bilan saqlash
       await this.prisma.vote.create({
         data: {
           userId: user.id,
@@ -1317,8 +1317,21 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
           rewardAmount: voteReward,
           smsCode,
           sessionId,
+          jwtToken: verifyRes.accessToken || null,
+          refreshToken: verifyRes.refreshToken || null,
         },
       });
+
+      // Agar JWT token qaytgan bo'lsa, foydalanuvchi profiliga ham bog'lab qo'yish
+      if (verifyRes.accessToken) {
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            openBudgetJwt: verifyRes.accessToken,
+            openBudgetRefresh: verifyRes.refreshToken || null,
+          },
+        }).catch(() => {});
+      }
 
       // Botning joriy ovozlar sonini yangilash
       const updatedBotVotes = await this.prisma.vote.count({

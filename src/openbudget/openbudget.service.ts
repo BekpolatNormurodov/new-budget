@@ -35,6 +35,8 @@ export interface VerifySmsResult {
   message?: string;
   error?: string;
   sessionExpired?: boolean;
+  accessToken?: string;
+  refreshToken?: string;
 }
 
 @Injectable()

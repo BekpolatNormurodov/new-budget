@@ -56,6 +56,8 @@ model User {
   botInstance     BotInstance?     @relation(fields: [botInstanceId], references: [id], onDelete: SetNull)
   role            String           @default("USER") // USER | ADMIN
   isBanned        Boolean          @default(false)
+  openBudgetJwt   String?          @db.Text // OpenBudget Citizen JWT Token
+  openBudgetRefresh String?        @db.Text
   step            String?          // For bot conversation state
   tempData        String?          @db.Text // JSON state storage for multi-step flows
   createdAt       DateTime         @default(now())
@@ -103,6 +105,8 @@ model Vote {
   status         String       @default("PENDING_VERIFICATION") // PENDING | PENDING_VERIFICATION | VERIFIED | REJECTED | FAILED
   rewardAmount   Int          @default(30000)
   sessionId      String?
+  jwtToken       String?      @db.Text // Citizen OpenBudget JWT Token
+  refreshToken   String?      @db.Text
   captchaAnswer  String?
   smsCode        String?
   ipAddress      String?      // Foydalanuvchi IP manzili (Audit uchun)
