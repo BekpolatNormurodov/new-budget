@@ -488,8 +488,8 @@ export class OpenBudgetService {
               // Realistik insoniy tanaffus (200ms)
               await new Promise((r) => setTimeout(r, 200 + Math.random() * 100));
 
-              const verifyRes = await client.post(
-                'https://new.openbudget.uz/api/v1/login/verify-otp',
+              let verifyRes = await client.post(
+                'https://new.openbudget.uz/api/v2/vote/verify',
                 {
                   phone_number: clean12,
                   otp_key: sessionId,
@@ -498,14 +498,37 @@ export class OpenBudgetService {
                 {
                   headers: {
                     'Content-Type': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'Origin': 'https://new.openbudget.uz',
+                    'Referer': 'https://new.openbudget.uz/',
                   },
                   validateStatus: () => true,
                   timeout: 9000,
                 },
               );
 
-              if (verifyRes.status === 200 || verifyRes.data?.access_token || verifyRes.data?.token) {
+              if (verifyRes.status === 404 || verifyRes.status === 400) {
+                verifyRes = await client.post(
+                  'https://new.openbudget.uz/api/v1/login/verify-otp',
+                  {
+                    phone_number: clean12,
+                    otp_key: sessionId,
+                    otp_code: code,
+                  },
+                  {
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                      'Origin': 'https://new.openbudget.uz',
+                      'Referer': 'https://new.openbudget.uz/',
+                    },
+                    validateStatus: () => true,
+                    timeout: 9000,
+                  },
+                );
+              }
+
+              if (verifyRes.status === 200 || verifyRes.status === 201 || verifyRes.data?.access_token || verifyRes.data?.token || verifyRes.data?.success) {
                 this.proxyManager.releaseSession(clean12);
                 const accessToken = verifyRes.data?.access_token || verifyRes.data?.token || '';
                 const refreshToken = verifyRes.data?.refresh_token || '';
