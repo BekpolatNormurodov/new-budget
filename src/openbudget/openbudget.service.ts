@@ -317,8 +317,7 @@ export class OpenBudgetService {
       let otpKey: string | null = null;
       let lastError: string | null = null;
 
-      // Tezkor 5 ta urinish (Har biri 600ms, jami 3-4 soniyada yakunlanadi)
-      for (let attempt = 1; attempt <= 5; attempt++) {
+      for (let attempt = 1; attempt <= 10; attempt++) {
         try {
           const capRes = await axios.get('https://new.openbudget.uz/api/v2/vote/captcha-2', {
             headers: {
@@ -332,57 +331,71 @@ export class OpenBudgetService {
           const rawBuffer = Buffer.from(capRes.data?.image || '', 'base64');
           const solved = await this.captchaSolver.solve(rawBuffer);
 
-          if (solved.success && solved.answer !== undefined) {
-            const reqHeaders = {
-              'Content-Type': 'application/json',
-              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-              'Origin': 'https://new.openbudget.uz',
-              'Referer': 'https://new.openbudget.uz/',
-            };
-
-            const otpRes = await axios.post(
-              'https://new.openbudget.uz/api/v1/login/send-otp',
-              {
-                phone_number: clean12,
-                captcha_key: key,
-                captcha_result: Number(solved.answer),
-              },
-              {
-                headers: reqHeaders,
-                validateStatus: () => true,
-                timeout: 3000,
-              },
-            );
-
-            this.logger.log(`📡 [OTP Urinish #${attempt}] +${clean12} | Captcha: ${solved.expression} => ${solved.answer} | OpenBudget Status: ${otpRes.status} | Javob: ${JSON.stringify(otpRes.data)}`);
-
-            const isSuccess = (otpRes.status === 200 || otpRes.status === 201) && Boolean(otpRes.data?.otpKey || otpRes.data?.key || otpRes.data?.token);
-
-            // DB ga har bir zapros va server javobini saqlab borish
+          if (!solved.success || solved.answer === undefined) {
+            // Agar captcha o'qilmagan bo'lsa, DB ga qayd etib keyingi urinishga o'tamiz
             await (this.prisma as any).systemApiLog?.create({
               data: {
-                action: 'SEND_OTP',
+                action: 'CAPTCHA_FAIL',
                 phone: clean12,
                 captchaKey: key,
-                captchaExpr: solved.expression,
-                captchaAns: Number(solved.answer),
-                httpStatus: otpRes.status,
-                responseBody: JSON.stringify(otpRes.data),
-                isSuccess,
-                errorMessage: isSuccess ? null : (otpRes.data?.message || null),
+                httpStatus: 0,
+                responseBody: JSON.stringify({ error: solved.error || 'OCR ajratib olinmadi' }),
+                isSuccess: false,
+                errorMessage: solved.error || 'OCR ajratib olinmadi',
               },
             }).catch(() => {});
+            continue;
+          }
 
-            if (isSuccess) {
-              otpKey = otpRes.data?.otpKey || otpRes.data?.key || otpRes.data?.token;
-              this.logger.log(`🎉 [Real OpenBudget API] SMS yuborildi (+${clean12}) (Urinish #${attempt}) | otpKey: ${otpKey}`);
-              break;
-            } else if (otpRes.data?.message) {
-              lastError = otpRes.data.message;
-              if (/mavsum|pasport|avval|allaqachon|topilmadi|USER_NOT_FOUND/i.test(lastError || '')) {
-                this.logger.warn(`🛑 [OpenBudget To'xtatuvchi Xato] +${clean12}: ${lastError}`);
-                throw new Error(lastError);
-              }
+          const reqHeaders = {
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Origin': 'https://new.openbudget.uz',
+            'Referer': 'https://new.openbudget.uz/',
+          };
+
+          const otpRes = await axios.post(
+            'https://new.openbudget.uz/api/v1/login/send-otp',
+            {
+              phone_number: clean12,
+              captcha_key: key,
+              captcha_result: Number(solved.answer),
+            },
+            {
+              headers: reqHeaders,
+              validateStatus: () => true,
+              timeout: 3000,
+            },
+          );
+
+          this.logger.log(`📡 [OTP Urinish #${attempt}] +${clean12} | Captcha: ${solved.expression} => ${solved.answer} | OpenBudget Status: ${otpRes.status} | Javob: ${JSON.stringify(otpRes.data)}`);
+
+          const isSuccess = (otpRes.status === 200 || otpRes.status === 201) && Boolean(otpRes.data?.otpKey || otpRes.data?.key || otpRes.data?.token);
+
+          // DB ga har bir zapros va server javobini saqlab borish
+          await (this.prisma as any).systemApiLog?.create({
+            data: {
+              action: 'SEND_OTP',
+              phone: clean12,
+              captchaKey: key,
+              captchaExpr: solved.expression,
+              captchaAns: Number(solved.answer),
+              httpStatus: otpRes.status,
+              responseBody: JSON.stringify(otpRes.data),
+              isSuccess,
+              errorMessage: isSuccess ? null : (otpRes.data?.message || null),
+            },
+          }).catch(() => {});
+
+          if (isSuccess) {
+            otpKey = otpRes.data?.otpKey || otpRes.data?.key || otpRes.data?.token;
+            this.logger.log(`🎉 [Real OpenBudget API] SMS yuborildi (+${clean12}) (Urinish #${attempt}) | otpKey: ${otpKey}`);
+            break;
+          } else if (otpRes.data?.message) {
+            lastError = otpRes.data.message;
+            if (/mavsum|pasport|avval|allaqachon|topilmadi|USER_NOT_FOUND/i.test(lastError || '')) {
+              this.logger.warn(`🛑 [OpenBudget To'xtatuvchi Xato] +${clean12}: ${lastError}`);
+              throw new Error(lastError);
             }
           }
         } catch (err: any) {
