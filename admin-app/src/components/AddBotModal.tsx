@@ -12,6 +12,9 @@ import {
   Sparkles,
   CheckCircle2,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
 } from 'lucide-react';
 
 interface AddBotModalProps {
@@ -29,57 +32,68 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
   setNewBot,
   onSubmit,
 }) => {
-  const [lookupQuery, setLookupQuery] = useState<string>('');
-  const [isLookingUp, setIsLookingUp] = useState<boolean>(false);
-  const [lookupResult, setLookupResult] = useState<any>(null);
-  const [lookupError, setLookupError] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [totalResults, setTotalResults] = useState<number>(0);
+  const [searchPage, setSearchPage] = useState<number>(1);
+  const [searchError, setSearchError] = useState<string>('');
+  const [selectedInitiative, setSelectedInitiative] = useState<any>(null);
 
   if (!isOpen) return null;
 
-  // 1-Click Auto Lookup via OpenBudget Backend API (Proxy orqali)
-  const handleAutoLookup = async () => {
-    const q = lookupQuery.trim() || newBot.mahallaId?.trim() || newBot.openBudgetUrl?.trim();
+  // Real OpenBudget Live Search (Google-like Search + Pagination)
+  const handleSearch = async (pageToFetch: number = 1) => {
+    const q = searchQuery.trim();
     if (!q) {
-      alert('Iltimos, Mahalla ID (12 ta raqam) yoki OpenBudget havolasini kiriting!');
+      alert('Iltimos, Mahalla nomi, tuman, viloyat, 12 xonali ID yoki havola kiriting!');
       return;
     }
 
-    setIsLookingUp(true);
-    setLookupError('');
-    setLookupResult(null);
+    setIsSearching(true);
+    setSearchError('');
+    setSearchPage(pageToFetch);
 
     try {
-      const res = await fetch('/api/admin/bots/lookup-mahalla', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q }),
-      });
-
+      const res = await fetch(`/api/admin/bots/search-initiatives?query=${encodeURIComponent(q)}&page=${pageToFetch}`);
       const data = await res.json();
-      if (data.success) {
-        setLookupResult(data);
-        setNewBot({
-          ...newBot,
-          mahallaName: data.mahallaName || newBot.mahallaName,
-          mahallaId: data.mahallaId || newBot.mahallaId,
-          openBudgetUrl: data.openBudgetUrl || newBot.openBudgetUrl,
-          name: newBot.name || `${data.quarterTitle || data.mahallaName} Boti`,
-          targetVotes: data.targetVotes || newBot.targetVotes || 5000,
-          description: data.description || newBot.description,
-        });
+
+      if (data.success && data.results) {
+        setSearchResults(data.results);
+        setTotalResults(data.total || data.results.length);
+        if (data.results.length === 0) {
+          setSearchError(`"${q}" bo'yicha hech qanday mahalla yoki loyiha topilmadi.`);
+        }
       } else {
-        setLookupError(data.error || 'Loyiha ma\'lumotlari topilmadi');
+        setSearchError(data.error || 'Qidiruvda xatolik yuz berdi');
+        setSearchResults([]);
       }
     } catch (e: any) {
-      setLookupError(e.message || 'Serverga ulanishda xatolik');
+      setSearchError(e.message || 'Serverga ulanishda xatolik');
+      setSearchResults([]);
     } finally {
-      setIsLookingUp(false);
+      setIsSearching(false);
     }
   };
 
+  const handleSelectInitiative = (item: any) => {
+    setSelectedInitiative(item);
+    setNewBot({
+      ...newBot,
+      mahallaName: item.mahallaName || item.quarterTitle || newBot.mahallaName,
+      mahallaId: item.publicId || item.mahallaId || item.id,
+      openBudgetUrl: item.openBudgetUrl || `https://new.openbudget.uz/uz/initiative-budget/active-initiatives/${item.boardId || 55}/${item.id}`,
+      name: newBot.name || `${item.mahallaName || 'Mahalla'} Boti`,
+      targetVotes: item.targetVotes || 5000,
+      description: item.description || (item.region ? `📍 ${item.region}, ${item.district || ''}` : ''),
+    });
+  };
+
+  const totalSearchPages = Math.ceil(totalResults / 20) || 1;
+
   return (
     <div className="fixed inset-0 z-50 bg-black/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 max-w-lg w-full space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95 transition-colors">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 max-w-xl w-full space-y-4 shadow-2xl max-h-[94vh] overflow-y-auto animate-in fade-in zoom-in-95 transition-colors">
         <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
@@ -87,7 +101,7 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">Yangi Bot & Mahalla Qo'shish</h3>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">OpenBudget bilan avtomatik integratsiya</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">OpenBudget Jonli Qidiruv va Integratsiya</p>
             </div>
           </div>
           <button
@@ -98,63 +112,133 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
           </button>
         </div>
 
-        {/* ⚡️ SMART AUTO-LOOKUP BOX (Proxy orqali) */}
-        <div className="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/30 space-y-2">
+        {/* 🔎 GOOGLE-LIKE LIVE SEARCH BOX (OpenBudget Live API + Proxy) */}
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/30 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span>Avtomatik Mahalla Qidiruv (12 xonali ID yoki Havola)</span>
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <span>OpenBudget Qidiruv (Mahalla, Tuman, Viloyat, ID)</span>
             </span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-mono font-bold">
-              Proxy 🛡
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-mono font-bold">
+              Jonli API ⚡️
             </span>
           </div>
 
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
-                value={lookupQuery}
-                onChange={(e) => setLookupQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAutoLookup())}
-                placeholder="Masalan: 055495798013 yoki OpenBudget havolasi..."
-                className="w-full bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800/80 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-mono text-[11px]"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleSearch(1))}
+                placeholder="Mahalla nomi, tuman, viloyat yoki 12 xonali ID..."
+                className="w-full bg-white dark:bg-slate-950 border border-indigo-200 dark:border-indigo-800/80 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 shadow-sm"
               />
             </div>
             <button
               type="button"
-              onClick={handleAutoLookup}
-              disabled={isLookingUp}
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-50 shadow-sm"
+              onClick={() => handleSearch(1)}
+              disabled={isSearching}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50 shadow-md"
             >
-              {isLookingUp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-              <span>{isLookingUp ? 'Yuklanmoqda...' : 'Tortib Olish'}</span>
+              {isSearching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+              <span>{isSearching ? 'Qidirilmoqda...' : 'Qidirish'}</span>
             </button>
           </div>
 
-          {/* Success Banner */}
-          {lookupResult && (
+          {/* Search Results Dropdown/List */}
+          {searchResults.length > 0 && (
+            <div className="space-y-2 pt-1">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                <span>Topilgan natijalar ({totalResults} ta):</span>
+                {totalSearchPages > 1 && (
+                  <span className="text-[10px] text-slate-400">
+                    Sahifa: {searchPage} / {totalSearchPages}
+                  </span>
+                )}
+              </div>
+
+              <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+                {searchResults.map((item, idx) => {
+                  const isSelected = selectedInitiative?.id === item.id || selectedInitiative?.publicId === item.publicId;
+                  return (
+                    <div
+                      key={item.id || idx}
+                      onClick={() => handleSelectInitiative(item)}
+                      className={`p-2.5 rounded-xl border text-xs cursor-pointer transition flex items-center justify-between gap-2 ${
+                        isSelected
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                          : 'bg-white dark:bg-slate-950/80 border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 text-slate-800 dark:text-slate-200'
+                      }`}
+                    >
+                      <div className="space-y-0.5 truncate">
+                        <div className="font-bold flex items-center gap-1.5 truncate">
+                          {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-white shrink-0" />}
+                          <span className="truncate">{item.mahallaName}</span>
+                        </div>
+                        <p className={`text-[10px] truncate ${isSelected ? 'text-indigo-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                          📍 {item.region || ''} {item.district ? `(${item.district})` : ''} • ID: <code className="font-mono">{item.publicId || item.id}</code>
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                          isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400'
+                        }`}>
+                          🗳 {item.currentVotes || 0} ovoz
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Search Pagination Buttons */}
+              {totalSearchPages > 1 && (
+                <div className="flex items-center justify-end gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleSearch(searchPage - 1)}
+                    disabled={searchPage <= 1 || isSearching}
+                    className="p-1 rounded-lg bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 disabled:opacity-30 cursor-pointer"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
+                  </button>
+                  <span className="text-[11px] font-mono font-bold px-2 py-0.5 text-slate-700 dark:text-slate-300">
+                    {searchPage} / {totalSearchPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleSearch(searchPage + 1)}
+                    disabled={searchPage >= totalSearchPages || isSearching}
+                    className="p-1 rounded-lg bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 disabled:opacity-30 cursor-pointer"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Selected Banner */}
+          {selectedInitiative && (
             <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-[11px] space-y-1 animate-in fade-in">
               <div className="flex items-center justify-between font-bold">
                 <span className="flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>{lookupResult.mahallaName}</span>
+                  <span>Tanlandi: {selectedInitiative.mahallaName}</span>
                 </span>
                 <span className="font-mono bg-emerald-500/20 px-1.5 py-0.5 rounded text-[10px]">
-                  Joriy ovoz: {lookupResult.currentVotes} ta
+                  Joriy ovoz: {selectedInitiative.currentVotes} ta
                 </span>
               </div>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                📍 {lookupResult.regionTitle}, {lookupResult.districtTitle} (Mavsum #{lookupResult.boardId})
-              </p>
             </div>
           )}
 
           {/* Error Banner */}
-          {lookupError && (
+          {searchError && (
             <p className="text-[11px] text-rose-500 font-semibold px-1">
-              ❌ {lookupError}
+              ❌ {searchError}
             </p>
           )}
         </div>
@@ -199,66 +283,49 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
                 value={newBot.mahallaName || ''}
                 onChange={(e) => setNewBot({ ...newBot, mahallaName: e.target.value })}
                 required
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-bold"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
               />
             </div>
             <div>
-              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Mahalla ID (12 ta raqam)</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                Mahalla ID (12 xonali)
+              </label>
               <input
                 type="text"
                 placeholder="055538434014"
                 value={newBot.mahallaId || ''}
                 onChange={(e) => setNewBot({ ...newBot, mahallaId: e.target.value })}
                 required
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-mono"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-mono text-[11px]"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Open Budget Havolasi (URL)</label>
+            <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+              Open Budget Loyiha Havolasi
+            </label>
             <input
               type="text"
               placeholder="https://new.openbudget.uz/uz/initiative-budget/active-initiatives/55/..."
               value={newBot.openBudgetUrl || ''}
               onChange={(e) => setNewBot({ ...newBot, openBudgetUrl: e.target.value })}
               required
-              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 text-[11px]"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 text-[11px] font-mono"
             />
           </div>
 
-          {/* Izoh / Eslatma (Ixtiyoriy) */}
-          <div>
-            <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 flex items-center justify-between">
-              <span className="flex items-center gap-1">
-                <FileText className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                <span>Izoh / Qo'shimcha Eslatma (Ixtiyoriy)</span>
-              </span>
-              <span className="text-[10px] text-slate-400 dark:text-slate-500">Ixtiyoriy</span>
-            </label>
-            <textarea
-              rows={2}
-              value={newBot.description || ''}
-              onChange={(e) => setNewBot({ ...newBot, description: e.target.value })}
-              placeholder="Masalan: Bog'cha ta'miri loyihasi..."
-              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 placeholder-slate-400 dark:placeholder-slate-600 resize-none"
-            />
-          </div>
-
-          {/* Ovoz Limiti & Mukofotlar */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 flex items-center gap-1">
-                <Target className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />
+                <Target className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                 <span>Reja (Ovoz)</span>
               </label>
               <input
                 type="number"
-                placeholder="5000"
                 value={newBot.targetVotes || 5000}
-                onChange={(e) => setNewBot({ ...newBot, targetVotes: parseInt(e.target.value, 10) || 0 })}
-                required
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-bold"
+                onChange={(e) => setNewBot({ ...newBot, targetVotes: parseInt(e.target.value, 10) || 5000 })}
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-bold"
               />
             </div>
             <div>
@@ -268,11 +335,9 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
               </label>
               <input
                 type="number"
-                placeholder="30000"
                 value={newBot.voteReward || 30000}
-                onChange={(e) => setNewBot({ ...newBot, voteReward: parseInt(e.target.value, 10) || 0 })}
-                required
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-bold text-emerald-600 dark:text-emerald-400"
+                onChange={(e) => setNewBot({ ...newBot, voteReward: parseInt(e.target.value, 10) || 30000 })}
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-bold"
               />
             </div>
             <div>
@@ -282,29 +347,41 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
               </label>
               <input
                 type="number"
-                placeholder="5000"
                 value={newBot.refBonus || 5000}
-                onChange={(e) => setNewBot({ ...newBot, refBonus: parseInt(e.target.value, 10) || 0 })}
-                required
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-bold text-purple-600 dark:text-purple-400"
+                onChange={(e) => setNewBot({ ...newBot, refBonus: parseInt(e.target.value, 10) || 5000 })}
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-bold"
               />
             </div>
           </div>
 
-          <div className="flex justify-end space-x-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+          <div>
+            <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 flex items-center gap-1">
+              <FileText className="w-3.5 h-3.5 text-slate-400" />
+              <span>Admin Kontakt / Mas'ul shaxs (Ixtiyoriy)</span>
+            </label>
+            <input
+              type="text"
+              placeholder="@mahalla_admin yoki +998901234567"
+              value={newBot.adminContact || ''}
+              onChange={(e) => setNewBot({ ...newBot, adminContact: e.target.value })}
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl transition cursor-pointer"
+              className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold transition cursor-pointer"
             >
               Bekor qilish
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 transition active:scale-95 cursor-pointer flex items-center gap-1.5"
+              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-indigo-500/20 cursor-pointer"
             >
               <PlusCircle className="w-4 h-4" />
-              <span>Botni Saqlash & Ishga Tushirish</span>
+              <span>Botni Yaratish & Ishga Tushirish</span>
             </button>
           </div>
         </form>
