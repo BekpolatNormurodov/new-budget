@@ -335,7 +335,17 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
 
     if (allButtons.length > 0) {
       inlineKeyboard = Markup.inlineKeyboard(
-        allButtons.map((btn) => [Markup.button.url(btn.text, btn.url)])
+        allButtons.map((btn) => {
+          const u = btn.url.trim();
+          if (u.startsWith('http://') || u.startsWith('https://') || u.startsWith('t.me/')) {
+            const finalUrl = u.startsWith('t.me/') ? `https://${u}` : u;
+            return [Markup.button.url(btn.text, finalUrl)];
+          } else {
+            // Callback action (masalan: start_vote, withdraw_menu, referral_link, refresh_balance)
+            const actionName = u.replace(/^action:/, '');
+            return [Markup.button.callback(btn.text, actionName)];
+          }
+        })
       );
     }
 

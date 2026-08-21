@@ -25,11 +25,8 @@ import {
   Redo2,
   Eraser,
   Target,
-  Users,
-  Flame,
   Zap,
-  Wallet,
-  Clock,
+  Flame,
 } from 'lucide-react';
 import { BotInstanceItem } from '../types';
 
@@ -64,8 +61,8 @@ const TEMPLATES = [
       'Pullar to\'g\'ridan-to\'g\'ri Uzcard/Humo kartangizga yoki Paynetga tushiriladi ✅\n\n' +
       'Hoziroq boshlash uchun pastdagi tugmani bosing 👇',
     buttons: [
-      { id: '1', text: '🔥 150 000 so\'m ishlashni boshlash', url: 'https://t.me/open_budget_bot' },
-      { id: '2', text: '💳 Kartaga pul olish', url: 'https://t.me/open_budget_bot' },
+      { id: '1', text: '🗳 Ovoz Berish (+30 000 so\'m)', url: 'start_vote' },
+      { id: '2', text: '💳 Kartaga Pul Yechish', url: 'withdraw_menu' },
     ],
   },
   {
@@ -79,8 +76,8 @@ const TEMPLATES = [
       '🎯 Ovozlar soni cheklangan, birinchilardan bo\'ling!\n\n' +
       'Birinchilardan bo\'lib ovoz bering 👇',
     buttons: [
-      { id: '1', text: '⚡️ Yangi Mahallaga Ovoz Berish', url: 'https://t.me/open_budget_bot' },
-      { id: '2', text: '📢 Yangiliklar Kanali', url: 'https://t.me/' },
+      { id: '1', text: '⚡️ Yangi Mahallaga Ovoz Berish', url: 'start_vote' },
+      { id: '2', text: '👥 Do\'stlarni Taklif Qilish', url: 'referral_link' },
     ],
   },
   {
@@ -94,8 +91,8 @@ const TEMPLATES = [
       '🔒 To\'lovlar 100% avtomatlashgan va komissiyasiz amalga oshiriladi.\n\n' +
       'Balansingizni tekshiring va pulni oling 👇',
     buttons: [
-      { id: '1', text: '💳 Pulni Kartaga Yechib Olish', url: 'https://t.me/open_budget_bot' },
-      { id: '2', text: '🧾 To\'lov Isbotlari & Cheklar', url: 'https://t.me/' },
+      { id: '1', text: '💳 Pulni Kartaga Yechib Olish', url: 'withdraw_menu' },
+      { id: '2', text: '💰 Balansimni Tekshirish', url: 'refresh_balance' },
     ],
   },
   {
@@ -110,8 +107,8 @@ const TEMPLATES = [
       '👥 60 ta do\'st = <b>300 000 so\'m</b> 💸\n\n' +
       'Shaxsiy havolangizni oling va do\'stlaringizga yuboring 👇',
     buttons: [
-      { id: '1', text: '🔗 Shaxsiy Referal Havolam', url: 'https://t.me/open_budget_bot' },
-      { id: '2', text: '🏆 Top Daromad Qiluvchilar', url: 'https://t.me/' },
+      { id: '1', text: '🔗 Shaxsiy Referal Havolam', url: 'referral_link' },
+      { id: '2', text: '🗳 Ovoz Berish (+30 000)', url: 'start_vote' },
     ],
   },
   {
@@ -124,8 +121,8 @@ const TEMPLATES = [
       '🔥 Oxirgi imkoniyatdan foydalaning va <b>30 000 so\'m</b> daromadingizni olib qoling!\n\n' +
       'Hoziroq ovoz berish uchun pastdagi tugmani bosing 👇',
     buttons: [
-      { id: '1', text: '🔥 So\'nggi Ovozni Berish (+30 000)', url: 'https://t.me/open_budget_bot' },
-      { id: '2', text: '📞 Yordam Markazi', url: 'https://t.me/' },
+      { id: '1', text: '🔥 So\'nggi Ovozni Berish (+30 000)', url: 'start_vote' },
+      { id: '2', text: '💬 Admin bilan bog\'lanish', url: 'https://t.me/Elbek_Muxtorovv' },
     ],
   },
   {
@@ -139,10 +136,18 @@ const TEMPLATES = [
       '💰 To\'lov: <b>30 000 so\'m</b> (Darhol kartaga)\n\n' +
       'Imkoniyatni qo\'ldan boy bermang 👇',
     buttons: [
-      { id: '1', text: '🎁 Ovoz Berish & Bonusni Olish', url: 'https://t.me/open_budget_bot' },
-      { id: '2', text: '💬 Admin bilan bog\'lanish', url: 'https://t.me/' },
+      { id: '1', text: '🎁 Ovoz Berish & Bonusni Olish', url: 'start_vote' },
+      { id: '2', text: '💳 Balansni Yechish', url: 'withdraw_menu' },
     ],
   },
+];
+
+const PRESET_BUTTON_ACTIONS = [
+  { label: '🗳 Ovoz Berish', action: 'start_vote', text: '🗳 Ovoz Berish (+30 000 so\'m)' },
+  { label: '💳 Pul Yechish', action: 'withdraw_menu', text: '💳 Pulni Kartaga Yechib Olish' },
+  { label: '🔗 Referal Havola', action: 'referral_link', text: '🔗 Shaxsiy Referal Havolam' },
+  { label: '💰 Balans Tekshirish', action: 'refresh_balance', text: '💰 Balansimni Tekshirish' },
+  { label: '💬 Admin', action: 'https://t.me/Elbek_Muxtorovv', text: '💬 Admin bilan bog\'lanish' },
 ];
 
 export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = ({
@@ -260,10 +265,14 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
   };
 
   // Button management
-  const addButton = () => {
+  const addButton = (preset?: { text: string; action: string }) => {
     setButtons([
       ...buttons,
-      { id: Date.now().toString(), text: `👉 Yangi Tugma #${buttons.length + 1}`, url: 'https://t.me/' },
+      {
+        id: Date.now().toString(),
+        text: preset ? preset.text : `👉 Yangi Tugma #${buttons.length + 1}`,
+        url: preset ? preset.action : 'start_vote',
+      },
     ]);
   };
 
@@ -279,6 +288,11 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
   const applyTemplate = (tmpl: typeof TEMPLATES[0]) => {
     pushToHistory(tmpl.text);
     setButtons(tmpl.buttons.map((b) => ({ ...b, id: Math.random().toString() })));
+  };
+
+  const isActionUrl = (url: string) => {
+    const u = url.trim();
+    return !u.startsWith('http://') && !u.startsWith('https://') && !u.startsWith('t.me/');
   };
 
   const handleSendBroadcast = async () => {
@@ -436,11 +450,11 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
                 {/* Left Column: Composer Controls (7 cols) */}
                 <div className="lg:col-span-7 space-y-4">
-                  {/* 5 Preset Marketing Templates Chips */}
+                  {/* 6 Preset Marketing Templates Chips */}
                   <div className="space-y-1.5">
                     <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block flex items-center gap-1">
                       <Sparkles className="w-3 h-3 text-orange-500" />
-                      5 ta Tayyor Marketing Shablonlari (1-Click):
+                      6 ta Viral Marketing Shablonlari (1-Click):
                     </span>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {TEMPLATES.map((tmpl) => (
@@ -630,67 +644,98 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
 
                   {/* Multiple Inline Buttons Builder */}
                   <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <div>
                         <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                           <Layers className="w-3.5 h-3.5 text-indigo-500" />
                           <span>Telegram Inline Tugmalar ({buttons.length} ta)</span>
                         </label>
                         <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                          Xabar tagiga biriktiriladigan havola tugmalari
+                          Bot ichidagi amallar yoki tashqi havola tugmalari
                         </p>
                       </div>
 
                       <button
                         type="button"
-                        onClick={addButton}
+                        onClick={() => addButton()}
                         className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-sm transition active:scale-95 cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>Tugma Qo'shish</span>
+                        <span>Yangi Tugma</span>
                       </button>
+                    </div>
+
+                    {/* Quick Button Presets */}
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-200 dark:border-slate-700/60">
+                      <span className="text-[10px] font-bold text-slate-400">Tezkor Tugmalar:</span>
+                      {PRESET_BUTTON_ACTIONS.map((pa, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => addButton(pa)}
+                          className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white dark:bg-slate-900 hover:bg-indigo-500/10 hover:text-indigo-600 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition cursor-pointer"
+                        >
+                          + {pa.label}
+                        </button>
+                      ))}
                     </div>
 
                     {buttons.length === 0 ? (
                       <p className="text-xs text-slate-400 text-center py-2 italic">
-                        Hech qanday tugma qo'shilmagan. Yuqoridagi "Tugma Qo'shish"ni bosing.
+                        Hech qanday tugma qo'shilmagan. Yuqoridagi "Yangi Tugma" yoki tezkor tugmalardan birini bosing.
                       </p>
                     ) : (
-                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                        {buttons.map((btn, idx) => (
-                          <div
-                            key={btn.id}
-                            className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center gap-2"
-                          >
-                            <span className="text-[10px] font-bold text-slate-400 w-4 text-center shrink-0">
-                              #{idx + 1}
-                            </span>
-                            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              <input
-                                type="text"
-                                value={btn.text}
-                                onChange={(e) => updateButton(btn.id, 'text', e.target.value)}
-                                placeholder="Tugma matni..."
-                                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:border-indigo-500"
-                              />
-                              <input
-                                type="url"
-                                value={btn.url}
-                                onChange={(e) => updateButton(btn.id, 'url', e.target.value)}
-                                placeholder="https://t.me/..."
-                                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-900 dark:text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => removeButton(btn.id)}
-                              className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition shrink-0 cursor-pointer"
-                              title="Tugmani o'chirish"
+                      <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                        {buttons.map((btn, idx) => {
+                          const isAction = isActionUrl(btn.url);
+                          return (
+                            <div
+                              key={btn.id}
+                              className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-1.5"
                             >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ))}
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                                  <span>#{idx + 1}</span>
+                                  {isAction ? (
+                                    <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono text-[9px] font-bold">
+                                      ⚡️ Bot Amali ({btn.url})
+                                    </span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 font-mono text-[9px] font-bold">
+                                      🌐 Tashqi Havola
+                                    </span>
+                                  )}
+                                </span>
+
+                                <button
+                                  type="button"
+                                  onClick={() => removeButton(btn.id)}
+                                  className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition shrink-0 cursor-pointer"
+                                  title="Tugmani o'chirish"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <input
+                                  type="text"
+                                  value={btn.text}
+                                  onChange={(e) => updateButton(btn.id, 'text', e.target.value)}
+                                  placeholder="Tugma matni (masalan: 🗳 Ovoz Berish)"
+                                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:border-indigo-500"
+                                />
+                                <input
+                                  type="text"
+                                  value={btn.url}
+                                  onChange={(e) => updateButton(btn.id, 'url', e.target.value)}
+                                  placeholder="start_vote yoki https://t.me/..."
+                                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-900 dark:text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -738,18 +783,22 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
                           <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-700/60">
                             {buttons
                               .filter((b) => b.text.trim())
-                              .map((btn) => (
-                                <a
-                                  key={btn.id}
-                                  href={btn.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="w-full py-2 px-3 rounded-xl bg-indigo-500/10 dark:bg-indigo-600/25 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-bold text-xs text-center border border-indigo-500/30 flex items-center justify-center gap-1.5 transition block shadow-sm truncate"
-                                >
-                                  <span className="truncate">{btn.text}</span>
-                                  <ExternalLink className="w-3 h-3 opacity-60 shrink-0" />
-                                </a>
-                              ))}
+                              .map((btn) => {
+                                const isAction = isActionUrl(btn.url);
+                                return (
+                                  <div
+                                    key={btn.id}
+                                    className="w-full py-2 px-3 rounded-xl bg-indigo-500/10 dark:bg-indigo-600/25 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-bold text-xs text-center border border-indigo-500/30 flex items-center justify-center gap-1.5 transition block shadow-sm truncate"
+                                  >
+                                    <span className="truncate">{btn.text}</span>
+                                    {isAction ? (
+                                      <Zap className="w-3 h-3 text-amber-500 shrink-0" />
+                                    ) : (
+                                      <ExternalLink className="w-3 h-3 opacity-60 shrink-0" />
+                                    )}
+                                  </div>
+                                );
+                              })}
                           </div>
                         )}
                       </div>

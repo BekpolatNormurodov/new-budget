@@ -887,6 +887,12 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
             await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
             await ctx.reply('❌ Qayta SMS so\'rashda xatolik yuz berdi.');
           }
+        } else if (data === 'start_vote') {
+          await handleVoteTrigger(ctx);
+        } else if (data === 'withdraw_menu') {
+          await handleWithdrawTrigger(ctx);
+        } else if (data === 'referral_link' || data === 'start_ref') {
+          await handleReferralTrigger(ctx);
         } else if (data === 'cancel_vote' || data === 'cancel_action') {
           await this.clearAllTimeouts(botRecord.id, user.id);
           await this.prisma.user.update({
