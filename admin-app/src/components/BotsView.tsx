@@ -14,6 +14,7 @@ import {
   Target,
   Image,
   Sparkles,
+  Send,
 } from 'lucide-react';
 import { BotInstanceItem } from '../types';
 import { formatSum } from '../utils/format';
@@ -39,6 +40,25 @@ export const BotsView: React.FC<BotsViewProps> = ({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ONLINE' | 'STOPPED'>('ALL');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
+
+  const handleTestMarketingBroadcast = async () => {
+    if (!confirm("Barcha bot foydalanuvchilariga test eslatma xabari yuborilsinmi?")) return;
+    setIsBroadcasting(true);
+    try {
+      const res = await fetch('/api/admin/broadcast/marketing-trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot: 'TEST' }),
+      });
+      const data = await res.json();
+      alert(`📢 Test Eslatma Xabarnomasi yakunlandi!\n\nJami yuborildi: ${data.sentCount || 0} ta xabar\nBloklangan/Nofaol: ${data.failedCount || 0} ta\nVaqt: ${data.durationMs || 0}ms`);
+    } catch (e) {
+      alert('Xabar yuborishda xatolik yuz berdi.');
+    } finally {
+      setIsBroadcasting(false);
+    }
+  };
 
   const filteredBots = bots.filter((b) => {
     const matchesSearch =
@@ -110,6 +130,17 @@ export const BotsView: React.FC<BotsViewProps> = ({
               <List className="w-4 h-4" />
             </button>
           </div>
+
+          {/* Marketing Broadcast Test Button */}
+          <button
+            onClick={handleTestMarketingBroadcast}
+            disabled={isBroadcasting}
+            className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-bold rounded-xl shadow-lg shadow-orange-500/20 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+            title="Barcha bot foydalanuvchilariga eslatma xabari yuborish (Test)"
+          >
+            <Send className={`w-3.5 h-3.5 ${isBroadcasting ? 'animate-spin' : ''}`} />
+            <span>{isBroadcasting ? 'Yuborilmoqda...' : '📢 Eslatma Yuborish (Test)'}</span>
+          </button>
 
           <button
             onClick={onOpenAddBot}
