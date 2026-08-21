@@ -51,6 +51,19 @@ export class AdminController {
     return this.adminService.lookupMahalla(query);
   }
 
+  @Get('bots/search-initiatives')
+  async searchInitiatives(
+    @Query('query') query: string,
+    @Query('page') page?: string,
+  ) {
+    return this.adminService.searchOpenBudgetInitiatives(query, page ? parseInt(page, 10) : 1);
+  }
+
+  @Post('bots/check-vote-token')
+  async checkVoteToken(@Body('tokenOrPhone') tokenOrPhone: string) {
+    return this.adminService.checkVoteByToken(tokenOrPhone);
+  }
+
   @Post('bots/sync-votes')
   async syncBotVotes() {
     return this.adminService.syncBotVotes();

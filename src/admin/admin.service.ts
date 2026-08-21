@@ -600,6 +600,135 @@ export class AdminService {
   }
 
   /**
+   * 🔍 Foydalanuvchining shaxsiy JWT tokeni orqali OpenBudget profilini va qaysi loyihaga ovoz berganini rasmiy tekshirish
+   */
+  async checkVoteByToken(tokenOrPhone: string) {
+    const input = (tokenOrPhone || '').trim();
+    if (!input) {
+      return { success: false, error: 'Token yoki telefon raqami kiritilmadi' };
+    }
+
+    let token = input;
+    let phone = '';
+
+    // Agar telefon raqam kiritilgan bo'lsa, bazadan uning saqlangan JWT tokenini topish
+    if (/^\+?\d{9,12}$/.test(input.replace(/[\s\-\(\)]/g, ''))) {
+      const clean = input.replace(/[^0-9]/g, '');
+      const cleanPhone = clean.length === 9 ? `998${clean}` : clean;
+      phone = cleanPhone;
+
+      const user = await this.prisma.user.findFirst({
+        where: {
+          OR: [
+            { phone: cleanPhone },
+            { phone: clean.slice(-9) },
+          ],
+        },
+      });
+
+      if (user && user.openBudgetJwt) {
+        token = user.openBudgetJwt;
+      } else {
+        const vote = await this.prisma.vote.findFirst({
+          where: { phone: cleanPhone, jwtToken: { not: null } },
+          orderBy: { id: 'desc' },
+        });
+        if (vote && vote.jwtToken) {
+          token = vote.jwtToken;
+        }
+      }
+    }
+
+    if (!token || token.length < 20) {
+      return {
+        success: false,
+        error: 'Ushbu foydalanuvchining OpenBudget JWT tokeni topilmadi yoki token kiritilmagan.',
+      };
+    }
+
+    const cleanToken = token.replace(/^bearer\s+/i, '').trim();
+
+    // 1. Shaxsiy profilni olish
+    const profileRes = await this.openBudgetService.getUserProfile(cleanToken);
+
+    // 2. Ovoz berilgan loyihalarni olish
+    const initiativesRes = await this.openBudgetService.getUserVotedInitiatives(cleanToken);
+
+    return {
+      success: true,
+      token: cleanToken,
+      phone: phone || profileRes.data?.phone_number || profileRes.data?.phone,
+      profile: profileRes.data || null,
+      votedInitiatives: initiativesRes.initiatives || [],
+      totalVotes: initiativesRes.initiatives?.length || 0,
+      isVerifiedOnOpenBudget: !!(profileRes.data || initiativesRes.initiatives?.length),
+    };
+  }
+
+  /**
+   * 🔎 OpenBudget umumiy qidiruv tizimi (Google/Search kabi Mahalla nomi, hudud yoki tuman bo'yicha)
+   */
+  async searchOpenBudgetInitiatives(query: string, page = 1) {
+    const trimmed = (query || '').trim();
+    if (!trimmed) {
+      return { success: false, error: 'Qidiruv so\'zi kiritilmadi' };
+    }
+
+    // 1. Agar to'g'ridan-to'g'ri 12 xonali Mahalla ID yoki URL bo'lsa
+    if (/^\d{12}$/.test(trimmed) || trimmed.startsWith('http')) {
+      const lookup = await this.openBudgetService.lookupMahallaOrInitiative(trimmed);
+      return {
+        success: true,
+        results: lookup.success ? [lookup] : [],
+        total: lookup.success ? 1 : 0,
+      };
+    }
+
+    // 2. Matnli qidiruv (Mahalla nomi, tuman, viloyat bo'yicha)
+    try {
+      const res = await this.proxyManagerService.requestWithRetry(async (client) => {
+        return client.get(`https://new.openbudget.uz/api/v1/initiatives`, {
+          params: {
+            title: trimmed,
+            page,
+            limit: 20,
+          },
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          },
+          timeout: 8000,
+        });
+      });
+
+      const list = res?.data?.items || res?.data?.data || (Array.isArray(res?.data) ? res.data : []);
+      const total = res?.data?.total || list.length;
+
+      const formatted = list.map((item: any) => ({
+        id: item.id,
+        publicId: item.public_id || item.id,
+        mahallaName: item.quarter_title ? `${item.quarter_title} MFY` : (item.title || 'Noma\'lum mahalla'),
+        region: item.region_title,
+        district: item.district_title,
+        boardId: String(item.board_id || '55'),
+        currentVotes: item.vote_count || 0,
+        targetVotes: 5000,
+        openBudgetUrl: `https://new.openbudget.uz/uz/initiative-budget/active-initiatives/${item.board_id || 55}/${item.id}`,
+        stage: item.stage,
+      }));
+
+      return {
+        success: true,
+        query: trimmed,
+        total,
+        page,
+        results: formatted,
+      };
+    } catch (err: any) {
+      return { success: false, error: `Qidiruv xatoligi: ${err.message}` };
+    }
+  }
+
+  /**
    * Barcha faol botlar ovozlarini OpenBudgetdan 15 minutlik sinxronlash
    */
   async syncBotVotes() {
