@@ -404,32 +404,25 @@ export class OpenBudgetService {
             };
           }
 
-          if (lastError && /mavsum|pasport|avval|allaqachon/i.test(lastError)) {
-            throw new Error(lastError);
-          }
-
-          // Fallback mock session if external service blocked temporarily
-          const mockSessionId = `OB_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+          const finalErrMsg = lastError || 'OpenBudget tizimi SMS kod yubormadi (Kaptcha xatosi yoki vaqtinchalik cheklov). Iltimos, qaytadan urinib ko\'ring.';
+          this.logger.warn(`❌ [OpenBudget OTP Fail] +${clean12}: ${finalErrMsg}`);
           return {
-            success: true,
-            sessionId: mockSessionId,
-            message: 'SMS kod muvaffaqiyatli yuborildi',
+            success: false,
+            error: finalErrMsg,
             initiative,
           };
         },
         clean12,
-        3,
+        2,
       );
 
-      if (smsResult && smsResult.success) {
+      if (smsResult) {
         return smsResult;
       }
 
       return {
-        success: true,
-        sessionId: `OB_${Date.now()}_${clean9}`,
-        message: 'SMS kod yuborildi',
-        initiative,
+        success: false,
+        error: 'SMS yuborishda xatolik yuz berdi. Iltimos qaytadan urinib ko\'ring.',
       };
     } catch (err: any) {
       this.logger.error('SMS so\'rashda xatolik yuz berdi:', err);
