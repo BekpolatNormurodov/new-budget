@@ -312,127 +312,80 @@ export class OpenBudgetService {
       }
     }
 
-    // 3. Ichki Open Budget tizimi orqali SMS so'rash (Auto-Failover / Proxy Retry bilan)
+    // 3. Ichki Open Budget tizimi orqali to'g'ridan-to'g'ri SMS so'rash (Proxy to'siqlarisiz 100% toza oqim)
     try {
-      const smsResult = await this.proxyManager.requestWithRetry(
-        async (client) => {
-          let otpKey: string | null = null;
-          let lastError: string | null = null;
+      let otpKey: string | null = null;
+      let lastError: string | null = null;
 
-          // Yangi real new.openbudget.uz API (Captcha-2 va send-otp - 100% kafolatli avtomatik tsikl)
-          for (let attempt = 1; attempt <= 12; attempt++) {
-            try {
-              // 1. Captcha olish (Direct tezkor yoki client orqali)
-              let capRes: any;
-              try {
-                capRes = await axios.get('https://new.openbudget.uz/api/v2/vote/captcha-2', {
-                  headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                    'Accept': 'application/json',
-                  },
-                  timeout: 3500,
-                });
-              } catch (cErr) {
-                capRes = await client.get('https://new.openbudget.uz/api/v2/vote/captcha-2', {
-                  headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                    'Accept': 'application/json',
-                  },
-                  timeout: 4000,
-                });
-              }
+      for (let attempt = 1; attempt <= 15; attempt++) {
+        try {
+          const capRes = await axios.get('https://new.openbudget.uz/api/v2/vote/captcha-2', {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+              'Accept': 'application/json',
+            },
+            timeout: 3500,
+          });
 
-              const key = capRes.data?.captchaKey;
-              const rawBuffer = Buffer.from(capRes.data?.image || '', 'base64');
-              const solved = await this.captchaSolver.solve(rawBuffer);
+          const key = capRes.data?.captchaKey;
+          const rawBuffer = Buffer.from(capRes.data?.image || '', 'base64');
+          const solved = await this.captchaSolver.solve(rawBuffer);
 
-              if (solved.success && solved.answer !== undefined) {
-                const reqHeaders = {
-                  'Content-Type': 'application/json',
-                  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                  'Origin': 'https://new.openbudget.uz',
-                  'Referer': 'https://new.openbudget.uz/',
-                };
+          if (solved.success && solved.answer !== undefined) {
+            const reqHeaders = {
+              'Content-Type': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+              'Origin': 'https://new.openbudget.uz',
+              'Referer': 'https://new.openbudget.uz/',
+            };
 
-                let otpRes: any;
-                // v1/login/send-otp (Eng ishonchli va barqaror rasmiy endpoint)
-                try {
-                  otpRes = await axios.post(
-                    'https://new.openbudget.uz/api/v1/login/send-otp',
-                    {
-                      phone_number: clean12,
-                      captcha_key: key,
-                      captcha_result: solved.answer,
-                    },
-                    {
-                      headers: reqHeaders,
-                      validateStatus: () => true,
-                      timeout: 4000,
-                    },
-                  );
-                } catch (eDirect) {
-                  otpRes = await client.post(
-                    'https://new.openbudget.uz/api/v1/login/send-otp',
-                    {
-                      phone_number: clean12,
-                      captcha_key: key,
-                      captcha_result: solved.answer,
-                    },
-                    {
-                      headers: reqHeaders,
-                      validateStatus: () => true,
-                      timeout: 4000,
-                    },
-                  );
-                }
+            const otpRes = await axios.post(
+              'https://new.openbudget.uz/api/v1/login/send-otp',
+              {
+                phone_number: clean12,
+                captcha_key: key,
+                captcha_result: solved.answer,
+              },
+              {
+                headers: reqHeaders,
+                validateStatus: () => true,
+                timeout: 4000,
+              },
+            );
 
-                if ((otpRes.status === 200 || otpRes.status === 201) && (otpRes.data?.otpKey || otpRes.data?.key || otpRes.data?.token)) {
-                  otpKey = otpRes.data?.otpKey || otpRes.data?.key || otpRes.data?.token;
-                  this.logger.log(`✅ [Real OpenBudget API] SMS yuborildi (+${clean12}) | otpKey: ${otpKey}`);
-                  break;
-                } else if (otpRes.data?.message) {
-                  lastError = otpRes.data.message;
-                  // Agar pasport/raqam limiti bo'lsa darhol to'xtatamiz
-                  if (/mavsum|pasport|avval|allaqachon/i.test(lastError || '')) {
-                    throw new Error(lastError);
-                  }
-                }
-              }
-            } catch (err: any) {
-              if (err.message && /mavsum|pasport|avval|allaqachon/i.test(err.message)) {
-                throw err;
+            if ((otpRes.status === 200 || otpRes.status === 201) && (otpRes.data?.otpKey || otpRes.data?.key || otpRes.data?.token)) {
+              otpKey = otpRes.data?.otpKey || otpRes.data?.key || otpRes.data?.token;
+              this.logger.log(`✅ [Real OpenBudget API] SMS yuborildi (+${clean12}) | otpKey: ${otpKey}`);
+              break;
+            } else if (otpRes.data?.message) {
+              lastError = otpRes.data.message;
+              if (/mavsum|pasport|avval|allaqachon/i.test(lastError || '')) {
+                throw new Error(lastError);
               }
             }
           }
-
-          if (otpKey) {
-            return {
-              success: true,
-              sessionId: otpKey,
-              message: 'SMS kod telefoningizga yuborildi',
-              initiative,
-            };
+        } catch (err: any) {
+          if (err.message && /mavsum|pasport|avval|allaqachon/i.test(err.message)) {
+            throw err;
           }
-
-          const finalErrMsg = lastError || 'OpenBudget tizimi SMS kod yubormadi (Kaptcha xatosi yoki vaqtinchalik cheklov). Iltimos, qaytadan urinib ko\'ring.';
-          this.logger.warn(`❌ [OpenBudget OTP Fail] +${clean12}: ${finalErrMsg}`);
-          return {
-            success: false,
-            error: finalErrMsg,
-            initiative,
-          };
-        },
-        clean12,
-        2,
-      );
-
-      if (smsResult) {
-        return smsResult;
+        }
       }
 
+      if (otpKey) {
+        return {
+          success: true,
+          sessionId: otpKey,
+          message: 'SMS kod telefoningizga yuborildi',
+          initiative,
+        };
+      }
+
+      const finalErrMsg = lastError || 'OpenBudget tizimi SMS kod yubormadi (Kaptcha xatosi yoki vaqtinchalik cheklov). Iltimos, qaytadan urinib ko\'ring.';
+      this.logger.warn(`❌ [OpenBudget OTP Fail] +${clean12}: ${finalErrMsg}`);
       return {
         success: false,
-        error: 'SMS yuborishda xatolik yuz berdi. Iltimos qaytadan urinib ko\'ring.',
+        error: finalErrMsg,
+        initiative,
       };
     } catch (err: any) {
       this.logger.error('SMS so\'rashda xatolik yuz berdi:', err);
