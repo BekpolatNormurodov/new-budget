@@ -320,14 +320,14 @@ export class OpenBudgetService {
           let lastError: string | null = null;
 
           // Yangi real new.openbudget.uz API (Captcha-2 va send-otp)
-          for (let attempt = 1; attempt <= 5; attempt++) {
+          for (let attempt = 1; attempt <= 2; attempt++) {
             try {
               const capRes = await client.get('https://new.openbudget.uz/api/v2/vote/captcha-2', {
                 headers: {
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                   'Accept': 'application/json',
                 },
-                timeout: 6000,
+                timeout: 2500,
               });
 
               const key = capRes.data?.captchaKey;
@@ -335,9 +335,6 @@ export class OpenBudgetService {
               const solved = await this.captchaSolver.solve(rawBuffer);
 
               if (solved.success && solved.answer !== undefined) {
-                // Realistik insoniy tanaffus (250-400ms)
-                await new Promise((r) => setTimeout(r, 250 + Math.random() * 150));
-
                 let otpRes = await client.post(
                   'https://new.openbudget.uz/api/v2/vote/send-otp',
                   {
@@ -354,7 +351,7 @@ export class OpenBudgetService {
                       'Referer': 'https://new.openbudget.uz/',
                     },
                     validateStatus: () => true,
-                    timeout: 8000,
+                    timeout: 2500,
                   },
                 );
 
@@ -374,7 +371,7 @@ export class OpenBudgetService {
                         'Referer': 'https://new.openbudget.uz/',
                       },
                       validateStatus: () => true,
-                      timeout: 8000,
+                      timeout: 2500,
                     },
                   );
                 }

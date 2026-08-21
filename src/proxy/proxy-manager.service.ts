@@ -276,7 +276,7 @@ export class ProxyManagerService implements OnModuleInit {
         return await requestFn(client);
       } catch (err: any) {
         lastError = err;
-        this.logger.warn(`⚠️ [Proxy Auto-Failover ${attempt}/${maxRetries}] So'rov xatoligi (${err.message}). Keyingi toza IP ga o'tilmoqda...`);
+        this.logger.warn(`⚠️ [Proxy Auto-Failover ${attempt}/${maxRetries}] So'rov xatoligi (${err.message}). Keyingi toza kanalga o'tilmoqda...`);
 
         // Agar bu sticky sessiya bo'lsa va xato bersa, eski nofaol proxyni o'chirib, boshqasini tanlaymiz
         if (sessionKey) {
@@ -288,8 +288,8 @@ export class ProxyManagerService implements OnModuleInit {
           }
         }
 
-        // Kichik tanaffus (150ms)
-        await new Promise((r) => setTimeout(r, 150));
+        // Kichik tanaffus (100ms)
+        await new Promise((r) => setTimeout(r, 100));
       }
     }
 
