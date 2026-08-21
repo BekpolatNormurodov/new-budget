@@ -83,67 +83,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           </div>
         )}
 
-        {/* Quick Admin Profile Selectors */}
-        <div className="space-y-1.5">
-          <label className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
-            <KeyRound className="w-3 h-3 text-indigo-400" />
-            <span>1-Bosishda Kirish (Adminni tanlang):</span>
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => { setPhone('+998 95 064 28 27'); setPassword('Khurshid#Dev2026!'); }}
-              className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-800 hover:border-indigo-500/50 border border-slate-700/60 text-left text-xs transition-all flex items-center gap-2 cursor-pointer active:scale-95"
-            >
-              <span className="text-base">⚡️</span>
-              <div className="truncate">
-                <div className="font-bold text-white text-[11px] truncate">Xurshid (DevOps)</div>
-                <div className="text-[9px] text-indigo-300 font-mono">95 064 28 27</div>
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => { setPhone('+998 94 348 99 00'); setPassword('Elbek#Budget2026!'); }}
-              className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-800 hover:border-indigo-500/50 border border-slate-700/60 text-left text-xs transition-all flex items-center gap-2 cursor-pointer active:scale-95"
-            >
-              <span className="text-base">👑</span>
-              <div className="truncate">
-                <div className="font-bold text-white text-[11px] truncate">Elbek Muxtorov</div>
-                <div className="text-[9px] text-indigo-300 font-mono">94 348 99 00</div>
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => { setPhone('+998 99 065 26 51'); setPassword('Jonibek#Open2026!'); }}
-              className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-800 hover:border-indigo-500/50 border border-slate-700/60 text-left text-xs transition-all flex items-center gap-2 cursor-pointer active:scale-95"
-            >
-              <span className="text-base">💼</span>
-              <div className="truncate">
-                <div className="font-bold text-white text-[11px] truncate">Jonibek Ismoilov</div>
-                <div className="text-[9px] text-indigo-300 font-mono">99 065 26 51</div>
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => { setPhone('+998 90 123 45 67'); setPassword('admin_password'); }}
-              className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-800 hover:border-indigo-500/50 border border-slate-700/60 text-left text-xs transition-all flex items-center gap-2 cursor-pointer active:scale-95"
-            >
-              <span className="text-base">🛡</span>
-              <div className="truncate">
-                <div className="font-bold text-white text-[11px] truncate">Bosh Admin</div>
-                <div className="text-[9px] text-indigo-300 font-mono">90 123 45 67</div>
-              </div>
-            </button>
-          </div>
-        </div>
-
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Phone Input */}
+          {/* Phone / Login Input */}
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-slate-300 flex items-center gap-1.5">
               <Phone className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Telefon Raqam</span>
+              <span>Login yoki Telefon</span>
             </label>
             <input
               type="text"
@@ -151,7 +97,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               autoFocus
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="+998 90 123 45 67"
+              placeholder="admin yoki +998901234567"
               className="w-full px-3.5 py-2.5 bg-slate-950/90 border border-slate-800 hover:border-slate-700 focus:border-indigo-500 rounded-xl text-white font-mono text-xs focus:outline-none transition-colors shadow-inner"
             />
           </div>
@@ -174,7 +120,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-white transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
                 title="Parolni ko'rsatish"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}

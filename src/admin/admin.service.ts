@@ -106,78 +106,49 @@ export class AdminService {
   }
 
   /**
-   * Admin Login: Barcha mas'ul adminlar va bosh administrator uchun qulay, xavfsiz va moslashuvchan kirish
+   * Admin Login: .env faylidagi yagona ADMIN_PHONE / admin va ADMIN_PASSWORD orqali kirish
    */
-  async login(phone: string, pass: string) {
-    const adminConfig = this.configService.get<any>('adminAuth') || {};
-    const configuredPhone = (adminConfig.phone || process.env.ADMIN_PHONE || '998901234567').replace(/[^0-9]/g, '');
-    const configuredPassword = adminConfig.password || process.env.ADMIN_PASSWORD || 'admin_password';
+  async login(loginInput: string, passwordInput: string) {
+    const configuredPhone = (process.env.ADMIN_PHONE || '+998901234567').trim();
+    const configuredPhoneDigits = configuredPhone.replace(/[^0-9]/g, '');
+    const configuredPassword = (process.env.ADMIN_PASSWORD || 'admin_password').trim();
 
-    let rawInput = (phone || '').trim().toLowerCase();
-    let inputPass = (pass || '').trim();
+    const input = (loginInput || '').trim();
+    const inputDigits = input.replace(/[^0-9]/g, '');
+    const pass = (passwordInput || '').trim();
 
-    if (!rawInput || !inputPass) {
-      throw new UnauthorizedException('Telefon raqam yoki login va parolni kiriting!');
+    if (!input || !pass) {
+      throw new UnauthorizedException('Login va parolni kiriting!');
     }
 
-    // Agar 'admin', 'root' yoki matn kiritilgan bo'lsa
-    let cleanDigits = rawInput.replace(/[^0-9]/g, '');
-    if (!cleanDigits || rawInput === 'admin' || rawInput === 'superadmin' || rawInput === 'root') {
-      cleanDigits = '998901234567';
-    } else if (cleanDigits.length === 9) {
-      cleanDigits = `998${cleanDigits}`;
+    // Login mosligi: 'admin', yoki .env dagi ADMIN_PHONE, yoki uning raqamlari
+    const isLoginValid =
+      input.toLowerCase() === 'admin' ||
+      input === configuredPhone ||
+      input === configuredPhoneDigits ||
+      (inputDigits.length > 0 && configuredPhoneDigits.endsWith(inputDigits)) ||
+      (inputDigits.length > 0 && inputDigits.endsWith(configuredPhoneDigits));
+
+    // Parol mosligi: .env dagi ADMIN_PASSWORD
+    const isPasswordValid = pass === configuredPassword;
+
+    if (!isLoginValid || !isPasswordValid) {
+      throw new UnauthorizedException('Login yoki parol noto\'g\'ri!');
     }
 
-    // Admin profilini aniqlash
-    const matchedAdmin = AdminService.DESIGNATED_ADMINS.find(
-      (a) =>
-        a.phone === cleanDigits ||
-        cleanDigits.endsWith(a.phone) ||
-        a.username.toLowerCase() === rawInput
-    );
-
-    // Qabul qilinadigan barcha parollar ro'yxati
-    const allowedPasswords = [
-      configuredPassword,
-      'admin_password',
-      'admin',
-      'admin123',
-      'admin2026',
-      'OpenBudget#2026!',
-      'Khurshid#Dev2026!',
-      'Elbek#Budget2026!',
-      'Jonibek#Open2026!',
-      matchedAdmin?.defaultPassword,
-    ].filter(Boolean);
-
-    const isPassMatch = allowedPasswords.some((p) => p === inputPass);
-
-    // Telefon / Login mosligi
-    const isPhoneMatch =
-      !!matchedAdmin ||
-      cleanDigits === configuredPhone ||
-      cleanDigits === '998901234567' ||
-      cleanDigits.endsWith(configuredPhone);
-
-    if (!isPhoneMatch || !isPassMatch) {
-      throw new UnauthorizedException('Telefon raqam yoki maxfiy parol noto\'g\'ri!');
-    }
-
-    const adminInfo = matchedAdmin || {
-      name: 'Bosh Administrator',
-      phone: `+${cleanDigits}`,
-      role: 'SUPER_ADMIN',
-      title: 'Bosh Administrator',
-      avatar: '👑',
-    };
-
-    const token = `ADMIN_SESSION_${Buffer.from(`${cleanDigits}:${Date.now()}`).toString('base64')}`;
-    this.logger.log(`🔑 [Admin Kirishi]: ${adminInfo.name} (${cleanDigits}) tizimga muvaffaqiyatli kirdi.`);
+    const token = `ADMIN_SESSION_${Buffer.from(`admin:${Date.now()}`).toString('base64')}`;
+    this.logger.log(`🔑 [Admin Kirishi]: Bosh Administrator tizimga muvaffaqiyatli kirdi.`);
 
     return {
       success: true,
       token,
-      admin: adminInfo,
+      admin: {
+        name: 'Bosh Administrator',
+        phone: configuredPhone,
+        role: 'SUPER_ADMIN',
+        title: 'Bosh Administrator',
+        avatar: '👑',
+      },
     };
   }
 
