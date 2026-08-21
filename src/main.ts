@@ -1,6 +1,11 @@
 // Increase libuv threadpool size for multi-core Sharp, crypto & network operations
 process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || '128';
 
+// Enable automatic JSON serialization for BigInt across all Prisma models and endpoints
+(BigInt.prototype as any).toJSON = function () {
+  return Number(this);
+};
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { Logger } from '@nestjs/common';
