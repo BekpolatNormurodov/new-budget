@@ -220,7 +220,7 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
           `🌅 <b>Xayrli tong, aziz yurtdosh!</b>\n\n` +
           `🔥 <b>Open Budgetda ovoz berib, qo'shimcha daromad oling!</b>\n\n` +
           `📍 Mahalla: <b>${mahalla}</b>\n` +
-          `💰 Har bir ovoz uchun to'lov: <b>${reward} so'm</b> (Darhol kartaga / paynetga)\n` +
+          `💰 Har bir ovoz uchun to'lov: <b>${reward} so'm</b> (Darhol Uzcard / Humo kartangizga)\n` +
           `👥 Oila a'zolaringiz va yaqinlaringiz raqamlaridan ham ovoz berib pul ishlashingiz mumkin!\n\n` +
           `Hoziroq "🗳 Ovoz berish" tugmasini bosing va o'z mukofotingizni oling 👇`;
 
@@ -236,7 +236,7 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
           `🌆 <b>Xayrli kech! Bugungi imkoniyatni qo'ldan boy bermang!</b>\n\n` +
           `⚡️ <b>${mahalla}</b> bo'yicha ovoz berish jarayoni davom etmoqda!\n\n` +
           `📍 Mahalla: <b>${mahalla}</b>\n` +
-          `💰 Ovoz mukofoti: <b>${reward} so'm</b>\n` +
+          `💰 Ovoz mukofoti: <b>${reward} so'm</b> (Uzcard / Humo)\n` +
           `👥 Yaqinlaringiz nomidagi raqamlardan ham ovoz berib, balansingizni to'ldiring!\n\n` +
           `Ovoz berish uchun pastdagi tugmani bosing 👇`;
 
@@ -274,7 +274,7 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
     // Agar hamma mahallalar rejasini to'liq bajargan bo'lsa
     const text =
       `🏆 <b>Tabriklaymiz! Barcha mahallalarimiz o'z maqsadiga to'liq yetdi!</b> 🎉\n\n` +
-      `Sizning balansingizda mablag'ingiz bo'lsa, istalgan vaqtda kartangizga yoki Paynet orqali yechib olishingiz mumkin.\n\n` +
+      `Sizning balansingizda mablag'ingiz bo'lsa, istalgan vaqtda Uzcard / Humo kartangizga yechib olishingiz mumkin.\n\n` +
       `Faolligingiz uchun minnatdormiz!`;
 
     const keyboard = Markup.inlineKeyboard([

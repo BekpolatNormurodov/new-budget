@@ -730,7 +730,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
           `⏱ <b>SMS KOD VAQTI:</b> SMS kod yuborilgach, uni kiritish uchun <b>2 daqiqa (120 soniya)</b> vaqt beriladi.\n\n` +
           `⌛️ <b>SESSIYA MUDDATI:</b> Ovoz berish jarayoni boshlangandan so'ng <b>10 daqiqa</b> ichida yakunlanishi kerak.\n\n` +
           `📌 <b>MUHIM PASPORT QOIDASI:</b> Ochiq Budjet qoidalariga ko'ra, bitta pasport (shaxs) nomiga rasmiylashtirilgan barcha telefon raqamlaridan bir mavsumda faqat <b>1 marta</b> ovoz berish mumkin.\n\n` +
-          `💳 <b>PUL YECHISH:</b> Minimal yechish summasi — 10 000 so'm (Uzcard, Humo, Paynet).\n\n` +
+          `💳 <b>PUL YECHISH:</b> Minimal yechish summasi — 10 000 so'm (Uzcard, Humo).\n\n` +
           `👑 <b>RASMIY ADMINLAR & BOG'LANISH:</b>\n` +
           `📞 <b>+998 99 065 26 51</b> — @JONIBEKISMOILOV (Jonibek)\n` +
           `📞 <b>+998 94 348 99 00</b> — @Elbek_Muxtorovv (Elbek)\n\n` +
