@@ -23,7 +23,7 @@ export default () => ({
   },
   health: {
     enabled: process.env.HEALTH_CHECK_ENABLED !== 'false',
-    intervalMinutes: parseInt(process.env.HEALTH_CHECK_INTERVAL_MINUTES || '30', 10),
+    intervalMinutes: parseInt(process.env.HEALTH_CHECK_INTERVAL_MINUTES || '15', 10),
     alertAdmins: process.env.HEALTH_ALERT_ADMINS !== 'false',
   },
   proxy: {

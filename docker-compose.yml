@@ -55,9 +55,9 @@ services:
       REFERRAL_BONUS: ${REFERRAL_BONUS:-5000}
       MIN_WITHDRAWAL: ${MIN_WITHDRAWAL:-10000}
       
-      # Avtomatlashtirish & Tizim Monitoringi (Har 30 daqiqada tekshiruv)
+      # Avtomatlashtirish & Tizim Monitoringi (Har 15 daqiqada tekshiruv)
       VOTE_AUTO_APPROVE_HOURS: ${VOTE_AUTO_APPROVE_HOURS:-2}
-      HEALTH_CHECK_INTERVAL_MINUTES: ${HEALTH_CHECK_INTERVAL_MINUTES:-30}
+      HEALTH_CHECK_INTERVAL_MINUTES: ${HEALTH_CHECK_INTERVAL_MINUTES:-15}
       HEALTH_CHECK_ENABLED: ${HEALTH_CHECK_ENABLED:-true}
       
       # Tashqi Servis & Proxy Sozlamalari

@@ -41,10 +41,10 @@ export class SystemHealthService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const intervalMinutes = this.configService.get<number>('health.intervalMinutes') || 30;
+    const intervalMinutes = this.configService.get<number>('health.intervalMinutes') || 15;
     const intervalMs = intervalMinutes * 60 * 1000;
 
-    this.logger.log(`⏱ 30 daqiqalik Tizim Monitoringi faollashtirildi (Har ${intervalMinutes} daqiqada ishga tushadi)`);
+    this.logger.log(`⏱ 15 daqiqalik Tizim Monitoringi faollashtirildi (Har ${intervalMinutes} daqiqada ishga tushadi)`);
 
     // Dastlabki tezkor tekshiruv (10 soniyadan so'ng)
     setTimeout(() => {
@@ -53,10 +53,10 @@ export class SystemHealthService implements OnModuleInit, OnModuleDestroy {
       });
     }, 10000);
 
-    // Har 30 daqiqalik interval
+    // Har 15 daqiqalik interval
     this.checkIntervalHandle = setInterval(() => {
       this.runPeriodicHealthCheck().catch((err) => {
-        this.logger.error(`30 daqiqalik tekshiruvda xatolik: ${err.message}`);
+        this.logger.error(`15 daqiqalik tekshiruvda xatolik: ${err.message}`);
       });
     }, intervalMs);
   }

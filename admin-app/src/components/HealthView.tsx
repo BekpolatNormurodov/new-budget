@@ -85,7 +85,7 @@ export const HealthView: React.FC<HealthViewProps> = ({ token, showToast }) => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">Avtomatik 30-Daqiqalik Monitoring</h3>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">Avtomatik 15-Daqiqalik Monitoring</h3>
               <span
                 className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
                   report?.status === 'HEALTHY'

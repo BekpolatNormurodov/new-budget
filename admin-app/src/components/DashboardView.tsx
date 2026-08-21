@@ -183,7 +183,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 30-Daqiqalik Monitoring & System Health Banner Widget */}
+      {/* 15-Daqiqalik Monitoring & System Health Banner Widget */}
       <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-100 via-indigo-50/50 to-slate-100 dark:from-slate-900 dark:via-indigo-950/40 dark:to-slate-900 border border-indigo-500/20 shadow-md dark:shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 flex-shrink-0">
@@ -191,7 +191,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white">Avtomatik 30-Daqiqalik Tizim Monitoringi</h4>
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white">Avtomatik 15-Daqiqalik Tizim Monitoringi</h4>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                 🟢 HEALTHY
               </span>

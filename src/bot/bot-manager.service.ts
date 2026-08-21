@@ -1165,7 +1165,13 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
       if (!verifyRes.success) {
         await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
-        return ctx.reply(`❌ ${verifyRes.error || 'SMS kod noto\'g\'ri kiritildi. Qaytadan kiriting:'}`);
+        return ctx.reply(
+          `❌ ${verifyRes.error || 'SMS kod noto\'g\'ri kiritildi. Qaytadan kiriting:'}`,
+          {
+            parse_mode: 'HTML',
+            ...BotKeyboards.smsWaitingInline(),
+          }
+        );
       }
 
       await this.clearAllTimeouts(botRecord.id, user.id);
