@@ -79,7 +79,6 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
-    await this.seedInitialBotIfEmpty();
     await this.launchAllActiveBots();
     this.startVoteAutoApprover();
     this.startBotSupervisor();
