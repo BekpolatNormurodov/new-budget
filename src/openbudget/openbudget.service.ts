@@ -320,42 +320,57 @@ export class OpenBudgetService {
           let lastError: string | null = null;
 
           // Yangi real new.openbudget.uz API (Captcha-2 va send-otp)
-          for (let attempt = 1; attempt <= 2; attempt++) {
+          for (let attempt = 1; attempt <= 3; attempt++) {
             try {
-              const capRes = await client.get('https://new.openbudget.uz/api/v2/vote/captcha-2', {
-                headers: {
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                  'Accept': 'application/json',
-                },
-                timeout: 2500,
-              });
+              // 1. Captcha olish (Direct tezkor yoki client orqali)
+              let capRes: any;
+              try {
+                capRes = await axios.get('https://new.openbudget.uz/api/v2/vote/captcha-2', {
+                  headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'Accept': 'application/json',
+                  },
+                  timeout: 3500,
+                });
+              } catch (cErr) {
+                capRes = await client.get('https://new.openbudget.uz/api/v2/vote/captcha-2', {
+                  headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'Accept': 'application/json',
+                  },
+                  timeout: 4000,
+                });
+              }
 
               const key = capRes.data?.captchaKey;
               const rawBuffer = Buffer.from(capRes.data?.image || '', 'base64');
               const solved = await this.captchaSolver.solve(rawBuffer);
 
               if (solved.success && solved.answer !== undefined) {
-                let otpRes = await client.post(
-                  'https://new.openbudget.uz/api/v2/vote/send-otp',
-                  {
-                    phone_number: clean12,
-                    captcha_key: key,
-                    captcha_result: solved.answer,
-                    initiative_id: initiative?.initiativeUuid || initiative?.openBudgetId,
-                  },
-                  {
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                      'Origin': 'https://new.openbudget.uz',
-                      'Referer': 'https://new.openbudget.uz/',
-                    },
-                    validateStatus: () => true,
-                    timeout: 2500,
-                  },
-                );
+                const reqHeaders = {
+                  'Content-Type': 'application/json',
+                  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                  'Origin': 'https://new.openbudget.uz',
+                  'Referer': 'https://new.openbudget.uz/',
+                };
 
-                if (otpRes.status === 404 || otpRes.status === 400) {
+                let otpRes: any;
+                // v1/login/send-otp (Eng ishonchli va barqaror rasmiy endpoint)
+                try {
+                  otpRes = await axios.post(
+                    'https://new.openbudget.uz/api/v1/login/send-otp',
+                    {
+                      phone_number: clean12,
+                      captcha_key: key,
+                      captcha_result: solved.answer,
+                    },
+                    {
+                      headers: reqHeaders,
+                      validateStatus: () => true,
+                      timeout: 4000,
+                    },
+                  );
+                } catch (eDirect) {
                   otpRes = await client.post(
                     'https://new.openbudget.uz/api/v1/login/send-otp',
                     {
@@ -364,14 +379,9 @@ export class OpenBudgetService {
                       captcha_result: solved.answer,
                     },
                     {
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                        'Origin': 'https://new.openbudget.uz',
-                        'Referer': 'https://new.openbudget.uz/',
-                      },
+                      headers: reqHeaders,
                       validateStatus: () => true,
-                      timeout: 2500,
+                      timeout: 4000,
                     },
                   );
                 }
