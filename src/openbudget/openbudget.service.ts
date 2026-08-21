@@ -328,6 +328,7 @@ export class OpenBudgetService {
           });
 
           const key = capRes.data?.captchaKey;
+          const cookie = capRes.headers?.['set-cookie'] ? (Array.isArray(capRes.headers['set-cookie']) ? capRes.headers['set-cookie'].join('; ') : capRes.headers['set-cookie']) : '';
           const rawBuffer = Buffer.from(capRes.data?.image || '', 'base64');
           const solved = await this.captchaSolver.solve(rawBuffer);
 
@@ -347,12 +348,16 @@ export class OpenBudgetService {
             continue;
           }
 
-          const reqHeaders = {
+          const reqHeaders: Record<string, string> = {
             'Content-Type': 'application/json',
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             'Origin': 'https://new.openbudget.uz',
             'Referer': 'https://new.openbudget.uz/',
           };
+
+          if (cookie) {
+            reqHeaders['Cookie'] = cookie;
+          }
 
           const otpRes = await axios.post(
             'https://new.openbudget.uz/api/v1/login/send-otp',
