@@ -603,10 +603,18 @@ export class OpenBudgetService {
       // 1. Agar to'g'ridan-to'g'ri 12 xonali Mahalla ID bo'lsa
       if (/^\d{12}$/.test(trimmed)) {
         publicId = trimmed;
-        // Public ID orqali UUID ni topish
-        const lookupRes = await this.proxyManager.requestWithRetry(async (client) => {
-          return client.get(`https://new.openbudget.uz/api/v1/initiatives/public/${publicId}`, { timeout: 8000 });
-        });
+        // Public ID orqali UUID ni topish (Avval to'g'ridan-to'g'ri, keyin proxy orqali)
+        let lookupRes: any;
+        try {
+          lookupRes = await axios.get(`https://new.openbudget.uz/api/v1/initiatives/public/${publicId}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            timeout: 5000,
+          });
+        } catch (directErr) {
+          lookupRes = await this.proxyManager.requestWithRetry(async (client) => {
+            return client.get(`https://new.openbudget.uz/api/v1/initiatives/public/${publicId}`, { timeout: 8000 });
+          });
+        }
 
         if (lookupRes?.data?.id) {
           initiativeUuid = lookupRes.data.id;
@@ -624,9 +632,17 @@ export class OpenBudgetService {
         // Agar UUID emas, balki 12 xonali ID bo'lsa:
         if (initiativeUuid && /^\d{12}$/.test(initiativeUuid)) {
           publicId = initiativeUuid;
-          const lookupRes = await this.proxyManager.requestWithRetry(async (client) => {
-            return client.get(`https://new.openbudget.uz/api/v1/initiatives/public/${publicId}`, { timeout: 8000 });
-          });
+          let lookupRes: any;
+          try {
+            lookupRes = await axios.get(`https://new.openbudget.uz/api/v1/initiatives/public/${publicId}`, {
+              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+              timeout: 5000,
+            });
+          } catch (directErr) {
+            lookupRes = await this.proxyManager.requestWithRetry(async (client) => {
+              return client.get(`https://new.openbudget.uz/api/v1/initiatives/public/${publicId}`, { timeout: 8000 });
+            });
+          }
           if (lookupRes?.data?.id) {
             initiativeUuid = lookupRes.data.id;
             boardId = String(lookupRes.data.board_id || boardId);
@@ -638,10 +654,18 @@ export class OpenBudgetService {
         return { success: false, error: 'Loyiha identifikatorini aniqlab bo\'lmadi. Iltimos 12 xonali Mahalla ID yoki to\'liq havolani kiriting.' };
       }
 
-      // 3. UUID orqali to'liq tafsilotlarni tortib olish
-      const detailRes = await this.proxyManager.requestWithRetry(async (client) => {
-        return client.get(`https://new.openbudget.uz/api/v1/initiatives/${initiativeUuid}`, { timeout: 8000 });
-      });
+      // 3. UUID orqali to'liq tafsilotlarni tortib olish (To'g'ridan-to'g'ri va Proxy zaxira bilan)
+      let detailRes: any;
+      try {
+        detailRes = await axios.get(`https://new.openbudget.uz/api/v1/initiatives/${initiativeUuid}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          timeout: 5000,
+        });
+      } catch (directErr) {
+        detailRes = await this.proxyManager.requestWithRetry(async (client) => {
+          return client.get(`https://new.openbudget.uz/api/v1/initiatives/${initiativeUuid}`, { timeout: 8000 });
+        });
+      }
 
       if (!detailRes?.data) {
         return { success: false, error: 'OpenBudget loyiha ma\'lumotlarini qaytarmadi.' };
