@@ -213,10 +213,10 @@ export function App() {
   const handleDeleteAgent = async (id: number) => {
     setConfirmModal({
       isOpen: true,
-      title: 'Agentni o\'chirish',
-      message: 'Haqiqatan ham ushbu agentni tizimdan o\'chirmoqchimisiz?',
-      type: 'danger',
-      confirmText: 'Ha, o\'chirilsin',
+      title: 'Agentni arxivlash',
+      message: 'Ushbu agent arxivlanadi va ro\'yxatda ko\'rinmaydi. Barcha hisob-kitoblar, ovozlar va referallar bazada 100% xavfsiz saqlanib qoladi.',
+      type: 'warning',
+      confirmText: 'Ha, arxivlansin',
       onConfirm: async () => {
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         try {
@@ -225,11 +225,11 @@ export function App() {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (res.ok) {
-            showToast('🗑 Agent muvaffaqiyatli o\'chirildi', 'info');
+            showToast('📦 Agent xavfsiz arxivlandi', 'info');
             loadAllData();
           }
         } catch (e) {
-          showToast('O\'chirishda xatolik', 'error');
+          showToast('Arxivlashda xatolik', 'error');
         }
       },
     });

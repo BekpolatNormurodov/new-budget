@@ -12,10 +12,13 @@ export class AgentService {
   /**
    * Barcha agentlar ro'yxatini olish (ixtiyoriy bot bo'yicha filter bilan)
    */
-  async listAgents(botInstanceId?: number) {
+  async listAgents(botInstanceId?: number, includeArchived = false) {
     const where: any = {};
     if (botInstanceId) {
       where.botInstanceId = botInstanceId;
+    }
+    if (!includeArchived) {
+      where.isActive = true;
     }
 
     const agents = await this.prisma.agent.findMany({
@@ -272,7 +275,7 @@ export class AgentService {
   }
 
   /**
-   * Agentni o'chirish
+   * Agentni arxivlash (Soft Delete – barcha hisob-kitoblar, ovozlar va referallar 100% saqlanadi)
    */
   async deleteAgent(id: number) {
     const agent = await this.prisma.agent.findUnique({ where: { id } });
@@ -280,9 +283,13 @@ export class AgentService {
       throw new NotFoundException('Agent topilmadi');
     }
 
-    await this.prisma.agent.delete({ where: { id } });
-    this.logger.log(`🗑 Agent o'chirildi: ${agent.name} (ID: ${id})`);
+    // Hech narsani bazadan o'chirmasdan arxivlaymiz
+    await this.prisma.agent.update({
+      where: { id },
+      data: { isActive: false },
+    });
+    this.logger.log(`📦 Agent muvaffaqiyatli arxivlandi (barcha ovoz va hisob-kitoblar saqlandi): ${agent.name} (ID: ${id})`);
 
-    return { success: true, message: "Agent muvaffaqiyatli o'chirildi" };
+    return { success: true, message: "Agent muvaffaqiyatli arxivlandi. Barcha hisob-kitoblar va ovozlar saqlanib qoldi." };
   }
 }
