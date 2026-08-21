@@ -320,7 +320,7 @@ export class OpenBudgetService {
           let lastError: string | null = null;
 
           // Yangi real new.openbudget.uz API (Captcha-2 va send-otp)
-          for (let attempt = 1; attempt <= 3; attempt++) {
+          for (let attempt = 1; attempt <= 6; attempt++) {
             try {
               // 1. Captcha olish (Direct tezkor yoki client orqali)
               let capRes: any;
