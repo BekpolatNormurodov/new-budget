@@ -33,6 +33,16 @@ export class BotKeyboards {
   }
 
   /**
+   * SMS kutish jarayonidagi inline tugmalar (Qayta SMS so'rash va Bekor qilish)
+   */
+  static smsWaitingInline() {
+    return Markup.inlineKeyboard([
+      [Markup.button.callback('📩 SMS kelmadimi? Qaytadan yuborish', 'resend_sms')],
+      [Markup.button.callback('❌ Bekor qilish', 'cancel_vote')],
+    ]);
+  }
+
+  /**
    * Pul yechish to'lov usullari inline tugmalari
    */
   static withdrawMethodsInline() {

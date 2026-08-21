@@ -1,6 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
+import axios, { AxiosInstance } from 'axios';
+import http from 'http';
+import https from 'https';
 
 export interface ProxyItem {
   url: string;
@@ -14,6 +16,20 @@ export interface ProxyItem {
   failCount: number;
 }
 
+const httpKeepAliveAgent = new http.Agent({
+  keepAlive: true,
+  maxSockets: 1000,
+  maxFreeSockets: 100,
+  timeout: 30000,
+});
+
+const httpsKeepAliveAgent = new https.Agent({
+  keepAlive: true,
+  maxSockets: 1000,
+  maxFreeSockets: 100,
+  timeout: 30000,
+});
+
 @Injectable()
 export class ProxyManagerService implements OnModuleInit {
   private readonly logger = new Logger(ProxyManagerService.name);
@@ -21,12 +37,12 @@ export class ProxyManagerService implements OnModuleInit {
   private currentIndex = 0;
   private isEnabled = false;
 
-  // Sticky Session kesh: sessionKey (masalan: telefon yoki sessionId) -> ProxyItem
+  // Sticky Session kesh: sessionKey (masalan: telefon raqam) -> ProxyItem
   private sessionMap = new Map<string, { proxy: ProxyItem; expiresAt: number }>();
   private readonly DEFAULT_SESSION_TTL_MS = 20 * 60 * 1000; // 20 daqiqa
 
   constructor(private readonly configService: ConfigService) {
-    // Har 5 daqiqada muddati o'tgan sticky sessiyalarni tozalash (Garbage Collection)
+    // Har 5 daqiqada muddati o'tgan sticky sessiyalarni tozalash
     setInterval(() => this.cleanupExpiredSessions(), 5 * 60 * 1000);
   }
 
@@ -58,104 +74,107 @@ export class ProxyManagerService implements OnModuleInit {
   /**
    * Proxy URL matnini obyektga aylantirish
    */
-  private parseProxyUrl(proxyString: string): ProxyItem | null {
+  public parseProxyUrl(rawUrl: string): ProxyItem | null {
     try {
-      const url = new URL(proxyString.startsWith('http') || proxyString.startsWith('socks') ? proxyString : `http://${proxyString}`);
-      const protocol = (url.protocol.replace(':', '') as any) || 'http';
-      
-      const item: ProxyItem = {
-        url: proxyString,
-        protocol,
-        host: url.hostname,
-        port: parseInt(url.port, 10) || (protocol === 'http' ? 80 : 8080),
-        isAlive: true,
-        failCount: 0,
-      };
+      let formatted = rawUrl.trim();
+      if (!formatted.includes('://')) {
+        formatted = `http://${formatted}`;
+      }
 
-      if (url.username) {
-        item.auth = {
-          username: decodeURIComponent(url.username),
-          password: decodeURIComponent(url.password || ''),
+      const parsed = new URL(formatted);
+      const protocol = (parsed.protocol.replace(':', '') || 'http') as any;
+
+      let auth: { username: string; password?: string } | undefined;
+      if (parsed.username) {
+        auth = {
+          username: decodeURIComponent(parsed.username),
+          password: decodeURIComponent(parsed.password || ''),
         };
       }
 
-      return item;
+      return {
+        url: rawUrl,
+        protocol: ['http', 'https', 'socks5', 'socks4'].includes(protocol) ? protocol : 'http',
+        host: parsed.hostname,
+        port: parseInt(parsed.port, 10) || 8080,
+        auth,
+        isAlive: true,
+        failCount: 0,
+      };
     } catch (e) {
-      this.logger.error(`Proxy formatini o'qishda xatolik [${proxyString}]`);
+      this.logger.error(`Noto'g'ri proxy formati: "${rawUrl}"`, e);
       return null;
     }
   }
 
   /**
-   * Navbatdagi faol proxyni olish (Round-robin)
+   * Navbatdagi faol proxyni olish (Round-robin + Auto-Failover)
    */
   public getNextProxy(): ProxyItem | null {
-    if (!this.isEnabled || this.proxyPool.length === 0) {
-      return null;
+    if (!this.isEnabled || this.proxyPool.length === 0) return null;
+
+    const aliveProxies = this.proxyPool.filter((p) => p.isAlive);
+    if (aliveProxies.length === 0) {
+      // Agar barcha proxylar vaqtincha nofaol deb belgilangan bo'lsa, ularga ikkinchi imkoniyat beramiz
+      this.logger.warn('⚠️ Barcha proxylar nofaol deb belgilangan. Hovuz qayta tiklanmoqda...');
+      this.proxyPool.forEach((p) => { p.isAlive = true; p.failCount = 0; });
+      return this.proxyPool[0] || null;
     }
 
-    const activeList = this.proxyPool.filter((p) => p.isAlive);
-    if (activeList.length === 0) {
-      this.logger.warn('⚠️ Barcha proxylar nosoz holatda!');
-      return null;
-    }
-
-    const selected = activeList[this.currentIndex % activeList.length];
-    this.currentIndex = (this.currentIndex + 1) % activeList.length;
-    return selected;
+    const proxy = aliveProxies[this.currentIndex % aliveProxies.length];
+    this.currentIndex = (this.currentIndex + 1) % aliveProxies.length;
+    return proxy;
   }
 
   /**
-   * Sticky Session: Berilgan kalit (Telefon raqam, SessionId yoki BotId) uchun doimiy biriktirilgan proxyni olish
-   * Agar avval biriktirilgan bo'lsa, xuddi o'sha IP ni qaytaradi (SMS so'rash va Verify bir xil IP dan chiqishi uchun)
+   * Sticky Session: Bitta telefon raqami uchun butun ovoz berish jarayonida bir xil IP ni ushlab turish
    */
-  public getStickyProxy(sessionKey: string, ttlMs = this.DEFAULT_SESSION_TTL_MS): ProxyItem | null {
-    if (!sessionKey || !this.isEnabled || this.proxyPool.length === 0) {
-      return this.getNextProxy();
-    }
+  public getStickyProxy(sessionKey: string): ProxyItem | null {
+    if (!this.isEnabled || this.proxyPool.length === 0) return null;
 
     const now = Date.now();
     const existing = this.sessionMap.get(sessionKey);
-
     if (existing && existing.expiresAt > now && existing.proxy.isAlive) {
-      // Sessiya muddatini yana uzaytirish
-      existing.expiresAt = now + ttlMs;
+      // Sessiya muddatini yangilash
+      existing.expiresAt = now + this.DEFAULT_SESSION_TTL_MS;
       return existing.proxy;
     }
 
-    // Yangi proxy biriktirish (Round-robin orqali)
+    // Yangi proxy tanlash va sticky keshga biriktirish
     const newProxy = this.getNextProxy();
     if (newProxy) {
       this.sessionMap.set(sessionKey, {
         proxy: newProxy,
-        expiresAt: now + ttlMs,
+        expiresAt: now + this.DEFAULT_SESSION_TTL_MS,
       });
-      this.logger.debug(`🔒 Sticky Session biriktirildi [${sessionKey}] -> IP: ${newProxy.host}`);
     }
-
     return newProxy;
   }
 
   /**
-   * Sessiya tugaganda sticky birikuvni bo'shatish
+   * Sessiya yakunlanganda sticky bog'lanishni bo'shatish
    */
   public releaseSession(sessionKey: string) {
-    if (sessionKey) {
-      this.sessionMap.delete(sessionKey);
-    }
+    this.sessionMap.delete(sessionKey);
   }
 
   /**
-   * Axios uchun to'liq sozlangan Proxy konfiguratsiyasini olish
-   * @param sessionKey Ixtiyoriy: Agar telefon raqam yoki session berilsa, Sticky Proxy ishlatiladi
+   * Axios konfiguratsiyasi uchun Proxy sozlamalarini tayyorlash
    */
-  public getAxiosConfig(sessionKey?: string): { proxy?: any } {
+  public getAxiosConfig(sessionKey?: string): any {
     const proxy = sessionKey ? this.getStickyProxy(sessionKey) : this.getNextProxy();
-    if (!proxy || proxy.protocol.startsWith('socks')) {
-      return {};
+    const baseHeaders = this.getRandomBrowserHeaders();
+
+    if (!proxy || !this.isEnabled) {
+      return {
+        headers: baseHeaders,
+        httpAgent: httpKeepAliveAgent,
+        httpsAgent: httpsKeepAliveAgent,
+      };
     }
 
     return {
+      headers: baseHeaders,
       proxy: {
         host: proxy.host,
         port: proxy.port,
@@ -166,37 +185,44 @@ export class ProxyManagerService implements OnModuleInit {
   }
 
   /**
-   * Istalgan so'rov uchun ideal darajada tayyorlangan Axios Instance yaratish
+   * Haqiqiy brauzer User-Agent lari (Anti-bot himoyasidan o'tish uchun)
    */
-  // Haqiqiy brauzer User-Agent lari (Anti-bot himoyasidan o'tish uchun)
   private readonly USER_AGENTS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1',
-    'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (Linux; Android 14; SM-S928B Build/UP1A.231005.007) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.165 Mobile Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0',
   ];
 
   /**
-   * Realistik brauzer sarlavhalarini olish
+   * Realistik brauzer sarlavhalari (Anti-bot / Stealth)
    */
   public getRandomBrowserHeaders(): Record<string, string> {
     const userAgent = this.USER_AGENTS[Math.floor(Math.random() * this.USER_AGENTS.length)];
+    const isMobile = userAgent.includes('Mobile') || userAgent.includes('iPhone') || userAgent.includes('Android');
+
     return {
       'User-Agent': userAgent,
       'Accept': 'application/json, text/plain, */*',
-      'Accept-Language': 'uz-UZ,uz;q=0.9,ru;q=0.8,en;q=0.7',
+      'Accept-Language': 'uz-UZ,uz;q=0.9,ru;q=0.8,en-US;q=0.7,en;q=0.6',
       'Accept-Encoding': 'gzip, deflate, br',
       'Connection': 'keep-alive',
-      'sec-ch-ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-      'sec-ch-ua-mobile': userAgent.includes('Mobile') ? '?1' : '?0',
-      'sec-ch-ua-platform': userAgent.includes('Windows') ? '"Windows"' : (userAgent.includes('Mac') ? '"macOS"' : '"Android"'),
+      'Origin': 'https://openbudget.uz',
+      'Referer': 'https://openbudget.uz/boards/initiatives',
+      'sec-ch-ua': '"Chromium";v="126", "Google Chrome";v="126", "Not-A.Brand";v="99"',
+      'sec-ch-ua-mobile': isMobile ? '?1' : '?0',
+      'sec-ch-ua-platform': userAgent.includes('Windows') ? '"Windows"' : (userAgent.includes('Mac') ? '"macOS"' : (isMobile ? '"Android"' : '"Linux"')),
+      'sec-fetch-dest': 'empty',
+      'sec-fetch-mode': 'cors',
+      'sec-fetch-site': 'same-origin',
     };
   }
 
   /**
-   * Istalgan so'rov uchun ideal darajada tayyorlangan Axios Instance yaratish (Interceptors va Loglar bilan)
+   * Istalgan so'rov uchun ideal darajada tayyorlangan Axios Instance yaratish
    */
-  public createAxiosClient(sessionKey?: string, customConfig: any = {}) {
+  public createAxiosClient(sessionKey?: string, customConfig: any = {}): AxiosInstance {
     const proxyConfig = this.getAxiosConfig(sessionKey);
     const headers = {
       ...this.getRandomBrowserHeaders(),
@@ -204,37 +230,22 @@ export class ProxyManagerService implements OnModuleInit {
     };
 
     const instance = axios.create({
-      timeout: 12000,
+      timeout: 10000,
       headers,
       ...proxyConfig,
       ...customConfig,
     });
 
-    // So'rov va javob loglarini real vaqtda qayd etuvchi Interceptorlar
     instance.interceptors.request.use((config) => {
       (config as any).metadata = { startTime: Date.now() };
-      const proxyHost = proxyConfig.proxy ? proxyConfig.proxy.host : 'DIRECT';
-      this.logger.log(
-        `🌐 [Proxy OUT] ${config.method?.toUpperCase()} ${config.url} | IP: ${proxyHost} ${sessionKey ? `| Session: ${sessionKey}` : ''}`
-      );
       return config;
     });
 
     instance.interceptors.response.use(
       (response) => {
-        const duration = Date.now() - ((response.config as any).metadata?.startTime || Date.now());
-        const proxyHost = proxyConfig.proxy ? proxyConfig.proxy.host : 'DIRECT';
-        this.logger.log(
-          `✅ [Proxy IN] ${response.status} OK | ${response.config.url} | IP: ${proxyHost} | Vaqt: ${duration}ms`
-        );
         return response;
       },
       (error) => {
-        const duration = Date.now() - ((error.config as any)?.metadata?.startTime || Date.now());
-        const proxyHost = proxyConfig.proxy ? proxyConfig.proxy.host : 'DIRECT';
-        this.logger.warn(
-          `❌ [Proxy ERR] ${error.response?.status || 'NET_ERR'} | ${error.config?.url} | IP: ${proxyHost} | Vaqt: ${duration}ms | Xato: ${error.message}`
-        );
         return Promise.reject(error);
       }
     );
@@ -243,11 +254,12 @@ export class ProxyManagerService implements OnModuleInit {
   }
 
   /**
-   * Avtomatik xatolikdan tiklanish (Auto-Failover / Retry):
-   * Agar joriy proxyda xatolik yuz bersa, avtomatik boshqa toza proxydan qayta urinadi
+   * Avtomatik xatolikdan tiklanish (Auto-Failover / Automatic IP Rotation):
+   * Agar joriy proxy yoki ulanishda xato yuz bersa, bu proxyni darhol nofaol deb belgilab,
+   * avtomatik navbatdagi toza proxydan (yoki Direct) qayta urinadi!
    */
   public async requestWithRetry<T = any>(
-    requestFn: (client: typeof axios) => Promise<T>,
+    requestFn: (client: AxiosInstance) => Promise<T>,
     sessionKey?: string,
     maxRetries = 3,
   ): Promise<T> {
@@ -256,18 +268,23 @@ export class ProxyManagerService implements OnModuleInit {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const client = this.createAxiosClient(sessionKey);
-        return await requestFn(client as any);
+        return await requestFn(client);
       } catch (err: any) {
         lastError = err;
-        this.logger.warn(`⚠️ [Proxy Retry ${attempt}/${maxRetries}] So'rov xatoligi [${err.message}]. Keyingi proxyga o'tilmoqda...`);
+        this.logger.warn(`⚠️ [Proxy Auto-Failover ${attempt}/${maxRetries}] So'rov xatoligi (${err.message}). Keyingi toza IP ga o'tilmoqda...`);
 
-        // Agar bu sticky sessiya bo'lsa va xato bersa, yangi toza proxy biriktiramiz
+        // Agar bu sticky sessiya bo'lsa va xato bersa, eski nofaol proxyni o'chirib, boshqasini tanlaymiz
         if (sessionKey) {
-          this.sessionMap.delete(sessionKey);
+          const bound = this.sessionMap.get(sessionKey);
+          if (bound) {
+            bound.proxy.isAlive = false;
+            bound.proxy.failCount++;
+            this.sessionMap.delete(sessionKey);
+          }
         }
 
-        // Kichik tanaffus (200ms)
-        await new Promise((r) => setTimeout(r, 200));
+        // Kichik tanaffus (150ms)
+        await new Promise((r) => setTimeout(r, 150));
       }
     }
 
@@ -294,7 +311,7 @@ export class ProxyManagerService implements OnModuleInit {
       return { total: 0, alive: 0, dead: 0 };
     }
 
-    this.logger.log(`🔍 ${this.proxyPool.length} ta proxylar salomatligi tekshirilmoqda (Parallel)...`);
+    this.logger.log(`🔍 ${this.proxyPool.length} ta proxylar salomatligi tekshirilmoqda...`);
     let alive = 0;
     let dead = 0;
 

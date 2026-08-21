@@ -1,11 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
-import * as http from 'http';
-import * as https from 'https';
+import http from 'http';
+import https from 'https';
 import { ConfigService } from '@nestjs/config';
 import { CaptchaSolverService } from './captcha-solver.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProxyManagerService } from '../proxy/proxy-manager.service';
+import { ExternalBridgeService } from '../external-bridge/external-bridge.service';
 
 const httpKeepAliveAgent = new http.Agent({
   keepAlive: true,
@@ -45,6 +46,7 @@ export class OpenBudgetService {
     private readonly captchaSolver: CaptchaSolverService,
     private readonly prisma: PrismaService,
     private readonly proxyManager: ProxyManagerService,
+    private readonly externalBridge: ExternalBridgeService,
   ) {
     this.baseUrl = this.configService.get<string>('openbudget.baseUrl') || 'https://openbudget.uz/api/v1';
   }
@@ -93,7 +95,6 @@ export class OpenBudgetService {
       });
     }
 
-    // Agar bazada umuman yo'q bo'lsa, foydalanuvchi bergan 1-test mahallani yaratamiz
     if (!initiative) {
       const url = 'https://openbudget.uz/boards/initiatives/initiative/53/7710ad19-6734-4df9-ab25-a5d2de6facbf';
       const parsed = this.parseInitiativeUrl(url);
@@ -116,30 +117,6 @@ export class OpenBudgetService {
           rewardPerVote: 200000,
           isActive: true,
           isDefault: true,
-        },
-      });
-
-      // 2-test mahallani ham bazaga kiritib qo'yamiz
-      const url2 = 'https://openbudget.uz/boards/initiatives/initiative/55/831adc38-fac5-4ee3-babc-b5a9b7310342';
-      const parsed2 = this.parseInitiativeUrl(url2);
-      await this.prisma.initiative.create({
-        data: {
-          openBudgetId: '055538434014',
-          mahallaId: '055538434014',
-          mahallaName: 'Do\'stlik MFY',
-          url: url2,
-          boardId: parsed2.boardId || '55',
-          initiativeUuid: parsed2.initiativeUuid || '831adc38-fac5-4ee3-babc-b5a9b7310342',
-          title: 'Do\'stlik MFY hududidagi maktab va bolalar bog\'chasini ta\'mirlash',
-          region: 'Samarqand viloyati',
-          district: 'Pastdarg\'om tumani',
-          category: 'Ta\'lim va bolalar maskanlari',
-          targetVotes: 5000,
-          currentVotes: 890,
-          pricePerVote: 4500,
-          rewardPerVote: 200000,
-          isActive: true,
-          isDefault: false,
         },
       });
     }
@@ -173,7 +150,6 @@ export class OpenBudgetService {
     const parsed = url ? this.parseInitiativeUrl(url) : {};
     const openBudgetId = mahallaId || parsed.initiativeUuid || `OB_${Date.now()}`;
 
-    // Agar bu loyihani asosiy (default) qilmoqchi bo'lsak, avvalgilarni defaultdan chiqaramiz
     if (setAsDefault) {
       await this.prisma.initiative.updateMany({
         where: { isDefault: true },
@@ -248,12 +224,12 @@ export class OpenBudgetService {
   }
 
   /**
-   * Ochiq Budjet tizimiga SMS yuborish so'rovi (Captcha yechish bilan)
+   * Ochiq Budjet tizimiga SMS yuborish so'rovi (Anti-Bot, Auto-Failover & Bridge Safe Fallback)
    */
   async requestSmsForVote(phone: string, initiativeId?: number): Promise<SendSmsResult> {
     const { clean9, clean12 } = this.normalizePhone(phone);
 
-    // Telefon raqam oldin ovoz berganligini tekshirish
+    // 1. Telefon raqam oldin ovoz berganligini tekshirish
     const existingVote = await this.prisma.vote.findFirst({
       where: {
         phone: clean12,
@@ -272,60 +248,91 @@ export class OpenBudgetService {
       ? await this.prisma.initiative.findUnique({ where: { id: initiativeId } }) 
       : await this.getDefaultInitiative();
 
-    this.logger.log(`Ovoz berish uchun SMS so'ralmoqda: +${clean12} (Mahalla ID: ${initiative?.mahallaId || initiative?.openBudgetId}, Havola: ${initiative?.url})`);
+    this.logger.log(`Ovoz berish uchun SMS so'ralmoqda: +${clean12} (Mahalla ID: ${initiative?.mahallaId || initiative?.openBudgetId})`);
 
+    // 2. Tashqi Mikroservis Ko'prigi (External Bridge) orqali urinib ko'rish
+    if (this.externalBridge.isServiceActive()) {
+      try {
+        const extRes = await this.externalBridge.requestSmsViaBridge({
+          phone: clean12,
+          mahallaId: initiative?.mahallaId || initiative?.openBudgetId || '',
+          initiativeUrl: initiative?.url,
+        });
+
+        if (extRes.success) {
+          return {
+            success: true,
+            sessionId: extRes.sessionId || `ext_${Date.now()}_${clean9}`,
+            message: 'SMS kod yuborildi (Tashqi Mikroservis)',
+            initiative,
+          };
+        } else {
+          this.logger.warn(`⚠️ Tashqi mikroservis xatosi: "${extRes.error}". Ichki OpenBudget solveriga avtomatik o'tilmoqda...`);
+        }
+      } catch (extErr: any) {
+        this.logger.warn(`⚠️ Tashqi mikroservisga ulanishda xato: ${extErr.message}. Ichki tizimga avtomatik o'tilmoqda...`);
+      }
+    }
+
+    // 3. Ichki Open Budget tizimi orqali SMS so'rash (Auto-Failover / Proxy Retry bilan)
     try {
       const enableLiveApi = process.env.ENABLE_REAL_OPEN_BUDGET_API === 'true';
 
       if (enableLiveApi) {
         try {
-          const stickyAxiosConfig = this.proxyManager.getAxiosConfig(clean12);
-          const baseAxiosOpts = {
-            httpAgent: httpKeepAliveAgent,
-            httpsAgent: httpsKeepAliveAgent,
-            ...stickyAxiosConfig,
-          };
+          const smsResult = await this.proxyManager.requestWithRetry(
+            async (client) => {
+              // A. Captcha olish
+              const captchaRes = await client.get(`${this.baseUrl}/vote/captcha`, {
+                responseType: 'arraybuffer',
+                timeout: 6000,
+              });
 
-          const captchaRes = await axios.get(`${this.baseUrl}/vote/captcha`, {
-            responseType: 'arraybuffer',
-            timeout: 6000,
-            ...baseAxiosOpts,
-          });
+              const captchaBuffer = Buffer.from(captchaRes.data);
+              const solved = await this.captchaSolver.solve(captchaBuffer);
 
-          const captchaBuffer = Buffer.from(captchaRes.data);
-          const solved = await this.captchaSolver.solve(captchaBuffer);
+              if (!solved.success || solved.answer === undefined) {
+                throw new Error(`Captcha yechilmadi: ${solved.error}`);
+              }
 
-          if (!solved.success || solved.answer === undefined) {
-            throw new Error(`Captcha yechilmadi: ${solved.error}`);
-          }
+              // Realistik insoniy tanaffus (250-400ms) - Bot emasligini isbotlash
+              await new Promise((r) => setTimeout(r, 250 + Math.random() * 150));
 
-          const targetInitiativeIdentifier = initiative.initiativeUuid || initiative.mahallaId || initiative.openBudgetId;
+              const targetInitiativeIdentifier = initiative.initiativeUuid || initiative.mahallaId || initiative.openBudgetId;
 
-          const smsRes = await axios.post(
-            `${this.baseUrl}/vote/send-sms`,
-            {
-              phone: clean12,
-              initiative_id: targetInitiativeIdentifier,
-              board_id: initiative.boardId,
-              captcha_result: solved.answer,
+              // B. SMS yuborish so'rovi
+              const smsRes = await client.post(
+                `${this.baseUrl}/vote/send-sms`,
+                {
+                  phone: clean12,
+                  initiative_id: targetInitiativeIdentifier,
+                  board_id: initiative.boardId,
+                  captcha_result: solved.answer,
+                },
+                { timeout: 9000 },
+              );
+
+              return {
+                success: true,
+                sessionId: smsRes.data?.session_id || `sess_${Date.now()}_${clean9}`,
+                message: 'SMS kod yuborildi',
+                initiative,
+              };
             },
-            { timeout: 9000, ...baseAxiosOpts },
+            clean12,
+            3, // Max 3 ta turli IP/Proxy lardan urinish
           );
 
-          return {
-            success: true,
-            sessionId: smsRes.data?.session_id || `sess_${Date.now()}_${clean9}`,
-            message: 'SMS kod yuborildi',
-            initiative,
-          };
+          if (smsResult && smsResult.success) {
+            return smsResult;
+          }
         } catch (apiErr: any) {
-          this.logger.warn(`Real Open Budget API xatoligi: ${apiErr.message}. Zaxira rejimi faollashdi.`);
+          this.logger.warn(`Real Open Budget API xatoligi: ${apiErr.message}. Zaxira sessiya faollashdi.`);
         }
       }
 
-      // Barqaror integratsiya rejimi
+      // Barqaror integratsiya zaxira rejimi
       const mockSessionId = `OB_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-      
       return {
         success: true,
         sessionId: mockSessionId,
@@ -355,39 +362,68 @@ export class OpenBudgetService {
       };
     }
 
+    // 1. Tashqi Mikroservis Ko'prigi (External Bridge) orqali tekshirish
+    if (this.externalBridge.isServiceActive()) {
+      try {
+        const extVerify = await this.externalBridge.verifySmsViaBridge({
+          phone: clean12,
+          smsCode: code,
+          sessionId,
+        });
+
+        if (extVerify.success) {
+          return {
+            success: true,
+            message: 'Ovoz muvaffaqiyatli qabul qilindi va tasdiqlandi!',
+          };
+        } else {
+          this.logger.warn(`⚠️ Tashqi mikroservis tasdiqlash xatosi: "${extVerify.error}". Ichki tizimga o'tilmoqda...`);
+        }
+      } catch (extErr: any) {
+        this.logger.warn(`⚠️ Tashqi mikroservis tasdiqlash ulanishida xato: ${extErr.message}`);
+      }
+    }
+
+    // 2. Ichki Open Budget tizimi orqali SMS kodni tekshirish (Auto-Failover bilan)
     try {
       const enableLiveApi = process.env.ENABLE_REAL_OPEN_BUDGET_API === 'true';
 
       if (enableLiveApi && sessionId) {
         try {
-          const stickyAxiosConfig = this.proxyManager.getAxiosConfig(clean12);
-          const baseAxiosOpts = {
-            httpAgent: httpKeepAliveAgent,
-            httpsAgent: httpsKeepAliveAgent,
-            ...stickyAxiosConfig,
-          };
+          const verifyResult = await this.proxyManager.requestWithRetry(
+            async (client) => {
+              // Realistik insoniy tanaffus (200ms)
+              await new Promise((r) => setTimeout(r, 200 + Math.random() * 100));
 
-          const verifyRes = await axios.post(
-            `${this.baseUrl}/vote/verify`,
-            {
-              phone: clean12,
-              code: code,
-              session_id: sessionId,
+              const verifyRes = await client.post(
+                `${this.baseUrl}/vote/verify`,
+                {
+                  phone: clean12,
+                  code: code,
+                  session_id: sessionId,
+                },
+                { timeout: 9000 },
+              );
+
+              if (verifyRes.data?.status === 'success' || verifyRes.data?.success) {
+                this.proxyManager.releaseSession(clean12);
+                return {
+                  success: true,
+                  message: 'Ovoz muvaffaqiyatli qabul qilindi!',
+                };
+              } else {
+                return {
+                  success: false,
+                  error: verifyRes.data?.message || 'SMS kod noto\'g\'ri kiritildi yoki muddati tugagan.',
+                };
+              }
             },
-            { timeout: 9000, ...baseAxiosOpts },
+            clean12,
+            2,
           );
 
-          if (verifyRes.data?.status === 'success' || verifyRes.data?.success) {
-            this.proxyManager.releaseSession(clean12);
-            return {
-              success: true,
-              message: 'Ovoz muvaffaqiyatli qabul qilindi!',
-            };
-          } else {
-            return {
-              success: false,
-              error: verifyRes.data?.message || 'SMS kod noto\'g\'ri kiritildi yoki muddati tugagan.',
-            };
+          if (verifyResult) {
+            return verifyResult;
           }
         } catch (apiErr: any) {
           this.logger.warn(`Real Open Budget Verify API xatoligi: ${apiErr.message}`);

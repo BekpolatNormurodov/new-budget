@@ -775,13 +775,89 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
               }
             );
           } catch (e) {}
-        } else if (data === 'cancel_action') {
+        } else if (data === 'resend_sms') {
+          const freshUser = await this.prisma.user.findUnique({ where: { id: user.id } });
+          if (!freshUser || freshUser.step !== 'AWAITING_SMS_CODE' || !freshUser.tempData) {
+            await ctx.answerCbQuery('Ovoz berish sessiyasi faol emas.', { show_alert: true });
+            return;
+          }
+
+          const tempData = JSON.parse(freshUser.tempData);
+          const { phone, smsSentAt, sessionStartedAt } = tempData;
+
+          const elapsedSec = Math.floor((Date.now() - (smsSentAt || 0)) / 1000);
+          const cooldownSec = 30;
+          if (elapsedSec < cooldownSec) {
+            await ctx.answerCbQuery(`⏳ Yangi SMS so'rash uchun yana ${cooldownSec - elapsedSec} soniya kuting!`, { show_alert: true });
+            return;
+          }
+
+          await ctx.answerCbQuery('🔄 Yangi SMS kod so\'ralmoqda...', { show_alert: false });
+          const resendWait = await ctx.reply('⏳ Yangi SMS kod so\'ralmoqda, iltimos kuting...');
+
+          try {
+            const res = await this.openBudgetService.requestSmsForVote(phone);
+            await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
+
+            if (!res.success) {
+              return ctx.reply(`❌ ${res.error || 'Qayta SMS yuborishda xatolik yuz berdi. Iltimos qaytadan urinib ko\'ring.'}`);
+            }
+
+            const newSmsSentAt = Date.now();
+            await this.prisma.user.update({
+              where: { id: user.id },
+              data: {
+                tempData: JSON.stringify({
+                  phone,
+                  sessionId: res.sessionId,
+                  smsSentAt: newSmsSentAt,
+                  sessionStartedAt,
+                  botId: botRecord.id,
+                }),
+              },
+            });
+
+            // Reset 2-minute timer
+            const timeoutKey = `${botRecord.id}_${user.id}`;
+            if (this.smsTimeouts.has(timeoutKey)) {
+              clearTimeout(this.smsTimeouts.get(timeoutKey));
+            }
+            const timeoutHandle = setTimeout(async () => {
+              try {
+                const u = await this.prisma.user.findUnique({ where: { id: user.id } });
+                if (u && u.step === 'AWAITING_SMS_CODE') {
+                  await this.prisma.user.update({ where: { id: user.id }, data: { step: null, tempData: null } });
+                  const activeBot = this.activeBots.get(botRecord.id);
+                  if (activeBot) {
+                    await activeBot.bot.telegram.sendMessage(
+                      user.telegramId,
+                      `⏳ SMS kod kiritish vaqti (2 daqiqa) tugadi!\n\nIltimos, qaytadan "🗳 Ovoz berish" tugmasini bosing:`,
+                      BotKeyboards.mainMenu(user.role === 'ADMIN')
+                    ).catch(() => {});
+                  }
+                }
+              } catch (e) {}
+            }, 120000);
+            this.smsTimeouts.set(timeoutKey, timeoutHandle);
+
+            await ctx.reply(
+              `✅ <b>Yangi SMS kod (+${phone}) raqamiga yuborildi!</b>\n\n⚠️ SMS kodni kiritish uchun sizda 2 daqiqa vaqt bor.\n\nKelgan 6 xonali SMS kodni yozib yuboring:`,
+              {
+                parse_mode: 'HTML',
+                ...BotKeyboards.smsWaitingInline(),
+              }
+            );
+          } catch (err: any) {
+            await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
+            await ctx.reply('❌ Qayta SMS so\'rashda xatolik yuz berdi.');
+          }
+        } else if (data === 'cancel_vote' || data === 'cancel_action') {
           await this.clearAllTimeouts(botRecord.id, user.id);
           await this.prisma.user.update({
             where: { id: user.id },
             data: { step: null, tempData: null },
           });
-          await ctx.reply('Amal bekor qilindi.');
+          await ctx.reply('❌ Amal bekor qilindi.', BotKeyboards.mainMenu(user.role === 'ADMIN'));
         }
       } catch (err) {}
     });
@@ -1044,7 +1120,10 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
       await ctx.reply(
         `📩 Telefoningizga (+${clean12}) 6 xonali SMS kod yuborildi!\n\n⚠️ SMS kodni kiritish uchun sizda 2 daqiqa vaqt bor.\n\nIltimos, kelgan SMS kodni quyida yozib yuboring:`,
-        BotKeyboards.cancelKeyboard()
+        {
+          parse_mode: 'HTML',
+          ...BotKeyboards.smsWaitingInline(),
+        }
       );
     } catch (err) {
       await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
