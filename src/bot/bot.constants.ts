@@ -103,6 +103,8 @@ export const BOT_BUTTONS = {
   BALANCE: '💰 Balans',
   WITHDRAW: '📩 Pulni yechib olish',
   REFERRAL: '🔗 Referal ssilka',
+  CONTACT: '📞 Bog\'lanish',
+  AGENT_CABINET: '💼 Agent Kabineti',
   ADMIN_PANEL: '👑 Admin panel',
   CANCEL: '❌ Bekor qilish',
 };

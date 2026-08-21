@@ -28,6 +28,7 @@ model BotInstance {
   isActive       Boolean   @default(true)
   status         String    @default("ONLINE") // ONLINE | STOPPED | ERROR
   avatarUrl      String?   @db.Text
+  adminContact   String?   // Admin mas'ul shaxs kontakt ma'lumoti (masalan: "@mahalla_admin" yoki "+998901234567")
   description    String?   @db.Text // Ixtiyoriy izoh / eslatma
   lastError      String?   @db.Text
   createdAt      DateTime  @default(now())
@@ -35,6 +36,7 @@ model BotInstance {
 
   votes          Vote[]
   users          User[]
+  agents         Agent[]
 }
 
 model User {
@@ -54,7 +56,10 @@ model User {
   referrals       User[]           @relation("UserReferrals")
   botInstanceId   Int?             // Qaysi bot orqali birinchi kirgan
   botInstance     BotInstance?     @relation(fields: [botInstanceId], references: [id], onDelete: SetNull)
-  role            String           @default("USER") // USER | ADMIN
+  agentId         Int?             // Qaysi agent havolasi orqali kirgan
+  agent           Agent?           @relation("AgentReferredUsers", fields: [agentId], references: [id], onDelete: SetNull)
+  agentsManaged   Agent[]
+  role            String           @default("USER") // USER | ADMIN | AGENT
   isBanned        Boolean          @default(false)
   openBudgetJwt   String?          @db.Text // OpenBudget Citizen JWT Token
   openBudgetRefresh String?        @db.Text
@@ -67,6 +72,31 @@ model User {
   withdrawals     Withdrawal[]
   rewardsReceived ReferralReward[] @relation("RefereeRewards")
   rewardsGiven    ReferralReward[] @relation("ReferrerRewards")
+}
+
+model Agent {
+  id            Int          @id @default(autoincrement())
+  botInstanceId Int
+  botInstance   BotInstance  @relation(fields: [botInstanceId], references: [id], onDelete: Cascade)
+  userId        Int?         // Agar botdagi Telegram foydalanuvchi bo'lsa
+  user          User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name          String       // Agent ismi (masalan: "Azizbek (Maktab faoli)")
+  phone         String?
+  telegramId    String?      // Agent Telegram ID
+  telegramUser  String?      // Agent Telegram username (@...)
+  code          String       @unique // Unikal referral kod (masalan: "ag_1", "ag_azizbek")
+  rewardPerVote Int          @default(5000) // Har bir ovoz uchun agent komissiyasi
+  totalVotes    Int          @default(0)    // Jami tasdiqlangan ovozlar
+  totalEarned   Int          @default(0)    // Jami ishlagan summasi
+  totalPaid     Int          @default(0)    // To'lab berilgan summa
+  balance       Int          @default(0)    // To'lanishi kerak bo'lgan qoldiq balans
+  lastReceiptUrl String?     @db.Text       // Oxirgi to'lov cheki rasmi URL
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  votes         Vote[]
+  referredUsers User[]       @relation("AgentReferredUsers")
 }
 
 model Initiative {
@@ -101,6 +131,9 @@ model Vote {
   botInstance    BotInstance? @relation(fields: [botInstanceId], references: [id], onDelete: SetNull)
   initiativeId   Int?
   initiative     Initiative?  @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
+  agentId        Int?
+  agent          Agent?       @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  agentReward    Int          @default(0)
   phone          String       // Global unikal tekshiruv ushbu maydon bo'yicha qilinadi!
   status         String       @default("PENDING_VERIFICATION") // PENDING | PENDING_VERIFICATION | VERIFIED | REJECTED | FAILED
   rewardAmount   Int          @default(30000)

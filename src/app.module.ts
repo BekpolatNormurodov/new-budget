@@ -12,6 +12,7 @@ import { WebAppModule } from './webapp/webapp.module';
 import { ProxyModule } from './proxy/proxy.module';
 import { ExternalBridgeModule } from './external-bridge/external-bridge.module';
 import { HealthModule } from './health/health.module';
+import { AgentModule } from './agent/agent.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { HealthModule } from './health/health.module';
     ProxyModule,
     ExternalBridgeModule,
     HealthModule,
+    AgentModule,
     OpenBudgetModule,
     WalletModule,
     BotModule,

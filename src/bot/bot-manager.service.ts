@@ -293,6 +293,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     voteReward?: number;
     refBonus?: number;
     isRefActive?: boolean;
+    adminContact?: string;
     avatarUrl?: string;
     description?: string;
   }) {
@@ -328,6 +329,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         voteReward: params.voteReward || 30000,
         refBonus: params.refBonus || 5000,
         isRefActive: params.isRefActive !== undefined ? Boolean(params.isRefActive) : true,
+        adminContact: params.adminContact ? params.adminContact.trim() : null,
         avatarUrl: avatarUrl || '/assets/open_budget_avatar.jpg',
         description: params.description ? params.description.trim() : null,
         isActive: true,
@@ -336,8 +338,63 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     });
 
     const started = await this.startBotInstance(botRecord);
+
+    // Har yangi bot uchun default 2 admin qo'shish (Elbek + Jonibek)
+    await this.seedDefaultAdminsForBot(botRecord.id).catch((err) => {
+      this.logger.warn(`Default adminlarni qo'shishda xatolik: ${err.message}`);
+    });
+
     return { botRecord, started };
   }
+
+  /**
+   * Har bir bot uchun standart 2 ta admin (Elbek + Jonibek) ni upsert qilish
+   */
+  private async seedDefaultAdminsForBot(botInstanceId: number) {
+    const defaultAdmins = [
+      {
+        telegramId: '8140304652',
+        firstName: 'Elbek',
+        username: 'Elbek_Muxtorovv',
+        phone: '998943489900',
+      },
+      {
+        telegramId: '5957905121',
+        firstName: 'Jonibek',
+        username: 'JONIBEKISMOILOV',
+        phone: '998990652651',
+      },
+    ];
+
+    for (const admin of defaultAdmins) {
+      try {
+        await this.prisma.user.upsert({
+          where: { telegramId: admin.telegramId },
+          update: {
+            role: 'ADMIN',
+            firstName: admin.firstName,
+            username: admin.username,
+            phone: admin.phone,
+            botInstanceId,
+          },
+          create: {
+            telegramId: admin.telegramId,
+            firstName: admin.firstName,
+            username: admin.username,
+            phone: admin.phone,
+            role: 'ADMIN',
+            referralCode: `ADM_${admin.telegramId}_${botInstanceId}`,
+            botInstanceId,
+          },
+        });
+        this.logger.log(`👑 [Bot #${botInstanceId}] Default admin qo'shildi: ${admin.firstName}`);
+      } catch (err: any) {
+        this.logger.warn(`[Bot #${botInstanceId}] ${admin.firstName} admin upsert xatoligi: ${err.message}`);
+      }
+    }
+  }
+
+
 
   /**
    * Barcha faol botlar ro'yxatini holati bilan olish
@@ -544,14 +601,22 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         const refBonus = botRecord.refBonus || 5000;
         const startText = BOT_MESSAGES.START(voteReward, refBonus);
 
+        // Agent ekanligini tekshirish: shu botda TelegramId bilan ro'yxatdan o'tgan agent
+        const isAgentOfBot = !!(await this.prisma.agent.findFirst({
+          where: { botInstanceId: botRecord.id, telegramId: ctx.from?.id?.toString(), isActive: true },
+        }));
+        const isAgent = isAgentOfBot || !!user.agentId;
+
         await ctx.reply(startText, {
           parse_mode: 'HTML',
-          ...BotKeyboards.mainMenu(user.role === 'ADMIN'),
+          ...BotKeyboards.mainMenu(user.role === 'ADMIN', isAgent),
         });
       } catch (err) {
         this.logger.error(`[Bot #${botRecord.id}] /start xatoligi:`, err);
       }
     });
+
+
 
     // 2. 🗳 Ovoz berish (/vote va tugma)
     const handleVoteTrigger = async (ctx: Context) => {
@@ -753,7 +818,118 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       } catch (e) {}
     });
 
-    // 7. Kontakt qabul qilish
+    // 9. 📞 Bog'lanish tugmasi (admin contact)
+    bot.hears(BOT_BUTTONS.CONTACT, async (ctx) => {
+      try {
+        const user = await this.getOrCreateBotUser(ctx, botRecord.id);
+        if (!user || user.isBanned) return;
+
+        const freshBot = await this.prisma.botInstance.findUnique({ where: { id: botRecord.id } });
+        const contact = freshBot?.adminContact || botRecord.adminContact;
+
+        if (!contact) {
+          return ctx.reply(
+            `📞 <b>Admin bilan bog'lanish:</b>\n\n` +
+            `📞 <b>+998 99 065 26 51</b> — @JONIBEKISMOILOV (Jonibek)\n` +
+            `📞 <b>+998 94 348 99 00</b> — @Elbek_Muxtorovv (Elbek)\n\n` +
+            `Savollaringiz bo'lsa, yuqoridagi adminlarga murojaat qiling.`,
+            { parse_mode: 'HTML' }
+          );
+        }
+
+        await ctx.reply(
+          `📞 <b>Admin bilan bog'lanish:</b>\n\n${contact}\n\nIstalgan savolingiz bo'lsa murojaat qilishingiz mumkin!`,
+          { parse_mode: 'HTML' }
+        );
+      } catch (err) {
+        this.logger.error(`[Bot #${botRecord.id}] Contact handler xatoligi:`, err);
+      }
+    });
+
+    // 10. 💼 Agent Kabineti tugmasi
+    bot.hears(BOT_BUTTONS.AGENT_CABINET, async (ctx) => {
+      try {
+        const user = await this.getOrCreateBotUser(ctx, botRecord.id);
+        if (!user || user.isBanned) return;
+
+        const telegramId = ctx.from?.id?.toString();
+        if (!telegramId) return;
+
+        // Agent topish: shu botda, shu Telegram ID bilan
+        const agent = await this.prisma.agent.findFirst({
+          where: {
+            botInstanceId: botRecord.id,
+            telegramId,
+            isActive: true,
+          },
+          include: {
+            botInstance: { select: { botUsername: true, mahallaName: true } },
+            _count: { select: { referredUsers: true, votes: true } },
+          },
+        });
+
+        if (!agent) {
+          // Agar agentId bilan bog'langan bo'lsa ham ko'rsatish
+          const byAgentId = user.agentId ? await this.prisma.agent.findUnique({
+            where: { id: user.agentId },
+            include: {
+              botInstance: { select: { botUsername: true, mahallaName: true } },
+              _count: { select: { referredUsers: true, votes: true } },
+            },
+          }) : null;
+
+          if (!byAgentId) {
+            return ctx.reply(
+              `💼 <b>Agent Kabineti</b>\n\n` +
+              `❌ Siz hali agent sifatida ro'yxatdan o'tmagansiz.\n\n` +
+              `Agent bo'lish uchun administrator bilan bog'laning.`,
+              { parse_mode: 'HTML' }
+            );
+          }
+        }
+
+        const agentData = agent || (user.agentId ? await this.prisma.agent.findUnique({
+          where: { id: user.agentId },
+          include: {
+            botInstance: { select: { botUsername: true, mahallaName: true } },
+            _count: { select: { referredUsers: true, votes: true } },
+          },
+        }) : null);
+
+        if (!agentData) return;
+
+        const botUsername = agentData.botInstance?.botUsername || '';
+        const referralLink = botUsername
+          ? `https://t.me/${botUsername}?start=${agentData.code}`
+          : `Kod: ${agentData.code}`;
+
+        const verifiedVotes = await this.prisma.vote.count({
+          where: { agentId: agentData.id, status: 'VERIFIED' },
+        });
+
+        const cabinetText =
+          `💼 <b>Agent Kabineti</b>\n\n` +
+          `👤 <b>Ism:</b> ${agentData.name}\n` +
+          (agentData.telegramUser ? `📲 <b>Username:</b> @${agentData.telegramUser}\n` : '') +
+          (agentData.phone ? `📞 <b>Telefon:</b> +${agentData.phone}\n` : '') +
+          `\n🔗 <b>Sizning havola:</b>\n<code>${referralLink}</code>\n\n` +
+          `📊 <b>Statistika:</b>\n` +
+          `👥 Havolangiz orqali kirganlar: <b>${agentData._count.referredUsers} ta</b>\n` +
+          `🗳 Tasdiqlangan ovozlar: <b>${verifiedVotes} ta</b>\n` +
+          `🗳 Jami ovozlar: <b>${agentData._count.votes} ta</b>\n\n` +
+          `💰 <b>Moliyaviy holat:</b>\n` +
+          `💵 Umumiy ishlagan: <b>${formatSum(agentData.totalEarned)} so'm</b>\n` +
+          `✅ To'langan: <b>${formatSum(agentData.totalPaid)} so'm</b>\n` +
+          `💳 Qoldiq balans: <b>${formatSum(agentData.balance)} so'm</b>\n\n` +
+          `📌 To'lov uchun administrator bilan bog'laning.`;
+
+        await ctx.reply(cabinetText, { parse_mode: 'HTML' });
+      } catch (err) {
+        this.logger.error(`[Bot #${botRecord.id}] Agent kabineti xatoligi:`, err);
+      }
+    });
+
+    // 11. Kontakt qabul qilish
     bot.on('contact', async (ctx) => {
       try {
         const user = await this.getOrCreateBotUser(ctx, botRecord.id);
@@ -764,6 +940,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         }
       } catch (err) {}
     });
+
 
     // 8. Callback querylar
     bot.on('callback_query', async (ctx) => {
@@ -983,23 +1160,41 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       const botObj = await this.prisma.botInstance.findUnique({ where: { id: botId } });
       const isRefActive = botObj ? (botObj.isRefActive ?? true) : true;
 
-      if (startPayload && isRefActive) {
-        const cleanRef = startPayload.replace(/^ref_/, '').trim();
-        const referrer = await this.prisma.user.findFirst({
-          where: {
-            OR: [
-              { referralCode: cleanRef },
-              { referralCode: startPayload.trim() },
-              { telegramId: cleanRef },
-            ],
-          },
-        });
+      let agentId: number | undefined = undefined;
 
-        if (referrer && referrer.telegramId !== telegramId) {
-          referredById = referrer.id;
-          this.logger.log(`🔗 Referral aniqlandi: Foydalanuvchi ${telegramId} ni Taklifchi #${referrer.id} (${referrer.firstName}) taklif qildi`);
+      if (startPayload) {
+        // Agent kodi tekshiruvi (ag_ bilan boshlanadi yoki agent jadvalida mavjud)
+        const agentCode = startPayload.trim();
+        if (agentCode) {
+          const agentRecord = await this.prisma.agent.findUnique({
+            where: { code: agentCode },
+          });
+          if (agentRecord && agentRecord.botInstanceId === botId && agentRecord.isActive) {
+            agentId = agentRecord.id;
+            this.logger.log(`🤝 Agent referral aniqlandi: Foydalanuvchi ${telegramId} → Agent #${agentRecord.id} (${agentRecord.name}) [Kod: ${agentCode}]`);
+          }
+        }
+
+        // Foydalanuvchi referral tekshiruvi (ref_ prefiksi bilan)
+        if (!agentId && isRefActive) {
+          const cleanRef = startPayload.replace(/^ref_/, '').trim();
+          const referrer = await this.prisma.user.findFirst({
+            where: {
+              OR: [
+                { referralCode: cleanRef },
+                { referralCode: startPayload.trim() },
+                { telegramId: cleanRef },
+              ],
+            },
+          });
+
+          if (referrer && referrer.telegramId !== telegramId) {
+            referredById = referrer.id;
+            this.logger.log(`🔗 Referral aniqlandi: Foydalanuvchi ${telegramId} ni Taklifchi #${referrer.id} (${referrer.firstName}) taklif qildi`);
+          }
         }
       }
+
 
       try {
         user = await this.prisma.user.create({
@@ -1012,6 +1207,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
             role: isAdmin ? 'ADMIN' : 'USER',
             referredById,
             botInstanceId: botId,
+            agentId: agentId || null,
           },
           include: { referrer: true, referrals: true },
         });
@@ -1031,12 +1227,18 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
             }
           }
         }
+
+        // Agent referral orqali kirgan bo'lsa – agent statistikasini yozib qo'yamiz (ixtiyoriy log)
+        if (agentId) {
+          this.logger.log(`🤝 Yangi foydalanuvchi agent havolasi orqali qo'shildi: User #${user.id} → Agent #${agentId}`);
+        }
       } catch (createErr) {
         user = await this.prisma.user.findUnique({
           where: { telegramId },
           include: { referrer: true, referrals: true },
         });
       }
+
     } else {
       if (user.username !== from.username || user.firstName !== from.first_name) {
         user = await this.prisma.user.update({

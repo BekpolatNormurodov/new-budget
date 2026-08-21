@@ -5,12 +5,16 @@ export class BotKeyboards {
   /**
    * Asosiy menyu klaviaturasi (Admin panel faqat web saytda boshqariladi)
    */
-  static mainMenu(_isAdmin: boolean = false) {
+  static mainMenu(_isAdmin: boolean = false, isAgent: boolean = false) {
     const buttons = [
       [BOT_BUTTONS.VOTE],
       [BOT_BUTTONS.BALANCE, BOT_BUTTONS.WITHDRAW],
-      [BOT_BUTTONS.REFERRAL],
+      [BOT_BUTTONS.REFERRAL, BOT_BUTTONS.CONTACT],
     ];
+
+    if (isAgent) {
+      buttons.push([BOT_BUTTONS.AGENT_CABINET]);
+    }
 
     return Markup.keyboard(buttons).resize();
   }

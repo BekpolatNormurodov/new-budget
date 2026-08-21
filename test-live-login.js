@@ -125,6 +125,49 @@ async function solveFullCaptcha(rawBuffer, worker) {
   return null;
 }
 
+// Proxy pool configuration
+function getProxyList() {
+  const raw = process.env.PROXY_LIST || '';
+  return raw.split('\n').map(p => p.trim()).filter(Boolean);
+}
+
+function parseProxy(proxyStr) {
+  try {
+    const url = new URL(proxyStr.includes('://') ? proxyStr : `http://${proxyStr}`);
+    return {
+      host: url.hostname,
+      port: parseInt(url.port, 10),
+      auth: url.username ? { username: url.username, password: url.password } : undefined,
+      raw: proxyStr,
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+function createAxiosClient(proxyStr) {
+  const cfg = {
+    timeout: 10000,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    },
+  };
+
+  if (proxyStr) {
+    const parsed = parseProxy(proxyStr);
+    if (parsed) {
+      cfg.proxy = {
+        host: parsed.host,
+        port: parsed.port,
+        auth: parsed.auth,
+        protocol: 'http',
+      };
+    }
+  }
+
+  return axios.create(cfg);
+}
+
 async function main() {
   console.log('\n========================================================');
   console.log('🚀 OPENBUDGET LIVE AUTH & SMS OTP SINOV DASTURI');
@@ -136,6 +179,17 @@ async function main() {
   const phone = cleanPhone;
 
   console.log(`📱 Telefon raqam: +${phone}`);
+  const proxies = getProxyList();
+  const selectedProxy = proxies.length > 0 ? proxies[Math.floor(Math.random() * proxies.length)] : null;
+  const client = createAxiosClient(selectedProxy);
+
+  if (selectedProxy) {
+    const p = parseProxy(selectedProxy);
+    console.log(`🛡  Ishlatilayotgan Proksi: ${p ? p.host + ':' + p.port : selectedProxy}`);
+  } else {
+    console.log('🌐 To\'g\'ridan-to\'g\'ri ulanish');
+  }
+
   console.log('⚙️  Tesseract OCR (300 DPI) yuklanmoqda...');
 
   const worker = await createWorker('eng');
@@ -152,7 +206,7 @@ async function main() {
 
   for (let attempt = 1; attempt <= 20; attempt++) {
     try {
-      const capRes = await axios.get('https://new.openbudget.uz/api/v2/vote/captcha-2', {
+      const capRes = await client.get('https://new.openbudget.uz/api/v2/vote/captcha-2', {
         headers: { 'User-Agent': 'Mozilla/5.0 Chrome/122.0.0.0 Safari/537.36' },
         timeout: 6000,
       });
@@ -164,7 +218,7 @@ async function main() {
       if (parsed) {
         process.stdout.write(`\r[Urinish #${attempt}] "${parsed.expression}" -> Javob: ${parsed.ans} ... `);
 
-        const otpRes = await axios.post('https://new.openbudget.uz/api/v1/login/send-otp', {
+        const otpRes = await client.post('https://new.openbudget.uz/api/v1/login/send-otp', {
           phone_number: phone,
           captcha_key: key,
           captcha_result: parsed.ans,
@@ -204,7 +258,7 @@ async function main() {
   console.log('\n⏳ Kod tasdiqlanmoqda...');
 
   try {
-    const verifyRes = await axios.post('https://new.openbudget.uz/api/v1/login/verify-otp', {
+    const verifyRes = await client.post('https://new.openbudget.uz/api/v1/login/verify-otp', {
       phone_number: phone,
       otp_key: otpKey,
       otp_code: smsCode.trim(),
@@ -222,7 +276,7 @@ async function main() {
       if (token) {
         console.log('\n👤 Shaxsiy profil ma\'lumotlari olinmoqda...');
         const cleanToken = token.replace(/^bearer\s+/i, '').trim();
-        const meRes = await axios.get('https://new.openbudget.uz/api/v1/users/profile', {
+        const meRes = await client.get('https://new.openbudget.uz/api/v1/users/profile', {
           headers: {
             Authorization: cleanToken,
             hl: 'uz',
