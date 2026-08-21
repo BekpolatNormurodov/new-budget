@@ -8,6 +8,7 @@ import { Telegraf, Context } from 'telegraf';
 import { PrismaService } from '../prisma/prisma.service';
 import { OpenBudgetService } from '../openbudget/openbudget.service';
 import { WalletService } from '../wallet/wallet.service';
+import { VoteAutoApproverService } from '../openbudget/vote-auto-approver.service';
 import { BOT_MESSAGES, BOT_BUTTONS, formatSum } from './bot.constants';
 import { BotKeyboards } from './bot.keyboards';
 
@@ -33,6 +34,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly openBudgetService: OpenBudgetService,
     private readonly walletService: WalletService,
+    private readonly voteAutoApproverService: VoteAutoApproverService,
   ) {}
 
   private async clearAllTimeouts(botId: number, userId: number) {
@@ -81,6 +83,11 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     await this.launchAllActiveBots();
     this.startVoteAutoApprover();
     this.startBotSupervisor();
+
+    // 🤖 OpenBudget API orqali kutilayotgan ovozlarni real vaqtda avtomatik tekshiruvchi servis
+    this.voteAutoApproverService.startLiveVoteChecker(async (botId, telegramId, text) => {
+      await this.sendMessageToUser(telegramId, text, botId || undefined);
+    });
   }
 
   async onModuleDestroy() {
