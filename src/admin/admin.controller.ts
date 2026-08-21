@@ -147,4 +147,10 @@ export class AdminController {
       targetBotId: body.targetBotId ? Number(body.targetBotId) : undefined,
     });
   }
+
+  // Yuborilgan xabarnomalar tarixi
+  @Get('broadcast/history')
+  async getBroadcastHistory() {
+    return this.adminService.getBroadcastHistory();
+  }
 }

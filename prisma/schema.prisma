@@ -105,6 +105,9 @@ model Vote {
   sessionId      String?
   captchaAnswer  String?
   smsCode        String?
+  ipAddress      String?      // Foydalanuvchi IP manzili (Audit uchun)
+  proxyUsed      String?      // Ovoz berishda ishlatilgan Proxy IP (Audit uchun)
+  userAgent      String?      @db.Text
   errorMessage   String?      @db.Text
   createdAt      DateTime     @default(now())
   completedAt    DateTime?
@@ -155,13 +158,18 @@ model BotSetting {
 }
 
 model BroadcastMessage {
-  id          Int      @id @default(autoincrement())
-  text        String   @db.Text
-  photoUrl    String?  @db.Text
-  buttonText  String?
-  buttonUrl   String?  @db.Text
-  status      String   @default("PENDING") // PENDING | SENDING | COMPLETED | FAILED
-  sentCount   Int      @default(0)
-  failedCount Int      @default(0)
-  createdAt   DateTime @default(now())
+  id                Int      @id @default(autoincrement())
+  type              String   @default("CUSTOM_AD") // REMINDER | CUSTOM_AD
+  slot              String?  // MORNING | EVENING | TEST
+  targetBotId       Int?
+  targetMahallaName String?
+  text              String   @db.Text
+  photoUrl          String?  @db.Text
+  buttonsJson       String?  @db.Text
+  totalUsers        Int      @default(0)
+  sentCount         Int      @default(0)
+  failedCount       Int      @default(0)
+  durationMs        Int      @default(0)
+  status            String   @default("COMPLETED") // COMPLETED | FAILED
+  createdAt         DateTime @default(now())
 }

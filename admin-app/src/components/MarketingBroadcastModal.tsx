@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   X,
   Send,
@@ -27,6 +27,10 @@ import {
   Target,
   Zap,
   Flame,
+  History,
+  Clock,
+  RotateCcw,
+  Check,
 } from 'lucide-react';
 import { BotInstanceItem } from '../types';
 
@@ -46,6 +50,23 @@ interface BroadcastResult {
   sentCount: number;
   failedCount: number;
   durationMs: number;
+}
+
+interface HistoryItem {
+  id: number;
+  type: string;
+  slot?: string;
+  targetBotId?: number;
+  targetMahallaName?: string;
+  text: string;
+  photoUrl?: string;
+  buttonsJson?: string;
+  totalUsers: number;
+  sentCount: number;
+  failedCount: number;
+  durationMs: number;
+  status: string;
+  createdAt: string;
 }
 
 const TEMPLATES = [
@@ -155,7 +176,7 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
   onClose,
   bots = [],
 }) => {
-  const [activeTab, setActiveTab] = useState<'custom_ad' | 'reminder'>('custom_ad');
+  const [activeTab, setActiveTab] = useState<'custom_ad' | 'reminder' | 'history'>('custom_ad');
 
   // Targeting: ALL or specific bot ID
   const [selectedBotTarget, setSelectedBotTarget] = useState<string>('ALL');
@@ -168,6 +189,10 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
   const [bannerImage, setBannerImage] = useState<string>('');
   const [buttons, setButtons] = useState<InlineButton[]>(TEMPLATES[0].buttons);
 
+  // Tab 3: History State
+  const [historyList, setHistoryList] = useState<HistoryItem[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
+
   // History stack for Undo/Redo (Ctrl+Z / Ctrl+Y)
   const historyRef = useRef<string[]>([TEMPLATES[0].text]);
   const historyIndexRef = useRef<number>(0);
@@ -176,6 +201,28 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
   const [result, setResult] = useState<BroadcastResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Load history when history tab is opened
+  useEffect(() => {
+    if (isOpen && activeTab === 'history') {
+      fetchHistory();
+    }
+  }, [isOpen, activeTab]);
+
+  const fetchHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const res = await fetch('/api/admin/broadcast/history');
+      if (res.ok) {
+        const data = await res.json();
+        setHistoryList(data || []);
+      }
+    } catch (e) {
+      console.error('History fetch error:', e);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   // Push new state to history stack
   const pushToHistory = (newVal: string) => {
@@ -295,6 +342,30 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
     return !u.startsWith('http://') && !u.startsWith('https://') && !u.startsWith('t.me/');
   };
 
+  // Load from history into editor
+  const handleReuseHistory = (item: HistoryItem) => {
+    if (item.type === 'REMINDER') {
+      setActiveTab('reminder');
+      setSelectedSlot((item.slot as any) || 'MORNING');
+      if (item.targetBotId) setSelectedBotTarget(String(item.targetBotId));
+      else setSelectedBotTarget('ALL');
+    } else {
+      setActiveTab('custom_ad');
+      pushToHistory(item.text);
+      if (item.targetBotId) setSelectedBotTarget(String(item.targetBotId));
+      else setSelectedBotTarget('ALL');
+
+      if (item.buttonsJson) {
+        try {
+          const parsed = JSON.parse(item.buttonsJson);
+          if (Array.isArray(parsed)) {
+            setButtons(parsed.map((b: any, idx: number) => ({ id: String(idx), text: b.text, url: b.url })));
+          }
+        } catch (e) {}
+      }
+    }
+  };
+
   const handleSendBroadcast = async () => {
     setLoading(true);
     setResult(null);
@@ -384,59 +455,74 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
         {!result && (
           <div className="px-5 pt-3 pb-2 bg-white dark:bg-slate-900 space-y-2.5 border-b border-slate-200 dark:border-slate-800 shrink-0">
             {/* Target Audience / Mahalla Selector */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
-              <div className="flex items-center gap-2">
-                <Target className="w-4 h-4 text-orange-500 shrink-0" />
-                <div>
-                  <span className="text-xs font-bold text-slate-900 dark:text-white block">
-                    Qaysi auditoriyaga yuborilsin?
-                  </span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                    Barcha mahallalarga yoki faqat tanlangan bot foydalanuvchilariga
-                  </span>
+            {activeTab !== 'history' && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <Target className="w-4 h-4 text-orange-500 shrink-0" />
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                      Qaysi auditoriyaga yuborilsin?
+                    </span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                      Barcha mahallalarga yoki faqat tanlangan bot foydalanuvchilariga
+                    </span>
+                  </div>
                 </div>
+
+                <select
+                  value={selectedBotTarget}
+                  onChange={(e) => setSelectedBotTarget(e.target.value)}
+                  className="bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-semibold text-xs rounded-xl px-3 py-1.5 border border-slate-300 dark:border-slate-700 focus:outline-none focus:border-orange-500 cursor-pointer shadow-sm"
+                >
+                  <option value="ALL">🌐 Barcha Mahallalar (Hamma Foydalanuvchilar)</option>
+                  {bots.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      📍 {b.mahallaName} ({b.botUsername ? `@${b.botUsername}` : b.name})
+                    </option>
+                  ))}
+                </select>
               </div>
+            )}
 
-              <select
-                value={selectedBotTarget}
-                onChange={(e) => setSelectedBotTarget(e.target.value)}
-                className="bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-semibold text-xs rounded-xl px-3 py-1.5 border border-slate-300 dark:border-slate-700 focus:outline-none focus:border-orange-500 cursor-pointer shadow-sm"
-              >
-                <option value="ALL">🌐 Barcha Mahallalar (Hamma Foydalanuvchilar)</option>
-                {bots.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    📍 {b.mahallaName} ({b.botUsername ? `@${b.botUsername}` : b.name})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Tab Selector */}
-            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
+            {/* 3-Tab Selector */}
+            <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setActiveTab('custom_ad')}
-                className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                className={`flex items-center justify-center gap-2 py-2 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   activeTab === 'custom_ad'
                     ? 'bg-white dark:bg-slate-800 text-orange-600 dark:text-orange-400 shadow-sm border border-slate-200/60 dark:border-slate-700/60'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                <Sparkles className="w-4 h-4" />
-                <span>Maxsus Reklama & Banner (Inline Tugmalar)</span>
+                <Sparkles className="w-3.5 h-3.5" />
+                <span className="truncate">Reklama & Banner</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('reminder')}
-                className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                className={`flex items-center justify-center gap-2 py-2 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   activeTab === 'reminder'
                     ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200/60 dark:border-slate-700/60'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                <Radio className="w-4 h-4" />
-                <span>Avtomatik Kunlik Eslatma</span>
+                <Radio className="w-3.5 h-3.5" />
+                <span className="truncate">Avtomatik Eslatma</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('history')}
+                className={`flex items-center justify-center gap-2 py-2 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'history'
+                    ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm border border-slate-200/60 dark:border-slate-700/60'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <History className="w-3.5 h-3.5" />
+                <span className="truncate">Yuborilganlar Tarixi</span>
               </button>
             </div>
           </div>
@@ -806,7 +892,7 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
                   </div>
                 </div>
               </div>
-            ) : (
+            ) : activeTab === 'reminder' ? (
               /* TAB 2: AUTOMATIC REMINDER */
               <div className="space-y-4 max-w-xl mx-auto py-2">
                 <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-300 text-xs flex items-start gap-3">
@@ -919,6 +1005,103 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
                   );
                 })()}
               </div>
+            ) : (
+              /* TAB 3: BROADCAST HISTORY */
+              <div className="space-y-3 py-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    <History className="w-4 h-4 text-emerald-500" />
+                    <span>Yuborilgan Xabarnomalar va Reklamalar Tarixi (Oxirgi 50 ta)</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={fetchHistory}
+                    className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer font-bold"
+                  >
+                    <RotateCcw className={`w-3 h-3 ${loadingHistory ? 'animate-spin' : ''}`} />
+                    <span>Yangilash</span>
+                  </button>
+                </div>
+
+                {loadingHistory ? (
+                  <div className="p-8 text-center text-xs text-slate-400">Tarix yuklanmoqda...</div>
+                ) : historyList.length === 0 ? (
+                  <div className="p-8 text-center rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-xs text-slate-400">
+                    Hozircha yuborilgan xabarlar tarixi mavjud emas.
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 max-h-[55vh] overflow-y-auto pr-1">
+                    {historyList.map((item) => {
+                      const isReminder = item.type === 'REMINDER';
+                      const formattedDate = new Date(item.createdAt).toLocaleString('uz-UZ', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      });
+
+                      return (
+                        <div
+                          key={item.id}
+                          className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition space-y-2"
+                        >
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                  isReminder
+                                    ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20'
+                                    : 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20'
+                                }`}
+                              >
+                                {isReminder ? `📢 Eslatma (${item.slot || 'Kunlik'})` : '🎨 Reklama & Banner'}
+                              </span>
+
+                              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                                <Target className="w-3 h-3 text-slate-400" />
+                                <span>{item.targetMahallaName || 'Barcha Mahallalar'}</span>
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-3 text-[10px] text-slate-400 font-mono">
+                              <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
+                                <Check className="w-3 h-3" />
+                                {item.sentCount} ta yetkazildi
+                              </span>
+                              {item.failedCount > 0 && (
+                                <span className="text-rose-500 font-bold">
+                                  {item.failedCount} ta blok
+                                </span>
+                              )}
+                              <span>{formattedDate}</span>
+                            </div>
+                          </div>
+
+                          <div className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2 font-mono bg-white dark:bg-slate-900/60 p-2 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                            {item.text.replace(/<[^>]*>?/gm, '')}
+                          </div>
+
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="text-[10px] text-slate-400">
+                              Sarflangan vaqt: {item.durationMs} ms
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={() => handleReuseHistory(item)}
+                              className="px-3 py-1 bg-white dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 transition cursor-pointer flex items-center gap-1 shadow-sm"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              <span>Qaytadan Yuklash</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             )
           ) : (
             /* Results Card */
@@ -957,6 +1140,9 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
             {!result && activeTab === 'custom_ad' && (
               <span>✨ {buttons.filter((b) => b.text.trim()).length} ta tugma biriktirildi</span>
             )}
+            {!result && activeTab === 'history' && (
+              <span>📜 Tarix saqlanmoqda (Audit uchun)</span>
+            )}
           </div>
 
           <div className="flex items-center gap-2.5">
@@ -969,7 +1155,7 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
               {result ? 'Yopish' : 'Bekor qilish'}
             </button>
 
-            {!result ? (
+            {!result && activeTab !== 'history' ? (
               <button
                 type="button"
                 onClick={handleSendBroadcast}
@@ -979,7 +1165,7 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
                 <Send className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 <span>{loading ? 'Xabarlar yuborilmoqda...' : 'Hozir Yuborish'}</span>
               </button>
-            ) : (
+            ) : result ? (
               <button
                 type="button"
                 onClick={() => setResult(null)}
@@ -987,7 +1173,7 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
               >
                 Yangi Xabar Yuborish
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

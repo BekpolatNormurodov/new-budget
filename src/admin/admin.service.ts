@@ -581,4 +581,11 @@ export class AdminService {
   }) {
     return this.botMarketingService.executeCustomAdBroadcast(params);
   }
+
+  /**
+   * Yuborilgan xabarlar tarixini olish
+   */
+  async getBroadcastHistory() {
+    return this.botMarketingService.getBroadcastHistory();
+  }
 }

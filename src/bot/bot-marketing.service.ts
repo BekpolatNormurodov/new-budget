@@ -197,6 +197,24 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
     const durationMs = Date.now() - startTime;
     this.logger.log(`✅ [Marketing Broadcast]: Jami ${activeBotsRecords.length} ta bot orqali ${totalSent} ta xabar yuborildi (${durationMs}ms).`);
 
+    // DB Tarixiga saqlash (Audit / History)
+    const targetBot = targetBotId ? activeBotsRecords.find((b) => b.id === targetBotId) : null;
+    await this.prisma.broadcastMessage.create({
+      data: {
+        type: 'REMINDER',
+        slot,
+        targetBotId: targetBotId || null,
+        targetMahallaName: targetBot ? targetBot.mahallaName : 'Barcha Mahallalar',
+        text: slot === 'MORNING' ? '🌅 Tonggi Eslatma (09:00)' : '🌙 Kechki Eslatma (17:00)',
+        buttonsJson: JSON.stringify(['start_vote', 'withdraw_menu']),
+        totalUsers: allUsers.length,
+        sentCount: totalSent,
+        failedCount: totalFailed,
+        durationMs,
+        status: totalSent > 0 ? 'COMPLETED' : 'FAILED',
+      },
+    }).catch(() => {});
+
     return {
       slot,
       totalBots: activeBotsRecords.length,
@@ -422,10 +440,43 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
     const durationMs = Date.now() - startTime;
     this.logger.log(`📢 [Custom Ad Broadcast]: Jami ${allUsers.length} foydalanuvchidan ${totalSent} tasiga reklama yetkazildi (${totalFailed} ta xato, ${durationMs}ms).`);
 
+    // DB Tarixiga saqlash (Audit / History)
+    let targetMahallaName = 'Barcha Mahallalar';
+    if (params.targetBotId) {
+      const targetBotRecord = await this.prisma.botInstance.findUnique({ where: { id: params.targetBotId } }).catch(() => null);
+      if (targetBotRecord) targetMahallaName = targetBotRecord.mahallaName;
+    }
+
+    await this.prisma.broadcastMessage.create({
+      data: {
+        type: 'CUSTOM_AD',
+        targetBotId: params.targetBotId || null,
+        targetMahallaName,
+        text: params.text,
+        photoUrl: params.photoBase64OrUrl && !params.photoBase64OrUrl.startsWith('data:') ? params.photoBase64OrUrl : (params.photoBase64OrUrl ? '[Yuklangan Banner Rasmi]' : null),
+        buttonsJson: JSON.stringify(allButtons),
+        totalUsers: allUsers.length,
+        sentCount: totalSent,
+        failedCount: totalFailed,
+        durationMs,
+        status: totalSent > 0 ? 'COMPLETED' : 'FAILED',
+      },
+    }).catch(() => {});
+
     return {
       sentCount: totalSent,
       failedCount: totalFailed,
       durationMs,
     };
+  }
+
+  /**
+   * Barcha yuborilgan xabarnomalar va reklamalar tarixini olish
+   */
+  public async getBroadcastHistory() {
+    return this.prisma.broadcastMessage.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
   }
 }
