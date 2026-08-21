@@ -194,42 +194,51 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
     slot: 'MORNING' | 'EVENING' | 'TEST',
   ) {
     const reward = (currentBot.voteReward || 30000).toLocaleString('uz-UZ');
-    const remaining = currentBot.remaining.toLocaleString('uz-UZ');
     const mahalla = currentBot.mahallaName;
+    const openBudgetUrl = currentBot.openBudgetUrl || '';
 
     // 1-HOLAT: Agar joriy mahalla rejasiga hali YETMAGAN bo'lsa (Target not reached)
     if (!currentBot.isTargetReached) {
       if (slot === 'MORNING') {
         const text =
           `🌅 <b>Xayrli tong, aziz yurtdosh!</b>\n\n` +
-          `🔥 <b>Open Budgetda yana qo'shimcha daromad olish imkoniyati!</b>\n\n` +
+          `🔥 <b>Open Budgetda ovoz berib, qo'shimcha daromad oling!</b>\n\n` +
           `📍 Mahalla: <b>${mahalla}</b>\n` +
-          `💰 Har bir ovoz uchun mukofot: <b>${reward} so'm</b> (Darhol to'lab beriladi!)\n` +
+          `💰 Har bir ovoz uchun to'lov: <b>${reward} so'm</b> (Darhol kartaga / paynetga)\n` +
           `👥 Oila a'zolaringiz va yaqinlaringiz raqamlaridan ham ovoz berib pul ishlashingiz mumkin!\n\n` +
-          `📊 Rejamiz to'lishiga yana <b>${remaining} ta</b> ovoz qoldi.\n\n` +
-          `Hoziroq "🗳 Ovoz berish" tugmasini bosing va o'z pulingizni oling 👇`;
+          (openBudgetUrl ? `🔗 <b>Ochiq Budjet havolasi:</b> <a href="${openBudgetUrl}">Havolani ko'rish</a>\n\n` : '') +
+          `Hoziroq "🗳 Ovoz berish" tugmasini bosing va o'z mukofotingizni oling 👇`;
 
-        const keyboard = Markup.inlineKeyboard([
-          [Markup.button.callback('🗳 Ovoz berish (+ ' + reward + ' so\'m)', 'start_vote')],
+        const keyboardButtons: any[] = [
+          [Markup.button.callback(`🗳 Ovoz berish (+${reward} so'm)`, 'start_vote')],
           [Markup.button.callback('💰 Balansimni tekshirish', 'refresh_balance')],
-        ]);
+        ];
+        if (openBudgetUrl) {
+          keyboardButtons.push([Markup.button.url('🌐 Ochiq Budjetda ko\'rish', openBudgetUrl)]);
+        }
 
+        const keyboard = Markup.inlineKeyboard(keyboardButtons);
         return { text, keyboard };
       } else {
         // EVENING yoki TEST
         const text =
           `🌆 <b>Xayrli kech! Bugungi imkoniyatni qo'ldan boy bermang!</b>\n\n` +
-          `⚡️ <b>${mahalla}</b> bo'yicha ovoz berish jarayoni qizg'in davom etmoqda!\n\n` +
+          `⚡️ <b>${mahalla}</b> bo'yicha ovoz berish jarayoni davom etmoqda!\n\n` +
           `📍 Mahalla: <b>${mahalla}</b>\n` +
-          `💰 Ovoz narxi: <b>${reward} so'm</b>\n` +
-          `⏳ Qolgan bo'sh o'rinlar: <b>${remaining} ta</b>\n\n` +
-          `Yaqinlaringiz nomidagi raqamlardan ham ovoz berib, bir necha daqiqada balansingizni to'ldiring 👇`;
+          `💰 Ovoz mukofoti: <b>${reward} so'm</b>\n` +
+          `👥 Yaqinlaringiz nomidagi raqamlardan ham ovoz berib, balansingizni to'ldiring!\n\n` +
+          (openBudgetUrl ? `🔗 <b>Ochiq Budjet havolasi:</b> <a href="${openBudgetUrl}">Havolani ko'rish</a>\n\n` : '') +
+          `Ovoz berish uchun pastdagi tugmani bosing 👇`;
 
-        const keyboard = Markup.inlineKeyboard([
-          [Markup.button.callback('🗳 Hoziroq ovoz berish', 'start_vote')],
+        const keyboardButtons: any[] = [
+          [Markup.button.callback(`🗳 Hoziroq ovoz berish (+${reward} so'm)`, 'start_vote')],
           [Markup.button.callback('💳 Pulni yechib olish', 'withdraw_menu')],
-        ]);
+        ];
+        if (openBudgetUrl) {
+          keyboardButtons.push([Markup.button.url('🌐 Ochiq Budjetda ko\'rish', openBudgetUrl)]);
+        }
 
+        const keyboard = Markup.inlineKeyboard(keyboardButtons);
         return { text, keyboard };
       }
     }
@@ -239,20 +248,26 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
       const nextMahalla = fallbackUnfinishedBot.mahallaName;
       const nextReward = (fallbackUnfinishedBot.voteReward || 30000).toLocaleString('uz-UZ');
       const nextBotUsername = fallbackUnfinishedBot.botUsername || fallbackUnfinishedBot.name;
+      const nextUrl = fallbackUnfinishedBot.openBudgetUrl || '';
 
       const text =
         `🎉 <b>Ajoyib yangilik! ${mahalla} o'zining barcha rejasini muvaffaqiyatli bajardi!</b> 🥳\n\n` +
         `Hammaga faollik uchun katta rahmat!\n\n` +
         `🚀 <b>Lekin pul ishlash to'xtamaydi!</b> Hozirda bizning yana bir mahallamizda ovoz qabul qilinmoqda:\n\n` +
-        `📍 Yangi Mahalla: <b>${nextMahalla}</b>\n` +
-        `💰 Har bir ovoz uchun to'lov: <b>${nextReward} so'm</b>!\n\n` +
-        `Barcha yangi va boshqa yaqinlaringiz raqamlari bilan quyidagi yangi botimizda ovoz berib, yana pul ishlashda davom eting 👇`;
+        `📍 Mahalla: <b>${nextMahalla}</b>\n` +
+        `💰 Har bir ovoz uchun to'lov: <b>${nextReward} so'm</b>!\n` +
+        (nextUrl ? `🔗 <b>Ochiq Budjet havolasi:</b> <a href="${nextUrl}">Havolani ko'rish</a>\n\n` : '\n') +
+        `Barcha yangi va yaqinlaringiz raqamlari bilan quyidagi botimizda ovoz berib, yana pul ishlashda davom eting 👇`;
 
-      const keyboard = Markup.inlineKeyboard([
-        [Markup.button.url(`🚀 Yangi Botga o'tish (@${nextBotUsername})`, `https://t.me/${nextBotUsername}`)],
+      const keyboardButtons: any[] = [
+        [Markup.button.url(`🚀 Botga o'tish (@${nextBotUsername})`, `https://t.me/${nextBotUsername}`)],
         [Markup.button.callback('💳 Balansimni yechib olish', 'withdraw_menu')],
-      ]);
+      ];
+      if (nextUrl) {
+        keyboardButtons.push([Markup.button.url('🌐 Ochiq Budjetda ko\'rish', nextUrl)]);
+      }
 
+      const keyboard = Markup.inlineKeyboard(keyboardButtons);
       return { text, keyboard };
     }
 
