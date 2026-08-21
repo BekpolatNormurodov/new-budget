@@ -12,6 +12,7 @@ import {
   Sparkles,
   CheckCircle2,
   Loader2,
+  PlusCircle,
 } from 'lucide-react';
 import { BotInstanceItem } from '../types';
 
@@ -38,6 +39,10 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
   const [refBonus, setRefBonus] = useState(5000);
   const [isRefActive, setIsRefActive] = useState<boolean>(true);
   const [description, setDescription] = useState('');
+  const [adminContactsList, setAdminContactsList] = useState<any[]>([
+    { name: 'Elbek Muxtorov', username: 'Elbek_Muxtorovv', phone: '998943489900' },
+    { name: 'Jonibek Ismoilov', username: 'JONIBEKISMOILOV', phone: '998990652651' },
+  ]);
 
   const [lookupQuery, setLookupQuery] = useState<string>('');
   const [isLookingUp, setIsLookingUp] = useState<boolean>(false);
@@ -56,6 +61,26 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
       setRefBonus(bot.refBonus || 5000);
       setIsRefActive(bot.isRefActive !== false);
       setDescription(bot.description || '');
+      
+      // Parse adminContact JSON or format
+      if (bot.adminContact) {
+        try {
+          const parsed = JSON.parse(bot.adminContact);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setAdminContactsList(parsed);
+          } else {
+            setAdminContactsList([{ name: '', username: bot.adminContact, phone: '' }]);
+          }
+        } catch {
+          setAdminContactsList([{ name: '', username: bot.adminContact, phone: '' }]);
+        }
+      } else {
+        setAdminContactsList([
+          { name: 'Elbek Muxtorov', username: 'Elbek_Muxtorovv', phone: '998943489900' },
+          { name: 'Jonibek Ismoilov', username: 'JONIBEKISMOILOV', phone: '998990652651' },
+        ]);
+      }
+
       setLookupQuery(bot.mahallaId || '');
       setLookupResult(null);
       setLookupError('');
@@ -103,6 +128,7 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanContacts = adminContactsList.filter((c) => c.name?.trim() || c.username?.trim() || c.phone?.trim());
     onSave(bot.id, {
       name,
       token,
@@ -114,6 +140,7 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
       refBonus: Number(refBonus),
       isRefActive,
       description,
+      adminContact: cleanContacts.length > 0 ? JSON.stringify(cleanContacts) : undefined,
     });
   };
 
@@ -278,6 +305,79 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
               placeholder="Masalan: Bog'cha ta'miri loyihasi..."
               className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 placeholder-slate-400 dark:placeholder-slate-600 resize-none"
             />
+          </div>
+
+          {/* 👥 Dynamic Multiple Admin Contacts */}
+          <div className="space-y-2 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between">
+              <label className="block text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Mas'ul Adminlar / Kontaktlar (2-3 ta admin)</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setAdminContactsList([...adminContactsList, { name: '', username: '', phone: '' }]);
+                }}
+                className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+              >
+                <PlusCircle className="w-3 h-3" />
+                <span>Admin qo'shish</span>
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {adminContactsList.map((contact: any, index: number) => (
+                <div key={index} className="flex items-center gap-2 bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <input
+                    type="text"
+                    placeholder="Ism (masalan: Elbek)"
+                    value={contact.name || ''}
+                    onChange={(e) => {
+                      const list = [...adminContactsList];
+                      list[index] = { ...list[index], name: e.target.value };
+                      setAdminContactsList(list);
+                    }}
+                    className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white"
+                  />
+                  <input
+                    type="text"
+                    placeholder="@username"
+                    value={contact.username || ''}
+                    onChange={(e) => {
+                      const list = [...adminContactsList];
+                      list[index] = { ...list[index], username: e.target.value };
+                      setAdminContactsList(list);
+                    }}
+                    className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white font-mono text-[11px]"
+                  />
+                  <input
+                    type="text"
+                    placeholder="998901234567"
+                    value={contact.phone || ''}
+                    onChange={(e) => {
+                      const list = [...adminContactsList];
+                      list[index] = { ...list[index], phone: e.target.value };
+                      setAdminContactsList(list);
+                    }}
+                    className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white font-mono text-[11px]"
+                  />
+                  {adminContactsList.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const list = [...adminContactsList];
+                        list.splice(index, 1);
+                        setAdminContactsList(list);
+                      }}
+                      className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Ovoz Limiti & Mukofotlar */}

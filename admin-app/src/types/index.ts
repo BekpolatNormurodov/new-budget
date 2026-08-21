@@ -28,6 +28,7 @@ export interface BotInstanceItem {
   status: string;
   avatarUrl?: string;
   description?: string;
+  adminContact?: string;
   isLiveRunning?: boolean;
   createdAt?: string;
 }

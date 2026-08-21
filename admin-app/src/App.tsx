@@ -109,6 +109,11 @@ export function App() {
     voteReward: 30000,
     refBonus: 5000,
     avatarImage: undefined as string | undefined,
+    adminContact: '' as string | undefined,
+    adminContactsList: [
+      { name: 'Elbek Muxtorov', username: 'Elbek_Muxtorovv', phone: '998943489900' },
+      { name: 'Jonibek Ismoilov', username: 'JONIBEKISMOILOV', phone: '998990652651' },
+    ] as any[],
   });
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -280,10 +285,17 @@ export function App() {
     }
 
     try {
+      const payload = { ...newBot };
+      if (payload.adminContactsList && Array.isArray(payload.adminContactsList)) {
+        const clean = payload.adminContactsList.filter((c: any) => c.name?.trim() || c.username?.trim() || c.phone?.trim());
+        payload.adminContact = clean.length > 0 ? JSON.stringify(clean) : undefined;
+        delete payload.adminContactsList;
+      }
+
       const res = await fetch('/api/admin/bots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(newBot),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
       showToast(`✅ "${newBot.name || newBot.mahallaName}" muvaffaqiyatli ishga tushirildi!`, 'success');
@@ -298,6 +310,11 @@ export function App() {
         voteReward: 30000,
         refBonus: 5000,
         avatarImage: undefined,
+        adminContact: '',
+        adminContactsList: [
+          { name: 'Elbek Muxtorov', username: 'Elbek_Muxtorovv', phone: '998943489900' },
+          { name: 'Jonibek Ismoilov', username: 'JONIBEKISMOILOV', phone: '998990652651' },
+        ],
       });
       loadAllData();
     } catch (err) {

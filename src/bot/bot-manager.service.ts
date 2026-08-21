@@ -834,18 +834,41 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         const freshBot = await this.prisma.botInstance.findUnique({ where: { id: botRecord.id } });
         const contact = freshBot?.adminContact || botRecord.adminContact;
 
-        if (!contact) {
-          return ctx.reply(
-            `📞 <b>Admin bilan bog'lanish:</b>\n\n` +
-            `📞 <b>+998 99 065 26 51</b> — @JONIBEKISMOILOV (Jonibek)\n` +
-            `📞 <b>+998 94 348 99 00</b> — @Elbek_Muxtorovv (Elbek)\n\n` +
-            `Savollaringiz bo'lsa, yuqoridagi adminlarga murojaat qiling.`,
-            { parse_mode: 'HTML' }
-          );
+        let contactText = '';
+        if (contact) {
+          try {
+            const parsed = JSON.parse(contact);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const lines = parsed.map((adm: any) => {
+                const parts: string[] = [];
+                if (adm.name) parts.push(`👤 <b>${adm.name}</b>`);
+                if (adm.username) {
+                  const cleanU = adm.username.replace(/^@/, '');
+                  parts.push(`📲 @${cleanU}`);
+                }
+                if (adm.phone) {
+                  const cleanP = adm.phone.replace(/[^0-9]/g, '');
+                  parts.push(`📞 +${cleanP}`);
+                }
+                return parts.join(' — ');
+              });
+              contactText = lines.join('\n\n');
+            } else {
+              contactText = contact;
+            }
+          } catch {
+            contactText = contact;
+          }
+        }
+
+        if (!contactText) {
+          contactText =
+            `👤 <b>Elbek Muxtorov</b> — 📲 @Elbek_Muxtorovv — 📞 +998943489900\n\n` +
+            `👤 <b>Jonibek Ismoilov</b> — 📲 @JONIBEKISMOILOV — 📞 +998990652651`;
         }
 
         await ctx.reply(
-          `📞 <b>Admin bilan bog'lanish:</b>\n\n${contact}\n\nIstalgan savolingiz bo'lsa murojaat qilishingiz mumkin!`,
+          `📞 <b>Mas'ul Administratorlar bilan bog'lanish:</b>\n\n${contactText}\n\nIstalgan savolingiz yoki taklifingiz bo'lsa bemalol murojaat qilishingiz mumkin!`,
           { parse_mode: 'HTML' }
         );
       } catch (err) {
