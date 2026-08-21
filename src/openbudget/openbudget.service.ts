@@ -325,25 +325,49 @@ export class OpenBudgetService {
                 // Realistik insoniy tanaffus (250-400ms)
                 await new Promise((r) => setTimeout(r, 250 + Math.random() * 150));
 
-                const otpRes = await client.post(
-                  'https://new.openbudget.uz/api/v1/login/send-otp',
+                let otpRes = await client.post(
+                  'https://new.openbudget.uz/api/v2/vote/send-otp',
                   {
                     phone_number: clean12,
                     captcha_key: key,
                     captcha_result: solved.answer,
+                    initiative_id: initiative?.initiativeUuid || initiative?.openBudgetId,
                   },
                   {
                     headers: {
                       'Content-Type': 'application/json',
-                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                      'Origin': 'https://new.openbudget.uz',
+                      'Referer': 'https://new.openbudget.uz/',
                     },
                     validateStatus: () => true,
                     timeout: 8000,
                   },
                 );
 
-                if (otpRes.status === 200 && otpRes.data?.otpKey) {
-                  otpKey = otpRes.data.otpKey;
+                if (otpRes.status === 404 || otpRes.status === 400) {
+                  otpRes = await client.post(
+                    'https://new.openbudget.uz/api/v1/login/send-otp',
+                    {
+                      phone_number: clean12,
+                      captcha_key: key,
+                      captcha_result: solved.answer,
+                    },
+                    {
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                        'Origin': 'https://new.openbudget.uz',
+                        'Referer': 'https://new.openbudget.uz/',
+                      },
+                      validateStatus: () => true,
+                      timeout: 8000,
+                    },
+                  );
+                }
+
+                if ((otpRes.status === 200 || otpRes.status === 201) && (otpRes.data?.otpKey || otpRes.data?.key || otpRes.data?.token)) {
+                  otpKey = otpRes.data?.otpKey || otpRes.data?.key || otpRes.data?.token;
                   this.logger.log(`✅ [Real OpenBudget API] SMS yuborildi (+${clean12}) | otpKey: ${otpKey}`);
                   break;
                 } else if (otpRes.data?.message) {
