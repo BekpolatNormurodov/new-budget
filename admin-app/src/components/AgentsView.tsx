@@ -9,16 +9,13 @@ import {
   CheckCircle2,
   Trash2,
   Receipt,
-  Upload,
-  Phone,
-  Send,
-  UserCheck,
+  Edit,
+  ChevronDown,
   Building2,
-  Clock,
-  TrendingUp,
-  Share2,
-  Eye,
   Sparkles,
+  Phone,
+  UserCheck,
+  TrendingUp,
 } from 'lucide-react';
 import { AgentItem, BotInstanceItem } from '../types';
 import { formatSum } from '../utils/format';
@@ -29,6 +26,7 @@ interface AgentsViewProps {
   bots: BotInstanceItem[];
   onRefresh: () => void;
   onAddAgent: (data: any) => Promise<void>;
+  onUpdateAgent: (id: number, data: any) => Promise<void>;
   onPayoutAgent: (id: number, amount: number, receiptImageBase64?: string) => Promise<void>;
   onDeleteAgent: (id: number) => Promise<void>;
 }
@@ -38,18 +36,19 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   bots,
   onRefresh,
   onAddAgent,
+  onUpdateAgent,
   onPayoutAgent,
   onDeleteAgent,
 }) => {
   const [search, setSearch] = useState('');
   const [selectedBotId, setSelectedBotId] = useState<string>('ALL');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<AgentItem | null>(null);
   const [payoutAgentItem, setPayoutAgentItem] = useState<AgentItem | null>(null);
   const [payoutAmount, setPayoutAmount] = useState<string>('');
   const [payoutReceiptBase64, setPayoutReceiptBase64] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  const [previewAgent, setPreviewAgent] = useState<AgentItem | null>(null);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -58,6 +57,15 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   // New Agent Form state
   const [newAgent, setNewAgent] = useState({
     botInstanceId: bots[0]?.id || 1,
+    name: '',
+    phone: '',
+    username: '',
+    telegramId: '',
+    rewardPerVote: 5000,
+  });
+
+  // Edit Agent Form state
+  const [editFormData, setEditFormData] = useState({
     name: '',
     phone: '',
     username: '',
@@ -101,7 +109,6 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   const totalPages = Math.ceil(filteredAgents.length / pageSize) || 1;
 
   const handleCopyLink = (link: string, code: string) => {
-    // 100% Reliable copy to clipboard across all browsers / HTTP/HTTPS
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(link).then(() => {
         setCopiedCode(code);
@@ -155,6 +162,33 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     }
   };
 
+  const openEditModal = (agent: AgentItem) => {
+    setEditingAgent(agent);
+    setEditFormData({
+      name: agent.name || '',
+      phone: agent.phone || '',
+      username: agent.telegramUser || '',
+      telegramId: agent.telegramId || '',
+      rewardPerVote: agent.rewardPerVote || 5000,
+    });
+  };
+
+  const handleEditAgentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAgent) return;
+    if (!editFormData.name.trim()) return alert('Agent ismi kiritilishi shart!');
+    setIsSubmitting(true);
+    try {
+      await onUpdateAgent(editingAgent.id, {
+        ...editFormData,
+        rewardPerVote: Number(editFormData.rewardPerVote) || 5000,
+      });
+      setEditingAgent(null);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handlePayoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!payoutAgentItem) return;
@@ -182,7 +216,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Top Controls Bar */}
+      {/* Top Controls Bar with Pro UI Dropdown */}
       <div className="p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3 w-full md:w-auto flex-wrap">
           {/* Search Input */}
@@ -193,28 +227,31 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
               value={search}
               onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
               placeholder="Agent ismi, referral kod, telefon..."
-              className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 shadow-sm"
+              className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 shadow-sm transition"
             />
           </div>
 
-          {/* Bot/Mahalla Filter */}
-          <select
-            value={selectedBotId}
-            onChange={(e) => { setSelectedBotId(e.target.value); setCurrentPage(1); }}
-            className="bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 shadow-sm"
-          >
-            <option value="ALL">Barcha Botlar & Mahallalar</option>
-            {bots.map((b) => (
-              <option key={b.id} value={String(b.id)}>
-                {b.mahallaName} ({b.name})
-              </option>
-            ))}
-          </select>
+          {/* Pro UI Dropdown for Bot/Mahalla Filter */}
+          <div className="relative">
+            <select
+              value={selectedBotId}
+              onChange={(e) => { setSelectedBotId(e.target.value); setCurrentPage(1); }}
+              className="appearance-none bg-slate-100 dark:bg-slate-950 hover:bg-slate-200 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl pl-3.5 pr-8 py-2 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500 shadow-sm cursor-pointer transition"
+            >
+              <option value="ALL">🏛 Barcha Botlar & Mahallalar</option>
+              {bots.map((b) => (
+                <option key={b.id} value={String(b.id)}>
+                  📍 {b.mahallaName} ({b.name})
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-3 pointer-events-none" />
+          </div>
         </div>
 
         <button
           onClick={() => setShowAddModal(true)}
-          className="w-full md:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
+          className="w-full md:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-md cursor-pointer active:scale-95"
         >
           <PlusCircle className="w-4 h-4" />
           <span>Yangi Agent Qo'shish</span>
@@ -262,7 +299,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
                           </span>
                         </div>
                         <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
-                          {agent.telegramUser && <span className="font-medium text-slate-500">@{agent.telegramUser}</span>}
+                          {agent.telegramUser && <span className="font-medium text-indigo-500 dark:text-indigo-400">@{agent.telegramUser}</span>}
                           {agent.phone && <span>+{agent.phone}</span>}
                         </div>
                       </td>
@@ -277,7 +314,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
                         </div>
                       </td>
 
-                      {/* 🔗 IDEAL SMART REFERRAL LINK BOX */}
+                      {/* 🔗 Smart Referral Link Box */}
                       <td className="p-3.5">
                         <div className="flex flex-col gap-1.5 max-w-[280px]">
                           <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-950/90 border border-indigo-200 dark:border-indigo-900/40 rounded-xl p-1 shadow-inner">
@@ -357,26 +394,38 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
                         </span>
                       </td>
 
-                      {/* Actions */}
+                      {/* Actions with EDIT, PAYOUT, ARCHIVE */}
                       <td className="p-3.5 text-center">
                         <div className="flex items-center justify-center gap-1.5">
+                          {/* ✏️ EDIT BUTTON */}
+                          <button
+                            onClick={() => openEditModal(agent)}
+                            className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition cursor-pointer"
+                            title="Tahrirlash"
+                          >
+                            <Edit className="w-3.5 h-3.5 text-indigo-500" />
+                          </button>
+
+                          {/* 💵 PAYOUT BUTTON */}
                           <button
                             onClick={() => {
                               setPayoutAgentItem(agent);
                               setPayoutAmount(String(agent.balance || ''));
                             }}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm cursor-pointer"
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm cursor-pointer"
                             title="To'lov qilish"
                           >
-                            <DollarSign className="w-3.5 h-3.5" />
+                            <DollarSign className="w-3 h-3" />
                             <span>To'lash</span>
                           </button>
+
+                          {/* 🗑 ARCHIVE BUTTON */}
                           <button
                             onClick={() => onDeleteAgent(agent.id)}
                             className="p-1.5 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
-                            title="O'chirish"
+                            title="Arxivlash"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
@@ -402,6 +451,97 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         )}
       </div>
 
+      {/* ✏️ MODAL: Agentni Tahrirlash (Edit Modal) */}
+      {editingAgent && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl animate-in zoom-in-95">
+            <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Edit className="w-4 h-4 text-indigo-500" />
+                <span>Agentni Tahrirlash (#{editingAgent.id})</span>
+              </h3>
+              <button
+                onClick={() => setEditingAgent(null)}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleEditAgentSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Agent Ismi *
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                  required
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Telegram Username
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="username"
+                    value={editFormData.username}
+                    onChange={(e) => setEditFormData({ ...editFormData, username: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-mono text-[11px]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Telefon Raqami
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="998901234567"
+                    value={editFormData.phone}
+                    onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-mono text-[11px]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Har bir tasdiqlangan ovoz uchun Agent haqi (so'm)
+                </label>
+                <input
+                  type="number"
+                  value={editFormData.rewardPerVote}
+                  onChange={(e) => setEditFormData({ ...editFormData, rewardPerVote: Number(e.target.value) })}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold font-mono"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingAgent(null)}
+                  className="px-4 py-2 rounded-xl text-slate-400 hover:bg-slate-800 cursor-pointer"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-md cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Saqlanmoqda...' : 'Saqlash'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* ➕ MODAL: Yangi Agent Qo'shish */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -424,17 +564,20 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Qaysi Bot / Mahalla uchun?
                 </label>
-                <select
-                  value={newAgent.botInstanceId}
-                  onChange={(e) => setNewAgent({ ...newAgent, botInstanceId: Number(e.target.value) })}
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold"
-                >
-                  {bots.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.mahallaName} ({b.name})
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    value={newAgent.botInstanceId}
+                    onChange={(e) => setNewAgent({ ...newAgent, botInstanceId: Number(e.target.value) })}
+                    className="w-full appearance-none bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold pr-8"
+                  >
+                    {bots.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.mahallaName} ({b.name})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
+                </div>
               </div>
 
               <div>

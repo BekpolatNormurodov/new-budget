@@ -191,6 +191,25 @@ export function App() {
     }
   };
 
+  const handleUpdateAgent = async (id: number, data: any) => {
+    try {
+      const res = await fetch(`/api/admin/agents/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Tahrirlashda xatolik');
+      }
+      showToast('✅ Agent ma\'lumotlari yangilandi!', 'success');
+      loadAllData();
+    } catch (e: any) {
+      showToast(e.message || 'Tahrirlashda xatolik', 'error');
+      throw e;
+    }
+  };
+
   const handlePayoutAgent = async (id: number, amount: number, receiptImageBase64?: string) => {
     try {
       const res = await fetch(`/api/admin/agents/${id}/payout`, {
@@ -543,6 +562,7 @@ export function App() {
               bots={bots}
               onRefresh={loadAllData}
               onAddAgent={handleAddAgent}
+              onUpdateAgent={handleUpdateAgent}
               onPayoutAgent={handlePayoutAgent}
               onDeleteAgent={handleDeleteAgent}
             />
