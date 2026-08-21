@@ -393,23 +393,21 @@ export function App() {
 
   const getTabTitle = () => {
     switch (activeTab) {
-      case 'dashboard': return 'Boshqaruv Paneli & Statistika';
       case 'bots': return 'Botlar Menejeri & Mahallalar';
       case 'votes': return 'Ovozlar Ro\'yxati & Tasdiqlash';
       case 'withdrawals': return 'Pul Yechish So\'rovlari';
       case 'users': return 'Foydalanuvchilar Bazasi';
-      case 'health': return '30-Daqiqalik Tizim Monitoringi';
+      case 'health': return '1-Daqiqalik Tizim Monitoringi';
     }
   };
 
   const getTabSubtitle = () => {
     switch (activeTab) {
-      case 'dashboard': return 'Umumiy moliyaviy oqim, ovozlar va mahalla progressi';
       case 'bots': return 'Ko\'p botli orchestrator va mahallalar ovoz yig\'ish rejasi';
       case 'votes': return 'SMS orqali kutilayotgan va tasdiqlangan barcha ovozlar';
       case 'withdrawals': return 'Foydalanuvchilarning pul yechish arizalari va cheklar';
       case 'users': return 'Barcha mijozlar, ularning balansi va referallari';
-      case 'health': return 'OpenBudget API, Captcha solver va proxylar salomatligi';
+      case 'health': return 'OpenBudget API, Captcha solver va 20 ta proxylar salomatligi';
     }
   };
 

@@ -99,7 +99,7 @@ export interface UserItem {
   };
 }
 
-export type TabType = 'dashboard' | 'bots' | 'votes' | 'withdrawals' | 'users' | 'health';
+export type TabType = 'bots' | 'votes' | 'withdrawals' | 'users' | 'health';
 
 export interface HealthReport {
   timestamp: string;
