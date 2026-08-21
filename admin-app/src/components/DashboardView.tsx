@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Vote,
   Wallet,
@@ -16,6 +16,7 @@ import {
   Sparkles,
   DollarSign,
   AlertTriangle,
+  Send,
 } from 'lucide-react';
 import { DashboardStats, BotInstanceItem, VoteItem, WithdrawalItem } from '../types';
 import { formatSum } from '../utils/format';
@@ -35,6 +36,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenApproveWithdrawal,
   onOpenEditBot,
 }) => {
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
+
+  const handleTestMarketingBroadcast = async () => {
+    setIsBroadcasting(true);
+    try {
+      const res = await fetch('/api/admin/broadcast/marketing-trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot: 'TEST' }),
+      });
+      const data = await res.json();
+      alert(`📢 Test Eslatma Xabarnomasi yakunlandi!\n\nJami yuborildi: ${data.sentCount} ta xabar\nBloklangan/Nofaol: ${data.failedCount} ta\nVaqt: ${data.durationMs}ms`);
+    } catch (e) {
+      alert('Xabar yuborishda xatolik yuz berdi.');
+    } finally {
+      setIsBroadcasting(false);
+    }
+  };
+
   if (!stats) return null;
 
   const totalTargetVotes = stats.bots.reduce((acc, b) => acc + (b.targetVotes || 5000), 0) || 5000;
@@ -202,7 +222,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={handleTestMarketingBroadcast}
+            disabled={isBroadcasting}
+            className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            title="Barcha botlardagi foydalanuvchilarga sinov xabarnomasini yuborish"
+          >
+            <Send className="w-3.5 h-3.5" />
+            {isBroadcasting ? 'Yuborilmoqda...' : '📢 Eslatma Yuborish (Test)'}
+          </button>
+
           <button
             onClick={() => onNavigateTab('health')}
             className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold border border-slate-300 dark:border-slate-700 transition-colors cursor-pointer"

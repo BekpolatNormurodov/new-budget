@@ -119,4 +119,10 @@ export class AdminController {
   async triggerHealth() {
     return this.adminService.triggerSystemHealthCheck();
   }
+
+  // Marketing Broadcast Trigger (Test / Manual Trigger)
+  @Post('broadcast/marketing-trigger')
+  async triggerMarketingBroadcast(@Body('slot') slot?: 'MORNING' | 'EVENING' | 'TEST') {
+    return this.adminService.triggerMarketingBroadcast(slot || 'TEST');
+  }
 }

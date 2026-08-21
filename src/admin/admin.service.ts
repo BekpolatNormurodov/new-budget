@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { OpenBudgetService } from '../openbudget/openbudget.service';
 import { BotManagerService } from '../bot/bot-manager.service';
+import { BotMarketingService } from '../bot/bot-marketing.service';
 import { SystemHealthService } from '../health/system-health.service';
 import { ProxyManagerService } from '../proxy/proxy-manager.service';
 import { BOT_MESSAGES, formatSum } from '../bot/bot.constants';
@@ -19,6 +20,7 @@ export class AdminService {
     private readonly walletService: WalletService,
     private readonly openBudgetService: OpenBudgetService,
     private readonly botManagerService: BotManagerService,
+    private readonly botMarketingService: BotMarketingService,
     private readonly systemHealthService: SystemHealthService,
     private readonly proxyManagerService: ProxyManagerService,
     private readonly configService: ConfigService,
@@ -557,5 +559,12 @@ export class AdminService {
     const report = await this.systemHealthService.runPeriodicHealthCheck();
     const proxyStats = this.proxyManagerService.getStats();
     return { success: true, report, proxyStats };
+  }
+
+  /**
+   * Kunlik ertalabki/kechki marketing xabarlarini qo'lda yoki test uchun ishga tushirish
+   */
+  async triggerMarketingBroadcast(slot: 'MORNING' | 'EVENING' | 'TEST' = 'TEST') {
+    return this.botMarketingService.executeBroadcast(slot);
   }
 }

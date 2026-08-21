@@ -240,6 +240,13 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Faol bot obyektini ID bo'yicha olish
+   */
+  public getActiveBot(botId: number) {
+    return this.activeBots.get(botId) || null;
+  }
+
+  /**
    * Botni to'xtatish
    */
   async stopBotInstance(botId: number): Promise<boolean> {
