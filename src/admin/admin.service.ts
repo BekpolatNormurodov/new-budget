@@ -562,9 +562,21 @@ export class AdminService {
   }
 
   /**
-   * Kunlik ertalabki/kechki marketing xabarlarini qo'lda yoki test uchun ishga tushirish
+   * Kunlik ertalabki/kechki marketing xabarlarini qo'lda yoki zudlik bilan ishga tushirish
    */
   async triggerMarketingBroadcast(slot: 'MORNING' | 'EVENING' | 'TEST' = 'TEST') {
     return this.botMarketingService.executeBroadcast(slot);
+  }
+
+  /**
+   * Bannerli va Inline tugmali maxsus Reklama yuborish
+   */
+  async triggerCustomAdBroadcast(params: {
+    text: string;
+    photoBase64OrUrl?: string;
+    buttonText?: string;
+    buttonUrl?: string;
+  }) {
+    return this.botMarketingService.executeCustomAdBroadcast(params);
   }
 }

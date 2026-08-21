@@ -114,14 +114,14 @@ export const BotsView: React.FC<BotsViewProps> = ({
             </button>
           </div>
 
-          {/* Marketing Broadcast Button */}
+          {/* Marketing & Ad Broadcast Button */}
           <button
             onClick={() => setIsBroadcastModalOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-bold rounded-xl shadow-lg shadow-orange-500/20 transition-all active:scale-95 cursor-pointer"
-            title="Barcha bot foydalanuvchilariga eslatma xabari yuborish"
+            className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-500 via-orange-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-xs font-bold rounded-xl shadow-lg shadow-orange-500/20 transition-all active:scale-95 cursor-pointer"
+            title="Barcha bot foydalanuvchilariga eslatma yoki reklama xabari yuborish"
           >
             <Send className="w-3.5 h-3.5" />
-            <span>📢 Eslatma Yuborish</span>
+            <span>📢 Eslatma & Reklama</span>
           </button>
 
           <button

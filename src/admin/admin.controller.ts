@@ -120,9 +120,17 @@ export class AdminController {
     return this.adminService.triggerSystemHealthCheck();
   }
 
-  // Marketing Broadcast Trigger (Test / Manual Trigger)
+  // Marketing Broadcast Trigger (Avtomatik Eslatma)
   @Post('broadcast/marketing-trigger')
   async triggerMarketingBroadcast(@Body('slot') slot?: 'MORNING' | 'EVENING' | 'TEST') {
-    return this.adminService.triggerMarketingBroadcast(slot || 'TEST');
+    return this.adminService.triggerMarketingBroadcast(slot || 'MORNING');
+  }
+
+  // Custom Ad Broadcast (Banner, Matn, Formatlash, Inline Tugma)
+  @Post('broadcast/custom-ad')
+  async triggerCustomAdBroadcast(
+    @Body() body: { text: string; photoBase64OrUrl?: string; buttonText?: string; buttonUrl?: string },
+  ) {
+    return this.adminService.triggerCustomAdBroadcast(body);
   }
 }

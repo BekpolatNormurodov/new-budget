@@ -106,16 +106,23 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
       })
     );
 
+    if (this.botManager.getAllActiveBots().length === 0) {
+      await this.botManager.launchAllActiveBots();
+    }
+
     const unfinishedBot = botStatsList.find((b) => !b.isTargetReached);
     const firstActiveBot = this.botManager.getFirstActiveBot();
 
-    // 2. Bazadagi barcha haqiqiy foydalanuvchilarni olish (isBanned: false va telegramId !== '0')
-    const allUsers = await this.prisma.user.findMany({
-      where: {
-        isBanned: false,
-        telegramId: { notIn: ['0', ''] },
-      },
+    // 2. Bazadagi barcha haqiqiy foydalanuvchilarni olish
+    const rawUsers = await this.prisma.user.findMany({
+      orderBy: { id: 'asc' },
     });
+
+    const allUsers = rawUsers.filter(
+      (u) => !u.isBanned && u.telegramId && u.telegramId !== '0' && u.telegramId.trim() !== ''
+    );
+
+    this.logger.log(`📢 [Marketing Broadcast]: Jami ${rawUsers.length} ta yozuvdan ${allUsers.length} ta haqiqiy foydalanuvchi tanlab olindi.`);
 
     let totalSent = 0;
     let totalFailed = 0;
@@ -287,5 +294,97 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
     ]);
 
     return { text, keyboard };
+  }
+
+  /**
+   * Reklama va Bannerli maxsus xabar yuborish (Rasm, formatlangan matn va inline tugma bilan)
+   */
+  public async executeCustomAdBroadcast(params: {
+    text: string;
+    photoBase64OrUrl?: string;
+    buttonText?: string;
+    buttonUrl?: string;
+  }): Promise<{
+    sentCount: number;
+    failedCount: number;
+    durationMs: number;
+  }> {
+    const startTime = Date.now();
+    const allUsers = await this.prisma.user.findMany({
+      where: {
+        isBanned: false,
+        telegramId: { notIn: ['0', ''] },
+      },
+    });
+
+    const firstActiveBot = this.botManager.getFirstActiveBot();
+
+    let totalSent = 0;
+    let totalFailed = 0;
+
+    // Inline tugma
+    let inlineKeyboard: any = undefined;
+    if (params.buttonText && params.buttonUrl) {
+      inlineKeyboard = Markup.inlineKeyboard([
+        [Markup.button.url(params.buttonText.trim(), params.buttonUrl.trim())],
+      ]);
+    }
+
+    // Rasm fayli yoki URL
+    let photoBufferOrUrl: any = undefined;
+    if (params.photoBase64OrUrl) {
+      if (params.photoBase64OrUrl.startsWith('data:image')) {
+        const base64Data = params.photoBase64OrUrl.replace(/^data:image\/\w+;base64,/, '');
+        photoBufferOrUrl = { source: Buffer.from(base64Data, 'base64') };
+      } else {
+        photoBufferOrUrl = params.photoBase64OrUrl;
+      }
+    }
+
+    for (const user of allUsers) {
+      let botToUse: any = user.botInstanceId ? this.botManager.getActiveBot(user.botInstanceId) : null;
+      if (!botToUse) botToUse = firstActiveBot;
+
+      if (!botToUse) {
+        totalFailed++;
+        continue;
+      }
+
+      try {
+        if (photoBufferOrUrl) {
+          await botToUse.bot.telegram.sendPhoto(user.telegramId, photoBufferOrUrl, {
+            caption: params.text,
+            parse_mode: 'HTML',
+            ...(inlineKeyboard || {}),
+          });
+        } else {
+          await botToUse.bot.telegram.sendMessage(user.telegramId, params.text, {
+            parse_mode: 'HTML',
+            ...(inlineKeyboard || {}),
+          });
+        }
+        totalSent++;
+      } catch (err: any) {
+        totalFailed++;
+        if (err.description?.includes('blocked') || err.description?.includes('deactivated')) {
+          await this.prisma.user.update({
+            where: { id: user.id },
+            data: { isBanned: true },
+          }).catch(() => {});
+        }
+      }
+
+      // Telegram Flood Limit: 35ms oralig'i
+      await new Promise((r) => setTimeout(r, 35));
+    }
+
+    const durationMs = Date.now() - startTime;
+    this.logger.log(`📢 [Custom Ad Broadcast]: Jami ${allUsers.length} foydalanuvchidan ${totalSent} tasiga reklama yetkazildi (${totalFailed} ta xato, ${durationMs}ms).`);
+
+    return {
+      sentCount: totalSent,
+      failedCount: totalFailed,
+      durationMs,
+    };
   }
 }
