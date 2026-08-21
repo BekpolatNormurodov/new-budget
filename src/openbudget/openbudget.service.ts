@@ -746,4 +746,30 @@ export class OpenBudgetService {
       return { success: false, error: err.message };
     }
   }
+
+  /**
+   * 🗳 Foydalanuvchi qaysi loyihalarga ovoz berganini rasmiy tekshirish (JWT Token orqali)
+   */
+  async getUserVotedInitiatives(accessToken: string): Promise<{ success: boolean; initiatives?: any[]; error?: string }> {
+    try {
+      const cleanToken = accessToken.replace(/^bearer\s+/i, '').trim();
+      const res = await this.proxyManager.requestWithRetry(async (client) => {
+        return client.get('https://new.openbudget.uz/api/v1/users/initiatives', {
+          headers: {
+            Authorization: cleanToken,
+            hl: 'uz',
+          },
+          timeout: 8000,
+        });
+      });
+
+      if (res?.data) {
+        const list = Array.isArray(res.data) ? res.data : res.data.items || res.data.data || [];
+        return { success: true, initiatives: list };
+      }
+      return { success: true, initiatives: [] };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
 }
