@@ -220,9 +220,9 @@ async function main() {
 
       const token = verifyRes.data.access_token || verifyRes.data.token;
       if (token) {
-        console.log('\n👤 Shaxsiy profil ma\'lumotlari tekshirilmoqda...');
+        console.log('\n👤 Shaxsiy profil ma\'lumotlari olinmoqda...');
         const cleanToken = token.replace(/^bearer\s+/i, '').trim();
-        const meRes = await axios.get('https://new.openbudget.uz/api/v1/users/me', {
+        const meRes = await axios.get('https://new.openbudget.uz/api/v1/users/profile', {
           headers: {
             Authorization: cleanToken,
             hl: 'uz',
@@ -231,7 +231,7 @@ async function main() {
           validateStatus: () => true,
           timeout: 8000,
         });
-        console.log('📋 Profil Javobi:', JSON.stringify(meRes.data, null, 2));
+        console.log('📋 Profil Ma\'lumotlari:', JSON.stringify(meRes.data, null, 2));
       }
     } else {
       console.log('\n❌ Tasdiqlashda xatolik:', JSON.stringify(verifyRes.data, null, 2));

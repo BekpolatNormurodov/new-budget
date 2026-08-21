@@ -729,8 +729,11 @@ export class OpenBudgetService {
     try {
       const cleanToken = accessToken.replace(/^bearer\s+/i, '').trim();
       const res = await this.proxyManager.requestWithRetry(async (client) => {
-        return client.get('https://new.openbudget.uz/api/v1/users/me', {
-          headers: { Authorization: cleanToken },
+        return client.get('https://new.openbudget.uz/api/v1/users/profile', {
+          headers: {
+            Authorization: cleanToken,
+            hl: 'uz',
+          },
           timeout: 8000,
         });
       });
