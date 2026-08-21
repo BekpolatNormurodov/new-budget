@@ -119,16 +119,16 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
 
       const { width, height } = info;
 
-      // 1. Tashqi oq fonni flood fill bilan belgilash
+      // 1. Tashqi oq fonni flood fill bilan belgilash (Threshold: 150)
       const bg = Array.from({ length: height }, () => Array(width).fill(false));
       const q: [number, number][] = [];
       for (let x = 0; x < width; x++) {
-        if (data[x] > 180) { q.push([0, x]); bg[0][x] = true; }
-        if (data[(height - 1) * width + x] > 180) { q.push([height - 1, x]); bg[height - 1][x] = true; }
+        if (data[x] > 150) { q.push([0, x]); bg[0][x] = true; }
+        if (data[(height - 1) * width + x] > 150) { q.push([height - 1, x]); bg[height - 1][x] = true; }
       }
       for (let y = 0; y < height; y++) {
-        if (data[y * width] > 180 && !bg[y][0]) { q.push([y, 0]); bg[y][0] = true; }
-        if (data[y * width + width - 1] > 180 && !bg[y][width - 1]) { q.push([y, width - 1]); bg[y][width - 1] = true; }
+        if (data[y * width] > 150 && !bg[y][0]) { q.push([y, 0]); bg[y][0] = true; }
+        if (data[y * width + width - 1] > 150 && !bg[y][width - 1]) { q.push([y, width - 1]); bg[y][width - 1] = true; }
       }
 
       while (q.length > 0) {
@@ -136,7 +136,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         for (const [dy, dx] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
           const ny = cy + dy;
           const nx = cx + dx;
-          if (ny >= 0 && ny < height && nx >= 0 && nx < width && !bg[ny][nx] && data[ny * width + nx] > 160) {
+          if (ny >= 0 && ny < height && nx >= 0 && nx < width && !bg[ny][nx] && data[ny * width + nx] > 150) {
             bg[ny][nx] = true;
             q.push([ny, nx]);
           }
@@ -147,7 +147,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
       const isBlack = Array.from({ length: height }, () => Array(width).fill(false));
       for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
-          if (!bg[y][x] && data[y * width + x] < 100) isBlack[y][x] = true;
+          if (!bg[y][x] && data[y * width + x] < 120) isBlack[y][x] = true;
         }
       }
 
@@ -179,7 +179,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
               }
             }
 
-            if (count >= 50 && (maxX - minX + 1) >= 8 && (maxY - minY + 1) >= 8) {
+            if (count >= 25 && (maxX - minX + 1) >= 5) {
               circles.push({ minX, maxX, minY, maxY, count });
             }
           }
@@ -191,7 +191,13 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
       const results: string[] = [];
       for (let i = 0; i < circles.length; i++) {
         const c = circles[i];
-        const border = 3;
+        const bw = c.maxX - c.minX + 1, bh = c.maxY - c.minY + 1;
+        if (bw > bh * 1.5 || bh <= 12) {
+          results.push('-');
+          continue;
+        }
+
+        const border = 1;
         const innerPoints: Array<{ y: number; x: number }> = [];
 
         for (let y = c.minY + border; y <= c.maxY - border; y++) {
@@ -202,7 +208,10 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
           }
         }
 
-        if (innerPoints.length < 8) continue;
+        if (innerPoints.length < 8) {
+          if (bw > bh * 1.2 || bh <= 14) results.push('-');
+          continue;
+        }
 
         let minX = width, maxX = 0, minY = height, maxY = 0;
         for (const p of innerPoints) {
@@ -226,7 +235,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         }
 
         const png = await sharp(canvas, { raw: { width: cw, height: ch, channels: 1 }, failOn: 'none' })
-          .resize(cw * 5, ch * 5, { kernel: 'nearest' })
+          .resize(cw * 4, ch * 4, { kernel: 'nearest' })
           .extend({ top: 35, bottom: 35, left: 35, right: 35, background: { r: 255, g: 255, b: 255 } })
           .resize(100, 100, { fit: 'contain', background: { r: 255, g: 255, b: 255 } })
           .withMetadata({ density: 300 })
@@ -236,10 +245,9 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         const ret = await worker.recognize(png);
         let txt = ret.data.text.trim().replace(/[^0-9\+\-\*lI|OQo]/g, '');
         txt = txt.replace(/[lI|]/g, '1').replace(/[OQo]/g, '0');
-        // Oxirgi tenglik (=) belgisini tashlab yuborish: agar bu oxirgi circle bo'lsa va '-' bo'lsa yoki results ichida allaqachon amal bo'lsa
+        // Oxirgi tenglik (=) belgisini tashlab yuborish
         const hasExistingOp = results.some(r => r === '+' || r === '-' || r === '*');
         if (i === circles.length - 1 && hasExistingOp && (txt === '-' || txt === '1')) {
-          // Bu captcha oxiridagi '=' belgisi
           continue;
         }
         if (txt) results.push(txt);
