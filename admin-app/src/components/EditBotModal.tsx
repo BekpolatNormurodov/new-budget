@@ -103,6 +103,35 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
     setLookupError('');
     setLookupResult(null);
 
+    // 1. Agar to'g'ridan-to'g'ri 12 xonali ID bo'lsa -> Brauzerdan to'g'ridan-to'g'ri OpenBudget API ga so'rov (0.05s)
+    if (/^\d{12}$/.test(q)) {
+      try {
+        const directPublicRes = await fetch(`https://new.openbudget.uz/api/v1/initiatives/public/${q}`);
+        if (directPublicRes.ok) {
+          const pubData = await directPublicRes.json();
+          if (pubData && pubData.id) {
+            const detailRes = await fetch(`https://new.openbudget.uz/api/v1/initiatives/${pubData.id}`);
+            if (detailRes.ok) {
+              const d = await detailRes.json();
+              const fullMahallaName = d.quarter_title ? `${d.quarter_title} MFY (${d.district_title || ''})` : (d.title || 'Mahalla');
+              const url = `https://new.openbudget.uz/uz/initiative-budget/active-initiatives/${d.board_id || 55}/${d.id}`;
+
+              setLookupResult(d);
+              setMahallaName(fullMahallaName);
+              setMahallaId(d.public_id || q);
+              setOpenBudgetUrl(url);
+              if (d.description) setDescription(d.description);
+              if (d.granted_amount) setGrantedAmount(d.granted_amount);
+              setIsLookingUp(false);
+              return;
+            }
+          }
+        }
+      } catch (clientErr) {
+        console.warn('Direct client fetch fallback to backend lookup:', clientErr);
+      }
+    }
+
     try {
       const res = await fetch('/api/admin/bots/lookup-mahalla', {
         method: 'POST',

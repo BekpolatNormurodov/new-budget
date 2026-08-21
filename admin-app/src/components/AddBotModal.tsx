@@ -42,7 +42,7 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Real OpenBudget Live Search (Google-like Search + Pagination)
+  // Real OpenBudget Live Search (Google-like Search + Pagination + Client Direct Fallback)
   const handleSearch = async (pageToFetch: number = 1) => {
     const q = searchQuery.trim();
     if (!q) {
@@ -54,6 +54,45 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
     setSearchError('');
     setSearchPage(pageToFetch);
 
+    // 1. Agar to'g'ridan-to'g'ri 12 xonali ID bo'lsa -> Brauzerdan to'g'ridan-to'g'ri OpenBudget API ga so'rov yuborish (0.05s tezlik)
+    if (/^\d{12}$/.test(q)) {
+      try {
+        const directPublicRes = await fetch(`https://new.openbudget.uz/api/v1/initiatives/public/${q}`);
+        if (directPublicRes.ok) {
+          const pubData = await directPublicRes.json();
+          if (pubData && pubData.id) {
+            const detailRes = await fetch(`https://new.openbudget.uz/api/v1/initiatives/${pubData.id}`);
+            if (detailRes.ok) {
+              const d = await detailRes.json();
+              const formattedItem = {
+                id: d.id,
+                publicId: d.public_id || q,
+                mahallaName: d.quarter_title ? `${d.quarter_title} MFY` : (d.title || 'Mahalla'),
+                quarterTitle: d.quarter_title,
+                region: d.region_title,
+                district: d.district_title,
+                boardId: String(d.board_id || '55'),
+                currentVotes: d.vote_count || 0,
+                targetVotes: 5000,
+                openBudgetUrl: `https://new.openbudget.uz/uz/initiative-budget/active-initiatives/${d.board_id || 55}/${d.id}`,
+                description: d.description || '',
+                grantedAmount: d.granted_amount || 0,
+                stage: d.stage || 'PASSED',
+              };
+
+              setSearchResults([formattedItem]);
+              setTotalResults(1);
+              setIsSearching(false);
+              return;
+            }
+          }
+        }
+      } catch (clientErr) {
+        console.warn('Direct client fetch fallback to backend search:', clientErr);
+      }
+    }
+
+    // 2. Backend Search orqali qidirish
     try {
       const res = await fetch(`/api/admin/bots/search-initiatives?query=${encodeURIComponent(q)}&page=${pageToFetch}`);
       const data = await res.json();
