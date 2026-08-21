@@ -850,17 +850,74 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
                   </div>
                 </div>
 
-                {/* Reminder Preview Card */}
-                <div className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 space-y-2">
-                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-                    Avtomatik xabar mazmuni:
-                  </span>
-                  <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-mono whitespace-pre-line">
-                    {selectedSlot === 'MORNING'
-                      ? '🌅 Xayrli tong, aziz yurtdosh!\n\n🔥 Open Budgetda ovoz berib, 30 000 so\'m mukofot oling!\n📍 Mahalla: [Mahalla Nomi]\n💰 To\'lov: 30 000 so\'m (Darhol kartaga / paynetga)\n\nHoziroq "🗳 Ovoz berish" tugmasini bosing 👇'
-                      : '🌆 Xayrli kech! Bugungi imkoniyatni boy bermang!\n\n⚡️ [Mahalla Nomi] bo\'yicha ovoz berish davom etmoqda!\n💰 Ovoz mukofoti: 30 000 so\'m\n\nOvoz berish uchun pastdagi tugmani bosing 👇'}
-                  </p>
-                </div>
+                {/* Dynamic Mahalla & Reward Info Card */}
+                {(() => {
+                  const targetBot = bots.find((b) => String(b.id) === String(selectedBotTarget));
+                  const mahallaName = targetBot ? targetBot.mahallaName : "Foydalanuvchining o'z mahallasi";
+                  const rewardStr = targetBot ? (targetBot.voteReward || 30000).toLocaleString('uz-UZ') + " so'm" : "30 000 so'm";
+
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <MessageSquare className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>Telegramdagi Jonli Ko'rinishi (Dinamik Eslatma):</span>
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                          {targetBot ? `📍 ${mahallaName}` : '🌐 Barcha Mahallalar'}
+                        </span>
+                      </div>
+
+                      {/* Telegram Message Bubble */}
+                      <div className="p-3.5 rounded-3xl bg-[#73899c]/20 dark:bg-[#0e1621] border border-slate-200 dark:border-slate-800 shadow-inner max-w-md mx-auto">
+                        <div className="p-4 rounded-2xl bg-white dark:bg-[#182533] border border-slate-200/60 dark:border-slate-700/50 shadow-md space-y-3">
+                          {selectedSlot === 'MORNING' ? (
+                            <div className="text-xs leading-relaxed text-slate-900 dark:text-slate-100 space-y-2">
+                              <p className="font-bold text-amber-600 dark:text-amber-400">🌅 Xayrli tong, aziz yurtdosh!</p>
+                              <p>🔥 <b>Open Budgetda ovoz berib, qo'shimcha daromad oling!</b></p>
+                              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/70 border border-slate-200/60 dark:border-slate-800 text-[11px] space-y-1">
+                                <p>📍 Mahalla: <b>{mahallaName}</b></p>
+                                <p>💰 Har bir ovoz uchun to'lov: <b className="text-emerald-600 dark:text-emerald-400">{rewardStr}</b> (Darhol kartaga / paynetga)</p>
+                              </div>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400">👥 Oila a'zolaringiz va yaqinlaringiz raqamlaridan ham ovoz berib pul ishlashingiz mumkin!</p>
+                              <p>Hoziroq "🗳 Ovoz berish" tugmasini bosing va o'z mukofotingizni oling 👇</p>
+                            </div>
+                          ) : (
+                            <div className="text-xs leading-relaxed text-slate-900 dark:text-slate-100 space-y-2">
+                              <p className="font-bold text-purple-600 dark:text-purple-400">🌆 Xayrli kech! Bugungi imkoniyatni qo'ldan boy bermang!</p>
+                              <p>⚡️ <b>{mahallaName}</b> bo'yicha ovoz berish jarayoni davom etmoqda!</p>
+                              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/70 border border-slate-200/60 dark:border-slate-800 text-[11px] space-y-1">
+                                <p>📍 Mahalla: <b>{mahallaName}</b></p>
+                                <p>💰 Ovoz mukofoti: <b className="text-emerald-600 dark:text-emerald-400">{rewardStr}</b></p>
+                              </div>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400">👥 Yaqinlaringiz nomidagi raqamlardan ham ovoz berib, balansingizni to'ldiring!</p>
+                              <p>Ovoz berish uchun pastdagi tugmani bosing 👇</p>
+                            </div>
+                          )}
+
+                          {/* Time Stamp */}
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {selectedSlot === 'MORNING' ? '09:00' : '17:00'} ✓✓
+                            </span>
+                          </div>
+
+                          {/* Action Buttons in Telegram */}
+                          <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-700/60">
+                            <div className="w-full py-2 px-3 rounded-xl bg-indigo-500/10 dark:bg-indigo-600/25 text-indigo-700 dark:text-indigo-300 font-bold text-xs text-center border border-indigo-500/30 flex items-center justify-center gap-1.5 shadow-sm">
+                              <span>🗳 {selectedSlot === 'MORNING' ? `Ovoz berish (+${rewardStr})` : `Hoziroq ovoz berish (+${rewardStr})`}</span>
+                              <Zap className="w-3 h-3 text-amber-500 shrink-0" />
+                            </div>
+                            <div className="w-full py-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs text-center border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1.5 shadow-sm">
+                              <span>{selectedSlot === 'MORNING' ? '💰 Balansimni tekshirish' : '💳 Pulni yechib olish'}</span>
+                              <Zap className="w-3 h-3 text-indigo-500 shrink-0" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )
           ) : (
