@@ -24,23 +24,41 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
   private poolSize = 4;
 
   async onModuleInit() {
-    // Dynamic pool size based on CPU cores (min 2, max 8) for parallel multi-core OCR
+    // Dynamic pool size based on CPU cores (min 2, max 4) for parallel multi-core OCR
     const cpuCount = os.cpus()?.length || 2;
-    this.poolSize = Math.max(2, Math.min(8, cpuCount));
+    this.poolSize = Math.max(2, Math.min(4, cpuCount));
     this.logger.log(`⚡ Initializing Tesseract OCR Multi-Worker Pool (${this.poolSize} workers across ${cpuCount} CPU cores)...`);
     
-    await this.initWorkerPool();
+    // Asinxron ravishda server yuklanishiga xalaqit bermasdan ishga tushirish
+    setTimeout(() => {
+      this.initWorkerPool().catch((err) => {
+        this.logger.warn(`Tesseract OCR worker pool background init warning: ${err.message}`);
+      });
+    }, 1000);
   }
 
   private async createSingleWorker(): Promise<Worker> {
-    const bestLangPath = path.resolve(__dirname, '../../node_modules/@tesseract.js-data/eng/4.0.0_best_int');
-    const fallbackLangPath = path.resolve(__dirname, '../../node_modules/@tesseract.js-data/eng/4.0.0');
-    const localData = fs.existsSync(bestLangPath) ? bestLangPath : (fs.existsSync(fallbackLangPath) ? fallbackLangPath : undefined);
+    const candidatePaths = [
+      path.resolve(process.cwd(), 'node_modules/@tesseract.js-data/eng/4.0.0_best_int'),
+      path.resolve(process.cwd(), 'node_modules/@tesseract.js-data/eng/4.0.0'),
+      path.resolve(__dirname, '../../node_modules/@tesseract.js-data/eng/4.0.0_best_int'),
+      path.resolve(__dirname, '../node_modules/@tesseract.js-data/eng/4.0.0_best_int'),
+    ];
 
-    const worker = await createWorker('eng', 1, {
-      langPath: localData,
-      gzip: false,
-    });
+    let localData: string | undefined;
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        localData = p;
+        break;
+      }
+    }
+
+    const workerOptions: any = { gzip: false };
+    if (localData) {
+      workerOptions.langPath = localData;
+    }
+
+    const worker = await createWorker('eng', 1, workerOptions);
 
     await worker.setParameters({
       tessedit_char_whitelist: '0123456789+-*/=xXlIoO| ',
@@ -65,16 +83,16 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
       this.availableWorkers = [...initializedWorkers];
       this.isInitialized = true;
       this.logger.log(`✅ Tesseract OCR Multi-Worker Pool ready with ${this.workers.length} active workers in RAM!`);
-    } catch (err) {
-      this.logger.error('Failed to initialize full Tesseract Worker Pool, attempting single worker fallback...', err);
+    } catch (err: any) {
+      this.logger.warn(`Full Tesseract Pool initialization skipped (${err.message}). Single fallback worker will be created on demand.`);
       try {
         const fallback = await this.createSingleWorker();
         this.workers = [fallback];
         this.availableWorkers = [fallback];
         this.isInitialized = true;
         this.logger.log('✅ Fallback single worker initialized');
-      } catch (e2) {
-        this.logger.error('Fallback worker creation also failed', e2);
+      } catch (e2: any) {
+        this.logger.warn(`Single fallback worker creation deferred: ${e2.message}`);
       }
     } finally {
       this.isInitializing = false;
