@@ -576,6 +576,7 @@ export class AdminService {
     photoBase64OrUrl?: string;
     buttonText?: string;
     buttonUrl?: string;
+    buttons?: Array<{ text: string; url: string }>;
   }) {
     return this.botMarketingService.executeCustomAdBroadcast(params);
   }

@@ -292,6 +292,7 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
     photoBase64OrUrl?: string;
     buttonText?: string;
     buttonUrl?: string;
+    buttons?: Array<{ text: string; url: string }>;
   }): Promise<{
     sentCount: number;
     failedCount: number;
@@ -310,12 +311,24 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
     let totalSent = 0;
     let totalFailed = 0;
 
-    // Inline tugma
+    // Ko'p sonli dinamik Inline tugmalar
     let inlineKeyboard: any = undefined;
-    if (params.buttonText && params.buttonUrl) {
-      inlineKeyboard = Markup.inlineKeyboard([
-        [Markup.button.url(params.buttonText.trim(), params.buttonUrl.trim())],
-      ]);
+    const allButtons: Array<{ text: string; url: string }> = [];
+
+    if (Array.isArray(params.buttons) && params.buttons.length > 0) {
+      for (const btn of params.buttons) {
+        if (btn.text && btn.url) {
+          allButtons.push({ text: btn.text.trim(), url: btn.url.trim() });
+        }
+      }
+    } else if (params.buttonText && params.buttonUrl) {
+      allButtons.push({ text: params.buttonText.trim(), url: params.buttonUrl.trim() });
+    }
+
+    if (allButtons.length > 0) {
+      inlineKeyboard = Markup.inlineKeyboard(
+        allButtons.map((btn) => [Markup.button.url(btn.text, btn.url)])
+      );
     }
 
     // Rasm fayli yoki URL

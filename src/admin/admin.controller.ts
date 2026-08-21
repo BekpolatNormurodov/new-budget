@@ -126,10 +126,17 @@ export class AdminController {
     return this.adminService.triggerMarketingBroadcast(slot || 'MORNING');
   }
 
-  // Custom Ad Broadcast (Banner, Matn, Formatlash, Inline Tugma)
+  // Custom Ad Broadcast (Banner, Matn, Formatlash, Inline Tugmalar)
   @Post('broadcast/custom-ad')
   async triggerCustomAdBroadcast(
-    @Body() body: { text: string; photoBase64OrUrl?: string; buttonText?: string; buttonUrl?: string },
+    @Body()
+    body: {
+      text: string;
+      photoBase64OrUrl?: string;
+      buttonText?: string;
+      buttonUrl?: string;
+      buttons?: Array<{ text: string; url: string }>;
+    },
   ) {
     return this.adminService.triggerCustomAdBroadcast(body);
   }
