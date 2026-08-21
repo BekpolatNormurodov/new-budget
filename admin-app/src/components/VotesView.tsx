@@ -165,15 +165,10 @@ export const VotesView: React.FC<VotesViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-            {pendingVotes.length > 0 && (
-              <button
-                onClick={onApproveAll}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
-              >
-                <Zap className="w-3.5 h-3.5 fill-current" />
-                <span>Barchasini Tasdiqlash ({pendingVotes.length})</span>
-              </button>
-            )}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>⚡ Avtomatik Tasdiqlash Faol (OpenBudget API)</span>
+            </div>
 
             <button
               onClick={handleExportCsv}
@@ -346,15 +341,15 @@ export const VotesView: React.FC<VotesViewProps> = ({
                     </td>
 
                     <td className="p-3.5 text-right">
-                      {vote.status !== 'VERIFIED' ? (
-                        <button
-                          onClick={() => onApproveVote(vote.id)}
-                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer"
-                        >
-                          Tasdiqlash
-                        </button>
+                      {vote.status === 'VERIFIED' ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">
+                          <span>✓ Tasdiqlangan</span>
+                        </span>
                       ) : (
-                        <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">Bajarilgan</span>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                          <span>Avto-tekshirilmoqda</span>
+                        </span>
                       )}
                     </td>
                   </tr>
