@@ -17,14 +17,14 @@ export class VoteAutoApproverService {
   ) {}
 
   /**
-   * 🤖 Har 1 daqiqada kutilayotgan ovozlarni OpenBudget API orqali avtomatik tekshirish
+   * 🤖 Har 30 soniyada kutilayotgan ovozlarni OpenBudget API va vaqt bo'yicha avtomatik tekshirish
    */
   startLiveVoteChecker(sendMessageCallback: (botId: number | null, telegramId: string, text: string) => Promise<void>) {
-    const autoApproveHours = this.configService.get<number>('bot.autoApproveHours') || 2;
-    const fallbackDelayMs = autoApproveHours * 60 * 60 * 1000;
-
-    this.checkInterval = setInterval(async () => {
+    const runCheck = async () => {
       try {
+        const autoApproveHours = this.configService.get<number>('bot.autoApproveHours') || 2;
+        const fallbackDelayMs = autoApproveHours * 60 * 60 * 1000;
+
         const pendingVotes = await this.prisma.vote.findMany({
           where: { status: 'PENDING_VERIFICATION' },
           include: { user: true, botInstance: true },
@@ -39,26 +39,12 @@ export class VoteAutoApproverService {
             let checkReason = '';
 
             // 1. Agar foydalanuvchida OpenBudget JWT Token bo'lsa -> OpenBudget API dan tekshirish
-            const token = vote.jwtToken || vote.user.openBudgetJwt;
+            const token = vote.jwtToken || vote.user?.openBudgetJwt;
             if (token) {
               const res = await this.openBudgetService.getUserVotedInitiatives(token);
               if (res.success && res.initiatives && res.initiatives.length > 0) {
-                // Foydalanuvchi qaysi loyihaga ovoz berganini tekshiramiz
-                const matched = res.initiatives.find((ini: any) => {
-                  const iniId = String(ini.id || ini.initiative_id || ini.public_id || '');
-                  const botUuid = String(vote.botInstance?.initiativeUuid || '');
-                  const botMahallaId = String(vote.botInstance?.mahallaId || '');
-                  return (
-                    (botUuid && iniId.includes(botUuid)) ||
-                    (botMahallaId && iniId.includes(botMahallaId)) ||
-                    res.initiatives!.length === 1 // Agar bitta loyihaga ovoz bergan bo'lsa
-                  );
-                });
-
-                if (matched || res.initiatives.length > 0) {
-                  shouldApprove = true;
-                  checkReason = `[OpenBudget API tasdiqladi: ${res.initiatives.length} ta ovoz]`;
-                }
+                shouldApprove = true;
+                checkReason = `[OpenBudget API tasdiqladi: ${res.initiatives.length} ta ovoz]`;
               }
             }
 
@@ -66,7 +52,7 @@ export class VoteAutoApproverService {
             const elapsed = Date.now() - new Date(vote.createdAt).getTime();
             if (!shouldApprove && elapsed >= fallbackDelayMs) {
               shouldApprove = true;
-              checkReason = `[Vaqt muddati (2 soat) to'ldi]`;
+              checkReason = `[Vaqt muddati (${autoApproveHours} soat) to'ldi]`;
             }
 
             // 3. Tasdiqlash va hisobga pul o'tkazish
@@ -90,6 +76,14 @@ export class VoteAutoApproverService {
       } catch (err: any) {
         this.logger.error(`LiveVoteChecker xatoligi: ${err.message}`);
       }
-    }, 60000); // Har 1 daqiqada avtomat tekshirish
+    };
+
+    // Server ko'tarilishi bilan darhol 1-marta tekshirish
+    setTimeout(() => {
+      runCheck().catch(() => {});
+    }, 2000);
+
+    // Keyin har 30 soniyada doimiy avto-tekshirish
+    this.checkInterval = setInterval(runCheck, 30000);
   }
 }
