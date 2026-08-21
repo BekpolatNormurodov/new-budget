@@ -627,4 +627,117 @@ export class OpenBudgetService {
       return { success: false, error: e.message };
     }
   }
+
+  /**
+   * 🔐 OpenBudget Shaxsiy Kabinetga Kirish (Send Login OTP with Captcha via Proxy)
+   */
+  async sendLoginOtp(phone: string): Promise<{ success: boolean; message?: string; captchaKey?: string; error?: string }> {
+    const { clean12 } = this.normalizePhone(phone);
+
+    try {
+      this.logger.log(`🔐 [OpenBudget Auth] ${clean12} uchun SMS OTP so'rovi yuborilmoqda...`);
+
+      // 1. Yangi Captcha olish (Proxy orqali)
+      const captchaRes = await this.proxyManager.requestWithRetry(async (client) => {
+        return client.get('https://new.openbudget.uz/api/v2/vote/captcha-2', { timeout: 8000 });
+      }, clean12);
+
+      if (!captchaRes?.data?.image || !captchaRes?.data?.captchaKey) {
+        return { success: false, error: 'OpenBudget serveridan captcha olib bo\'lmadi.' };
+      }
+
+      const captchaKey = captchaRes.data.captchaKey;
+      const rawImageBuffer = Buffer.from(captchaRes.data.image, 'base64');
+
+      // 2. Captcha yechish
+      const solveResult = await this.captchaSolver.solve(rawImageBuffer);
+      const answer = solveResult.answer !== undefined ? Number(solveResult.answer) : 0;
+
+      // 3. SMS yuborish so'rovi (POST /api/v1/login/send-otp)
+      const otpRes = await this.proxyManager.requestWithRetry(async (client) => {
+        return client.post('https://new.openbudget.uz/api/v1/login/send-otp', {
+          phone_number: clean12,
+          captcha_key: captchaKey,
+          captcha_result: answer,
+        }, { timeout: 9000 });
+      }, clean12);
+
+      if (otpRes?.status === 200 || otpRes?.data?.success) {
+        return {
+          success: true,
+          message: 'SMS kod muvaffaqiyatli yuborildi',
+          captchaKey,
+        };
+      } else {
+        const errMsg = otpRes?.data?.message || 'SMS yuborishda xatolik';
+        return {
+          success: false,
+          error: errMsg,
+        };
+      }
+    } catch (err: any) {
+      this.logger.error(`SendLoginOtp xatosi (${clean12}):`, err.message);
+      return { success: false, error: err.message || 'SMS so\'rashda tizim xatosi' };
+    }
+  }
+
+  /**
+   * 🔑 OpenBudget SMS Kodni Tasdiqlash va JWT Access Token olish (Verify Login OTP)
+   */
+  async verifyLoginOtp(phone: string, otp: string): Promise<{ success: boolean; accessToken?: string; refreshToken?: string; user?: any; error?: string }> {
+    const { clean12 } = this.normalizePhone(phone);
+    const code = otp.trim();
+
+    try {
+      this.logger.log(`🔑 [OpenBudget Auth] ${clean12} uchun SMS OTP tasdiqlanmoqda...`);
+
+      const verifyRes = await this.proxyManager.requestWithRetry(async (client) => {
+        return client.post('https://new.openbudget.uz/api/v1/login/verify-otp', {
+          phone_number: clean12,
+          otp: code,
+        }, { timeout: 9000 });
+      }, clean12);
+
+      if (verifyRes?.data?.access_token || verifyRes?.data?.token) {
+        const token = verifyRes.data.access_token || verifyRes.data.token;
+        const refreshToken = verifyRes.data.refresh_token;
+        const user = verifyRes.data.user || verifyRes.data;
+
+        this.proxyManager.releaseSession(clean12);
+        return {
+          success: true,
+          accessToken: token,
+          refreshToken,
+          user,
+        };
+      } else {
+        const errMsg = verifyRes?.data?.message || 'SMS kod noto\'g\'ri kiritildi';
+        return { success: false, error: errMsg };
+      }
+    } catch (err: any) {
+      this.logger.error(`VerifyLoginOtp xatosi (${clean12}):`, err.message);
+      return { success: false, error: err.message || 'SMS kodni tasdiqlashda xatolik' };
+    }
+  }
+
+  /**
+   * 👤 Shaxsiy Profil Ma'lumotlarini Olish (JWT Token orqali)
+   */
+  async getUserProfile(accessToken: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const res = await this.proxyManager.requestWithRetry(async (client) => {
+        return client.get('https://new.openbudget.uz/api/v1/users/me', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          timeout: 8000,
+        });
+      });
+
+      if (res?.data) {
+        return { success: true, data: res.data };
+      }
+      return { success: false, error: 'Profil ma\'lumotlari topilmadi' };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
 }
