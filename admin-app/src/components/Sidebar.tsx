@@ -73,13 +73,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badge: stats?.totalUsers ? stats.totalUsers : null,
       badgeColor: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
     },
-    {
-      id: 'health' as TabType,
-      label: 'Tizim Monitoringi',
-      icon: Activity,
-      badge: '1m Live',
-      badgeColor: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
-    },
   ];
 
   const handleSelectTab = (id: TabType) => {
