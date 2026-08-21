@@ -354,13 +354,16 @@ export class OpenBudgetService {
               },
             );
 
+            this.logger.log(`📡 [OTP Urinish #${attempt}] +${clean12} | Captcha: ${solved.expression} => ${solved.answer} | OpenBudget Status: ${otpRes.status} | Javob: ${JSON.stringify(otpRes.data)}`);
+
             if ((otpRes.status === 200 || otpRes.status === 201) && (otpRes.data?.otpKey || otpRes.data?.key || otpRes.data?.token)) {
               otpKey = otpRes.data?.otpKey || otpRes.data?.key || otpRes.data?.token;
-              this.logger.log(`✅ [Real OpenBudget API] SMS yuborildi (+${clean12}) (Urinish #${attempt}) | otpKey: ${otpKey}`);
+              this.logger.log(`🎉 [Real OpenBudget API] SMS yuborildi (+${clean12}) (Urinish #${attempt}) | otpKey: ${otpKey}`);
               break;
             } else if (otpRes.data?.message) {
               lastError = otpRes.data.message;
               if (/mavsum|pasport|avval|allaqachon|topilmadi|USER_NOT_FOUND/i.test(lastError || '')) {
+                this.logger.warn(`🛑 [OpenBudget To'xtatuvchi Xato] +${clean12}: ${lastError}`);
                 throw new Error(lastError);
               }
             }
