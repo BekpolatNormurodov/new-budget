@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Sliders,
@@ -7,9 +7,6 @@ import {
   Gift,
   MapPin,
   Key,
-  Image,
-  Upload,
-  Trash2,
   FileText,
   Search,
   Sparkles,
@@ -41,14 +38,11 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
   const [refBonus, setRefBonus] = useState(5000);
   const [isRefActive, setIsRefActive] = useState<boolean>(true);
   const [description, setDescription] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState<string>('');
 
   const [lookupQuery, setLookupQuery] = useState<string>('');
   const [isLookingUp, setIsLookingUp] = useState<boolean>(false);
   const [lookupResult, setLookupResult] = useState<any>(null);
   const [lookupError, setLookupError] = useState<string>('');
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (bot) {
@@ -62,7 +56,6 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
       setRefBonus(bot.refBonus || 5000);
       setIsRefActive(bot.isRefActive !== false);
       setDescription(bot.description || '');
-      setAvatarUrl(bot.avatarUrl || '/assets/open_budget_avatar.jpg');
       setLookupQuery(bot.mahallaId || '');
       setLookupResult(null);
       setLookupError('');
@@ -70,21 +63,6 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
   }, [bot, isOpen]);
 
   if (!isOpen || !bot) return null;
-
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Rasm hajmi 5MB dan oshmasligi kerak');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setAvatarUrl(event.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
   // 1-Click Auto Lookup via OpenBudget Backend API (Proxy orqali)
   const handleAutoLookup = async () => {
@@ -136,7 +114,6 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
       refBonus: Number(refBonus),
       isRefActive,
       description,
-      avatarUrl,
     });
   };
 
@@ -220,53 +197,6 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
               ❌ {lookupError}
             </p>
           )}
-        </div>
-
-        {/* Bot Profile Image Upload */}
-        <div className="p-3.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-500/20 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <img
-              src={avatarUrl || '/assets/open_budget_avatar.jpg'}
-              alt="Bot Avatar"
-              className="w-12 h-12 rounded-2xl object-cover border-2 border-indigo-500/30 shadow-lg shrink-0"
-            />
-            <div>
-              <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1">
-                <Image className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                <span>Bot Profil Rasmi</span>
-              </h4>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">Ixtiyoriy bot avatari</p>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-[11px] transition flex items-center gap-1 shadow-sm cursor-pointer"
-            >
-              <Upload className="w-3 h-3" />
-              <span>Yuklash</span>
-            </button>
-            {avatarUrl && (
-              <button
-                type="button"
-                onClick={() => setAvatarUrl('/assets/open_budget_avatar.jpg')}
-                className="p-1.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl cursor-pointer"
-                title="Standart rasmga qaytarish"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleAvatarChange}
-          />
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
