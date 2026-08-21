@@ -1166,9 +1166,9 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       if (!verifyRes.success) {
         await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
 
-        // Agar sessiya eskirgan yoki IP o'zgargan bo'lsa -> avtomatik yangi toza IP orqali yangi SMS yuborish
+        // Agar sessiya eskirgan yoki o'zgargan bo'lsa -> avtomatik yangi toza SMS yuborish
         if (verifyRes.sessionExpired) {
-          const resendWait = await ctx.reply('🔄 Sessiya va IP yangilanmoqda, yangi toza SMS kod yuborilmoqda...');
+          const resendWait = await ctx.reply(BOT_MESSAGES.WAITING);
           try {
             const newSms = await this.openBudgetService.requestSmsForVote(phone);
             await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
@@ -1212,7 +1212,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
               this.smsTimeouts.set(timeoutKey, timeoutHandle);
 
               return ctx.reply(
-                `🔄 <b>Yangi toza IP orqali yangi SMS kod yuborildi!</b>\n\nAvvalgi sessiya muddati o'tgan edi. Telefoningizga (+${phone}) kelgan <b>yangi SMS kodni</b> kiriting:`,
+                `📩 Telefoningizga (+${phone}) 6 xonali yangi SMS kod yuborildi!\n\n⚠️ SMS kodni kiritish uchun sizda 2 daqiqa vaqt bor.\n\nIltimos, kelgan SMS kodni quyida yozib yuboring:`,
                 {
                   parse_mode: 'HTML',
                   ...BotKeyboards.smsWaitingInline(),
