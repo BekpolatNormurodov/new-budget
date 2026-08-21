@@ -80,14 +80,32 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Xabarlarni yuborishni bajarish (Ertalabki, Kechki yoki Test)
+   * QOIDA: Barcha faol botlar o'z foydalanuvchilariga mustaqil xabar yuboradi!
    */
   public async executeBroadcast(slot: 'MORNING' | 'EVENING' | 'TEST' = 'TEST'): Promise<BroadcastResult> {
     const startTime = Date.now();
+
+    // 1. Agar xotirada botlar ishga tushmagan bo'lsa, barchasini ishga tushiramiz
+    if (this.botManager.getAllActiveBots().length === 0) {
+      await this.botManager.launchAllActiveBots();
+    }
+
     const activeBotsRecords = await this.prisma.botInstance.findMany({
       where: { isActive: true },
     });
 
-    // 1. Faol botlar statistikasini hisoblash
+    // 2. Bazadagi barcha haqiqiy foydalanuvchilarni olish
+    const rawUsers = await this.prisma.user.findMany({
+      orderBy: { id: 'asc' },
+    });
+
+    const allUsers = rawUsers.filter(
+      (u) => !u.isBanned && u.telegramId && u.telegramId !== '0' && u.telegramId.trim() !== ''
+    );
+
+    this.logger.log(`📢 [Marketing Broadcast]: Jami ${activeBotsRecords.length} ta faol bot va ${allUsers.length} ta foydalanuvchi aniqlandi.`);
+
+    // 3. Faol botlar statistikasini hisoblash
     const botStatsList = await Promise.all(
       activeBotsRecords.map(async (b) => {
         const verifiedVotes = await this.prisma.vote.count({
@@ -106,102 +124,72 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
       })
     );
 
-    if (this.botManager.getAllActiveBots().length === 0) {
-      await this.botManager.launchAllActiveBots();
-    }
-
     const unfinishedBot = botStatsList.find((b) => !b.isTargetReached);
-    const firstActiveBot = this.botManager.getFirstActiveBot();
-
-    // 2. Bazadagi barcha haqiqiy foydalanuvchilarni olish
-    const rawUsers = await this.prisma.user.findMany({
-      orderBy: { id: 'asc' },
-    });
-
-    const allUsers = rawUsers.filter(
-      (u) => !u.isBanned && u.telegramId && u.telegramId !== '0' && u.telegramId.trim() !== ''
-    );
-
-    this.logger.log(`📢 [Marketing Broadcast]: Jami ${rawUsers.length} ta yozuvdan ${allUsers.length} ta haqiqiy foydalanuvchi tanlab olindi.`);
 
     let totalSent = 0;
     let totalFailed = 0;
-    const sentMapByBot = new Map<number, { sent: number; failed: number; name: string; targetReached: boolean }>();
+    const details: BroadcastResult['details'] = [];
 
-    for (const user of allUsers) {
-      // Foydalanuvchiga mos botni aniqlash
-      let botToUse: any = user.botInstanceId ? this.botManager.getActiveBot(user.botInstanceId) : null;
-      let botStat: any = user.botInstanceId ? botStatsList.find((b) => b.id === user.botInstanceId) : null;
-
-      if (!botToUse || !botStat) {
-        botToUse = firstActiveBot;
-        botStat = botStatsList[0] || {
-          id: botToUse?.id || 1,
-          name: 'Open Budget Bot',
-          mahallaName: 'Navbahor MFY',
-          voteReward: 30000,
-          targetVotes: 5000,
-          remaining: 1000,
-          isTargetReached: false,
-        };
+    // 4. HAMMA FAOL BOTLAR BO'YICHA BIRMA-BIR XABAR YUBORISH
+    for (const botStat of botStatsList) {
+      let liveBot = this.botManager.getActiveBot(botStat.id);
+      if (!liveBot) {
+        await this.botManager.startBotInstance(botStat);
+        liveBot = this.botManager.getActiveBot(botStat.id);
       }
 
-      if (!botToUse) {
-        this.logger.warn(`Hech qanday faol bot topilmadi, foydalanuvchiga (${user.telegramId}) xabar yuborib bo'lmadi.`);
-        totalFailed++;
+      if (!liveBot) {
+        this.logger.warn(`⚠️ [Bot #${botStat.id}] ${botStat.mahallaName} botini ishga tushirib bo'lmadi.`);
         continue;
       }
 
-      const { text, keyboard } = this.buildMarketingMessage(botStat, unfinishedBot, slot);
-
-      try {
-        await botToUse.bot.telegram.sendMessage(user.telegramId, text, {
-          parse_mode: 'HTML',
-          ...keyboard,
-        });
-        totalSent++;
-
-        const currentCount = sentMapByBot.get(botStat.id) || {
-          sent: 0,
-          failed: 0,
-          name: botStat.mahallaName || botStat.name,
-          targetReached: botStat.isTargetReached || false,
-        };
-        currentCount.sent++;
-        sentMapByBot.set(botStat.id, currentCount);
-      } catch (err: any) {
-        totalFailed++;
-        const currentCount = sentMapByBot.get(botStat.id) || {
-          sent: 0,
-          failed: 0,
-          name: botStat.mahallaName || botStat.name,
-          targetReached: botStat.isTargetReached || false,
-        };
-        currentCount.failed++;
-        sentMapByBot.set(botStat.id, currentCount);
-
-        if (err.description?.includes('blocked') || err.description?.includes('deactivated')) {
-          await this.prisma.user.update({
-            where: { id: user.id },
-            data: { isBanned: true },
-          }).catch(() => {});
-        }
+      // Bu botga tegishli foydalanuvchilar (agar biriktirilmagan bo'lsa, barchasiga yuboradi)
+      let botUsers = allUsers.filter((u) => u.botInstanceId === botStat.id);
+      if (botUsers.length === 0) {
+        botUsers = allUsers;
       }
 
-      // Telegram Flood Limit: 35ms oralig'i
-      await new Promise((r) => setTimeout(r, 35));
+      let botSent = 0;
+      let botFailed = 0;
+
+      const { text, keyboard } = this.buildMarketingMessage(botStat, unfinishedBot, slot);
+
+      for (const user of botUsers) {
+        try {
+          await liveBot.bot.telegram.sendMessage(user.telegramId, text, {
+            parse_mode: 'HTML',
+            ...keyboard,
+          });
+          botSent++;
+          totalSent++;
+        } catch (err: any) {
+          botFailed++;
+          totalFailed++;
+          if (err.description?.includes('blocked') || err.description?.includes('deactivated')) {
+            await this.prisma.user.update({
+              where: { id: user.id },
+              data: { isBanned: true },
+            }).catch(() => {});
+          }
+        }
+
+        // Telegram Flood Limit: 35ms oralig'i
+        await new Promise((r) => setTimeout(r, 35));
+      }
+
+      details.push({
+        botId: botStat.id,
+        mahallaName: botStat.mahallaName,
+        targetReached: botStat.isTargetReached,
+        sent: botSent,
+        failed: botFailed,
+      });
+
+      this.logger.log(`📢 [Bot #${botStat.id}] ${botStat.mahallaName}: ${botSent} ta xabar muvaffaqiyatli yuborildi.`);
     }
 
-    const details: BroadcastResult['details'] = Array.from(sentMapByBot.entries()).map(([botId, data]) => ({
-      botId,
-      mahallaName: data.name,
-      targetReached: data.targetReached,
-      sent: data.sent,
-      failed: data.failed,
-    }));
-
     const durationMs = Date.now() - startTime;
-    this.logger.log(`✅ [Marketing Broadcast]: Jami ${allUsers.length} ta foydalanuvchidan ${totalSent} tasiga xabar yetkazildi (${totalFailed} ta xato, ${durationMs}ms).`);
+    this.logger.log(`✅ [Marketing Broadcast]: Jami ${activeBotsRecords.length} ta bot orqali ${totalSent} ta xabar yuborildi (${durationMs}ms).`);
 
     return {
       slot,
