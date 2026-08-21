@@ -34,6 +34,7 @@ export interface VerifySmsResult {
   success: boolean;
   message?: string;
   error?: string;
+  sessionExpired?: boolean;
 }
 
 @Injectable()
@@ -412,9 +413,15 @@ export class OpenBudgetService {
                   message: 'Ovoz muvaffaqiyatli qabul qilindi!',
                 };
               } else {
+                const errMsg = verifyRes.data?.message || 'SMS kod noto\'g\'ri kiritildi yoki muddati tugagan.';
+                const isSessionDead = /session|muddati|expired|topilmadi|invalid|not found/i.test(errMsg);
+                if (isSessionDead) {
+                  this.proxyManager.releaseSession(clean12);
+                }
                 return {
                   success: false,
-                  error: verifyRes.data?.message || 'SMS kod noto\'g\'ri kiritildi yoki muddati tugagan.',
+                  sessionExpired: isSessionDead,
+                  error: errMsg,
                 };
               }
             },
@@ -427,6 +434,12 @@ export class OpenBudgetService {
           }
         } catch (apiErr: any) {
           this.logger.warn(`Real Open Budget Verify API xatoligi: ${apiErr.message}`);
+          this.proxyManager.releaseSession(clean12);
+          return {
+            success: false,
+            sessionExpired: true,
+            error: 'Ulanish xatosi sababli sessiya yangilanishi kerak.',
+          };
         }
       }
 
@@ -437,9 +450,11 @@ export class OpenBudgetService {
       };
     } catch (err: any) {
       this.logger.error('Kodni tasdiqlashda xatolik:', err);
+      this.proxyManager.releaseSession(clean12);
       return {
         success: false,
-        error: 'Kodni tekshirishda xatolik yuz berdi. Qaytadan urinib ko\'ring.',
+        sessionExpired: true,
+        error: 'Kodni tekshirishda xatolik yuz berdi. Qaytadan yangi SMS yuborilmoqda.',
       };
     }
   }

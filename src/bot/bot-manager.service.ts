@@ -1165,6 +1165,65 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
       if (!verifyRes.success) {
         await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
+
+        // Agar sessiya eskirgan yoki IP o'zgargan bo'lsa -> avtomatik yangi toza IP orqali yangi SMS yuborish
+        if (verifyRes.sessionExpired) {
+          const resendWait = await ctx.reply('🔄 Sessiya va IP yangilanmoqda, yangi toza SMS kod yuborilmoqda...');
+          try {
+            const newSms = await this.openBudgetService.requestSmsForVote(phone);
+            await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
+
+            if (newSms.success) {
+              const newSmsSentAt = Date.now();
+              await this.prisma.user.update({
+                where: { id: user.id },
+                data: {
+                  tempData: JSON.stringify({
+                    phone,
+                    sessionId: newSms.sessionId,
+                    smsSentAt: newSmsSentAt,
+                    sessionStartedAt,
+                    botId: botRecord.id,
+                  }),
+                },
+              });
+
+              // Reset 2-minute timer
+              const timeoutKey = `${botRecord.id}_${user.id}`;
+              if (this.smsTimeouts.has(timeoutKey)) {
+                clearTimeout(this.smsTimeouts.get(timeoutKey));
+              }
+              const timeoutHandle = setTimeout(async () => {
+                try {
+                  const u = await this.prisma.user.findUnique({ where: { id: user.id } });
+                  if (u && u.step === 'AWAITING_SMS_CODE') {
+                    await this.prisma.user.update({ where: { id: user.id }, data: { step: null, tempData: null } });
+                    const activeBot = this.activeBots.get(botRecord.id);
+                    if (activeBot) {
+                      await activeBot.bot.telegram.sendMessage(
+                        user.telegramId,
+                        `⏳ SMS kod kiritish vaqti (2 daqiqa) tugadi!\n\nIltimos, qaytadan "🗳 Ovoz berish" tugmasini bosing:`,
+                        BotKeyboards.mainMenu(user.role === 'ADMIN')
+                      ).catch(() => {});
+                    }
+                  }
+                } catch (e) {}
+              }, 120000);
+              this.smsTimeouts.set(timeoutKey, timeoutHandle);
+
+              return ctx.reply(
+                `🔄 <b>Yangi toza IP orqali yangi SMS kod yuborildi!</b>\n\nAvvalgi sessiya muddati o'tgan edi. Telefoningizga (+${phone}) kelgan <b>yangi SMS kodni</b> kiriting:`,
+                {
+                  parse_mode: 'HTML',
+                  ...BotKeyboards.smsWaitingInline(),
+                }
+              );
+            }
+          } catch (e) {
+            await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
+          }
+        }
+
         return ctx.reply(
           `❌ ${verifyRes.error || 'SMS kod noto\'g\'ri kiritildi. Qaytadan kiriting:'}`,
           {
