@@ -37,6 +37,7 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY test-live-login.js /app/test-live-login.js
 
 RUN chmod +x /app/docker-entrypoint.sh && \
     mkdir -p /app/logs /app/public/receipts /app/public/avatars
