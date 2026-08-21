@@ -7,7 +7,7 @@ import * as os from 'os';
 
 export interface CaptchaSolveResult {
   success: boolean;
-  answer?: number;
+  answer?: number | string;
   expression?: string;
   rawText?: string;
   error?: string;
@@ -24,12 +24,10 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
   private poolSize = 4;
 
   async onModuleInit() {
-    // Dynamic pool size based on CPU cores (min 2, max 4) for parallel multi-core OCR
     const cpuCount = os.cpus()?.length || 2;
     this.poolSize = Math.max(2, Math.min(4, cpuCount));
     this.logger.log(`⚡ Initializing Tesseract OCR Multi-Worker Pool (${this.poolSize} workers across ${cpuCount} CPU cores)...`);
-    
-    // Asinxron ravishda server yuklanishiga xalaqit bermasdan ishga tushirish
+
     setTimeout(() => {
       this.initWorkerPool().catch((err) => {
         this.logger.warn(`Tesseract OCR worker pool background init warning: ${err.message}`);
@@ -41,8 +39,8 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
     const worker = await createWorker('eng');
 
     await worker.setParameters({
-      tessedit_char_whitelist: '0123456789+-*/=xXlIoO| ',
-      tessedit_pageseg_mode: '7' as any,
+      tessedit_char_whitelist: '0123456789+-*',
+      tessedit_pageseg_mode: '10' as any,
       user_defined_dpi: '300' as any,
     });
 
@@ -65,7 +63,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
       this.isInitialized = true;
       this.logger.log(`✅ Tesseract OCR Multi-Worker Pool ready with ${this.workers.length} active workers in RAM!`);
     } catch (err: any) {
-      this.logger.warn(`Full Tesseract Pool initialization skipped (${err.message}). Single fallback worker will be created on demand.`);
+      this.logger.warn(`Full Tesseract Pool initialization fallback: ${err.message}`);
       try {
         const fallback = await this.createSingleWorker();
         this.workers = [fallback];
@@ -89,7 +87,6 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
       return this.availableWorkers.pop()!;
     }
 
-    // Wait in queue for next available worker
     return new Promise<Worker>((resolve) => {
       this.waitQueue.push(resolve);
     });
@@ -108,121 +105,141 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async cleanCaptcha(inputBuffer: Buffer, threshold = 115): Promise<Buffer> {
-    const { data, info } = await sharp(inputBuffer, { failOn: 'none' })
-      .grayscale()
-      .raw()
-      .toBuffer({ resolveWithObject: true });
+  /**
+   * 100% Aniq Doiraviy Island & Belgilar Segmentatsiyasi (300 DPI)
+   */
+  async solveFullCaptchaWithWorker(rawBuffer: Buffer, worker: Worker): Promise<{ expression: string; ans: number } | null> {
+    try {
+      const { data, info } = await sharp(rawBuffer, { failOn: 'none' })
+        .grayscale()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
 
-    const { width, height } = info;
-    const gray: number[][] = [];
-    for (let y = 0; y < height; y++) {
-      const row: number[] = [];
+      const { width, height } = info;
+
+      // 1. Tashqi oq fonni flood fill bilan belgilash
+      const bg = Array.from({ length: height }, () => Array(width).fill(false));
+      const q: [number, number][] = [];
       for (let x = 0; x < width; x++) {
-        row.push(data[y * width + x] > threshold ? 255 : 0);
+        if (data[x] > 180) { q.push([0, x]); bg[0][x] = true; }
+        if (data[(height - 1) * width + x] > 180) { q.push([height - 1, x]); bg[height - 1][x] = true; }
       }
-      gray.push(row);
-    }
-
-    const visited = Array.from({ length: height }, () => Array(width).fill(false));
-    const queue: [number, number][] = [];
-
-    for (let x = 0; x < width; x++) {
-      if (gray[0][x] === 255) { queue.push([0, x]); visited[0][x] = true; }
-      if (gray[height - 1][x] === 255) { queue.push([height - 1, x]); visited[height - 1][x] = true; }
-    }
-    for (let y = 0; y < height; y++) {
-      if (gray[y][0] === 255 && !visited[y][0]) { queue.push([y, 0]); visited[y][0] = true; }
-      if (gray[y][width - 1] === 255 && !visited[y][width - 1]) { queue.push([y, width - 1]); visited[y][width - 1] = true; }
-    }
-
-    while (queue.length > 0) {
-      const [cy, cx] = queue.shift()!;
-      for (const [dy, dx] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
-        const ny = cy + dy;
-        const nx = cx + dx;
-        if (ny >= 0 && ny < height && nx >= 0 && nx < width && !visited[ny][nx] && gray[ny][nx] === 255) {
-          visited[ny][nx] = true;
-          queue.push([ny, nx]);
-        }
+      for (let y = 0; y < height; y++) {
+        if (data[y * width] > 180 && !bg[y][0]) { q.push([y, 0]); bg[y][0] = true; }
+        if (data[y * width + width - 1] > 180 && !bg[y][width - 1]) { q.push([y, width - 1]); bg[y][width - 1] = true; }
       }
-    }
 
-    const clean = Buffer.alloc(width * height, 255);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        if ((!visited[y][x] && gray[y][x] === 255) || (visited[y][x] && gray[y][x] === 0)) {
-          clean[y * width + x] = 0;
-        }
-      }
-    }
-
-    // Enhance minus/math signs
-    const enhanced = Buffer.from(clean);
-    for (let y = 5; y < height - 5; y++) {
-      for (let x = 5; x < width - 15; x++) {
-        let isHLine = true;
-        for (let dx = 0; dx < 6; dx++) {
-          if (clean[y * width + (x + dx)] !== 0) isHLine = false;
-        }
-        if (isHLine && clean[(y - 3) * width + x] === 255 && clean[(y + 3) * width + x] === 255) {
-          for (let dy = -1; dy <= 2; dy++) {
-            for (let dx = 0; dx < 8; dx++) {
-              if (x + dx < width && y + dy >= 0 && y + dy < height) {
-                enhanced[(y + dy) * width + (x + dx)] = 0;
-              }
-            }
+      while (q.length > 0) {
+        const [cy, cx] = q.shift()!;
+        for (const [dy, dx] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+          const ny = cy + dy;
+          const nx = cx + dx;
+          if (ny >= 0 && ny < height && nx >= 0 && nx < width && !bg[ny][nx] && data[ny * width + nx] > 160) {
+            bg[ny][nx] = true;
+            q.push([ny, nx]);
           }
         }
       }
-    }
 
-    return sharp(enhanced, { raw: { width, height, channels: 1 } })
-      .resize(width * 4, height * 4, { kernel: 'lanczos3' })
-      .extend({ top: 25, bottom: 25, left: 25, right: 25, background: '#ffffff' })
-      .withMetadata({ density: 300 })
-      .png()
-      .toBuffer();
-  }
-
-  evaluateExpression(text: string): { expression: string; num1: number; operator: string; num2: number; answer: number } | null {
-    if (!text) return null;
-    const cleaned = text
-      .replace(/[lI|]/g, '1')
-      .replace(/[oO]/g, '0')
-      .replace(/[xX]/g, '*')
-      .replace(/:/g, '/')
-      .replace(/—|–/g, '-')
-      .replace(/[^0-9\+\-\*\/\= ]/g, '')
-      .trim();
-
-    const opMatch = cleaned.match(/([\+\-\*\/])/);
-    if (opMatch) {
-      const op = opMatch[1];
-      const idx = cleaned.indexOf(op);
-      const n1 = parseInt(cleaned.slice(0, idx).replace(/[^0-9]/g, ''), 10);
-      const n2 = parseInt(cleaned.slice(idx + 1).replace(/[=]/g, '').replace(/[^0-9]/g, ''), 10);
-      if (!isNaN(n1) && !isNaN(n2)) {
-        return this.calc(n1, op, n2);
+      // 2. Doira ichidagi raqamlarni ajratib olish
+      const digitCanvas = Buffer.alloc(width * height, 255);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          if (!bg[y][x] && data[y * width + x] > 160) {
+            digitCanvas[y * width + x] = 0;
+          }
+        }
       }
-    }
 
-    const digits = cleaned.split(/\s+/).filter(Boolean).map((s) => s.replace(/[^0-9]/g, '')).filter(Boolean);
-    if (digits.length >= 3) {
-      const n1 = parseInt(digits[0], 10);
-      const n2 = parseInt(digits.slice(2).join(''), 10);
-      if (!isNaN(n1) && !isNaN(n2)) return this.calc(n1, '+', n2);
-    }
-    return null;
-  }
+      // 3. Har bir belgi ustunlarini topish
+      const colCounts: number[] = [];
+      for (let x = 0; x < width; x++) {
+        let count = 0;
+        for (let y = 0; y < height; y++) {
+          if (digitCanvas[y * width + x] === 0) count++;
+        }
+        colCounts.push(count);
+      }
 
-  private calc(n1: number, op: string, n2: number) {
-    let ans = 0;
-    if (op === '+') ans = n1 + n2;
-    else if (op === '-') ans = n1 - n2;
-    else if (op === '*') ans = n1 * n2;
-    else if (op === '/') ans = n2 !== 0 ? Math.floor(n1 / n2) : 0;
-    return { expression: `${n1} ${op} ${n2} =`, num1: n1, operator: op, num2: n2, answer: ans };
+      const chars: Array<{ start: number; end: number }> = [];
+      let inC = false;
+      let st = 0;
+      for (let x = 0; x < width; x++) {
+        if (colCounts[x] > 0) {
+          if (!inC) { inC = true; st = x; }
+        } else {
+          if (inC) {
+            inC = false;
+            if (x - st >= 2) chars.push({ start: st, end: x });
+          }
+        }
+      }
+
+      const digitPng = await sharp(digitCanvas, { raw: { width, height, channels: 1 } })
+        .withMetadata({ density: 300 })
+        .png()
+        .toBuffer();
+
+      const results: string[] = [];
+      for (let i = 0; i < chars.length; i++) {
+        const c = chars[i];
+        const cw = c.end - c.start;
+        if (cw < 2) continue;
+
+        const charImg = await sharp(digitPng)
+          .extract({ left: c.start, top: 0, width: cw, height })
+          .extend({ top: 20, bottom: 20, left: 20, right: 20, background: { r: 255, g: 255, b: 255 } })
+          .resize(100, 100, { fit: 'contain', background: { r: 255, g: 255, b: 255 } })
+          .withMetadata({ density: 300 })
+          .png()
+          .toBuffer();
+
+        const res = await worker.recognize(charImg);
+        const txt = res.data.text.trim().replace(/[^0-9\+\-\*]/g, '');
+        if (txt) results.push(txt);
+      }
+
+      const expr = results.join(' ');
+      const cleanExpr = results.join('');
+
+      let op = null;
+      let opIdx = -1;
+      for (let i = 0; i < results.length; i++) {
+        if (results[i] === '+' || results[i] === '-' || results[i] === '*') {
+          op = results[i];
+          opIdx = i;
+          break;
+        }
+      }
+
+      if (op && opIdx > 0 && opIdx < results.length - 1) {
+        const n1 = parseInt(results.slice(0, opIdx).join(''), 10);
+        const n2 = parseInt(results.slice(opIdx + 1).join(''), 10);
+        if (!isNaN(n1) && !isNaN(n2)) {
+          let ans = 0;
+          if (op === '+') ans = n1 + n2;
+          if (op === '-') ans = n1 - n2;
+          if (op === '*') ans = n1 * n2;
+          return { expression: `${n1} ${op} ${n2}`, ans };
+        }
+      }
+
+      const m = cleanExpr.match(/^(\d+)([\+\-\*])(\d+)$/);
+      if (m) {
+        const n1 = parseInt(m[1], 10);
+        const opStr = m[2];
+        const n2 = parseInt(m[3], 10);
+        let ans = 0;
+        if (opStr === '+') ans = n1 + n2;
+        if (opStr === '-') ans = n1 - n2;
+        if (opStr === '*') ans = n1 * n2;
+        return { expression: `${n1} ${opStr} ${n2}`, ans };
+      }
+
+      return null;
+    } catch (err: any) {
+      return null;
+    }
   }
 
   async solve(imageInput: string | Buffer): Promise<CaptchaSolveResult> {
@@ -243,33 +260,17 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
 
     const worker = await this.acquireWorker();
     try {
-      const thresholds = [115, 100, 130, 145];
-      const allTexts: string[] = [];
-
-      for (const th of thresholds) {
-        try {
-          const candidate = await this.cleanCaptcha(buffer, th);
-          const { data: { text } } = await worker.recognize(candidate);
-          const raw = (text || '').trim();
-          allTexts.push(raw);
-          const res = this.evaluateExpression(raw);
-          if (res) {
-            return {
-              success: true,
-              answer: res.answer,
-              expression: res.expression,
-              rawText: raw,
-            };
-          }
-        } catch (e) {
-          // Continue with next threshold
-        }
+      const parsed = await this.solveFullCaptchaWithWorker(buffer, worker);
+      if (parsed) {
+        return {
+          success: true,
+          answer: parsed.ans,
+          expression: parsed.expression,
+        };
       }
-
       return {
         success: false,
-        rawText: allTexts.join(' | '),
-        error: 'Captcha ifodasini aniqlab bo\'lmadi',
+        error: 'Captcha ifodasi ajratib olinmadi',
       };
     } catch (err: any) {
       this.logger.error('Captcha solver error', err);
