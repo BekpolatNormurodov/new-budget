@@ -83,6 +83,60 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           </div>
         )}
 
+        {/* Quick Admin Profile Selectors */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+            <KeyRound className="w-3 h-3 text-indigo-400" />
+            <span>1-Bosishda Kirish (Adminni tanlang):</span>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => { setPhone('+998 95 064 28 27'); setPassword('Khurshid#Dev2026!'); }}
+              className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-800 hover:border-indigo-500/50 border border-slate-700/60 text-left text-xs transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+            >
+              <span className="text-base">⚡️</span>
+              <div className="truncate">
+                <div className="font-bold text-white text-[11px] truncate">Xurshid (DevOps)</div>
+                <div className="text-[9px] text-indigo-300 font-mono">95 064 28 27</div>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setPhone('+998 94 348 99 00'); setPassword('Elbek#Budget2026!'); }}
+              className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-800 hover:border-indigo-500/50 border border-slate-700/60 text-left text-xs transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+            >
+              <span className="text-base">👑</span>
+              <div className="truncate">
+                <div className="font-bold text-white text-[11px] truncate">Elbek Muxtorov</div>
+                <div className="text-[9px] text-indigo-300 font-mono">94 348 99 00</div>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setPhone('+998 99 065 26 51'); setPassword('Jonibek#Open2026!'); }}
+              className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-800 hover:border-indigo-500/50 border border-slate-700/60 text-left text-xs transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+            >
+              <span className="text-base">💼</span>
+              <div className="truncate">
+                <div className="font-bold text-white text-[11px] truncate">Jonibek Ismoilov</div>
+                <div className="text-[9px] text-indigo-300 font-mono">99 065 26 51</div>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setPhone('+998 90 123 45 67'); setPassword('admin_password'); }}
+              className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-800 hover:border-indigo-500/50 border border-slate-700/60 text-left text-xs transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+            >
+              <span className="text-base">🛡</span>
+              <div className="truncate">
+                <div className="font-bold text-white text-[11px] truncate">Bosh Admin</div>
+                <div className="text-[9px] text-indigo-300 font-mono">90 123 45 67</div>
+              </div>
+            </button>
+          </div>
+        </div>
+
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Phone Input */}
