@@ -247,6 +247,21 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Birinchi mavjud faol botni olish
+   */
+  public getFirstActiveBot() {
+    if (this.activeBots.size === 0) return null;
+    return this.activeBots.values().next().value || null;
+  }
+
+  /**
+   * Barcha faol botlar ro'yxatini olish
+   */
+  public getAllActiveBots() {
+    return Array.from(this.activeBots.values());
+  }
+
+  /**
    * Botni to'xtatish
    */
   async stopBotInstance(botId: number): Promise<boolean> {
