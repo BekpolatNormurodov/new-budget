@@ -374,8 +374,30 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
         }
         totalSent++;
       } catch (err: any) {
+        // Agar Telegram HTML formatlashda xatolik bersa (unclosed tag va h.k.), teglarsiz oddiy matn sifatida qayta urinib ko'ramiz
+        if (err.description?.includes('parse entities') || err.message?.includes('parse entities')) {
+          try {
+            const strippedText = params.text.replace(/<[^>]*>?/gm, '');
+            if (photoBufferOrUrl) {
+              await botToUse.bot.telegram.sendPhoto(user.telegramId, photoBufferOrUrl, {
+                caption: strippedText,
+                ...(inlineKeyboard || {}),
+              });
+            } else {
+              await botToUse.bot.telegram.sendMessage(user.telegramId, strippedText, {
+                ...(inlineKeyboard || {}),
+              });
+            }
+            totalSent++;
+            continue;
+          } catch (e2: any) {
+            err = e2;
+          }
+        }
+
         totalFailed++;
-        if (err.description?.includes('blocked') || err.description?.includes('deactivated')) {
+        this.logger.warn(`⚠️ Reklama yetkazilmadi [User ID: ${user.telegramId} (@${user.username || 'noma\'lum'})]: ${err.description || err.message}`);
+        if (err.description?.includes('blocked') || err.description?.includes('deactivated') || err.description?.includes('chat not found')) {
           await this.prisma.user.update({
             where: { id: user.id },
             data: { isBanned: true },

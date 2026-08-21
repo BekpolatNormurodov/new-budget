@@ -53,74 +53,94 @@ interface BroadcastResult {
 
 const TEMPLATES = [
   {
-    id: 'vote',
-    label: '🗳 Ovoz Berish (+30 000)',
+    id: 'income150k',
+    label: '💸 150 000 So\'m Daromad',
     icon: '🔥',
     text:
-      '🔥 <b>DIQQAT, KATTA IMKONIYAT!</b>\n\n' +
-      'Ochiq Budjet loyihasida ovoz berib <b>30 000 so\'m</b> kafolatlangan mukofotga ega bo\'ling!\n\n' +
-      '📍 <i>Barcha oila a\'zolaringiz va yaqinlaringiz raqamlaridan ham ovoz berishingiz mumkin!</i>\n\n' +
-      'Hoziroq quyidagi tugmalar orqali boshlang 👇',
+      '🔥 <b>10 DAQIQADA 150 000 SO\'M ISHLASHNI HOHLAYSIZMI?</b>\n\n' +
+      'Ochiq Budjet loyihasida o\'zingiz, oila a\'zolaringiz va yaqinlaringiz nomidagi raqamlardan ovoz bering!\n\n' +
+      '💰 <b>Har bir ovoz uchun: 30 000 so\'m naqd pul!</b>\n' +
+      '⚡️ 5 ta ovoz = <b>150 000 so\'m</b> darhol hisobingizda!\n\n' +
+      'Pullar to\'g\'ridan-to\'g\'ri Uzcard/Humo kartangizga yoki Paynetga tushiriladi ✅\n\n' +
+      'Hoziroq boshlash uchun pastdagi tugmani bosing 👇',
     buttons: [
-      { id: '1', text: '🗳 Ovoz Berish (+30 000 so\'m)', url: 'https://t.me/open_budget_bot' },
-      { id: '2', text: '📞 Rasmiy Admin / Bog\'lanish', url: 'https://t.me/' },
+      { id: '1', text: '🔥 150 000 so\'m ishlashni boshlash', url: 'https://t.me/open_budget_bot' },
+      { id: '2', text: '💳 Kartaga pul olish', url: 'https://t.me/open_budget_bot' },
     ],
   },
   {
     id: 'new_mahalla',
-    label: '🚀 Yangi Mahalla Boshlandi',
-    icon: '⚡️',
+    label: '⚡️ Yangi Mahalla Ochildi',
+    icon: '🚀',
     text:
-      '🚀 <b>YANGI MAHALLA UCHUN OVOZ BERISH OCHILDI!</b>\n\n' +
-      'Siz boshqa mahallaga ovoz bergan bo\'lsangiz ham, <b>ushbu yangi mahallamizga yangi raqamlar orqali</b> yana ovoz berib pul ishlashingiz mumkin!\n\n' +
-      '💰 Har bir tasdiqlangan ovoz uchun: <b>30 000 so\'m darhol to\'lanadi!</b>\n\n' +
+      '⚡️ <b>DIQQAT: YANGI KATTA BYUDJETLI MAHALLA START OLDI!</b>\n\n' +
+      'Agar oldin boshqa mahallaga ovoz bergan bo\'lsangiz ham — <b>ushbu yangi mahallamizga yangi raqamlar orqali</b> yana cheksiz ovoz berib pul ishlashingiz mumkin!\n\n' +
+      '💎 Har bir tasdiqlangan ovozga: <b>30 000 so\'m kafolatlangan mukofot!</b>\n' +
+      '🎯 Ovozlar soni cheklangan, birinchilardan bo\'ling!\n\n' +
       'Birinchilardan bo\'lib ovoz bering 👇',
     buttons: [
       { id: '1', text: '⚡️ Yangi Mahallaga Ovoz Berish', url: 'https://t.me/open_budget_bot' },
-      { id: '2', text: '📢 Rasmiy Telegram Kanal', url: 'https://t.me/' },
+      { id: '2', text: '📢 Yangiliklar Kanali', url: 'https://t.me/' },
     ],
   },
   {
     id: 'withdraw',
-    label: '💳 Pul Yechish Eslatmasi',
-    icon: '💳',
+    label: '💳 1 Daqiqada Kartaga Pul',
+    icon: '💰',
     text:
-      '💳 <b>PULLARNI YECHIB OLISH ESLATMASI!</b>\n\n' +
-      'Hisobingizda to\'plangan mukofot pullarini <b>Uzcard, Humo yoki Paynet</b> orqali 1 daqiqada yechib oling!\n\n' +
-      '✅ Minimal yechish: <b>10 000 so\'m</b>\n' +
-      '✅ To\'lovlar 100% avtomatlashgan va tezkor amalga oshiriladi.\n\n' +
-      'Balansingizni tekshirib, pulni yechib oling 👇',
+      '💰 <b>BALANSINGIZDAGI PULLARNI YECHIB OLING!</b>\n\n' +
+      'Hisobingizda mablag\' bormi? Uni <b>1 daqiqa ichida</b> o\'z plastik kartangizga (Uzcard / Humo) yoki telefon raqamingizga Paynet orqali o\'tkazib oling!\n\n' +
+      '🚀 Minimal yechish summasi: <b>10 000 so\'m</b>\n' +
+      '🔒 To\'lovlar 100% avtomatlashgan va komissiyasiz amalga oshiriladi.\n\n' +
+      'Balansingizni tekshiring va pulni oling 👇',
     buttons: [
-      { id: '1', text: '💳 Balansni Yechib Olish', url: 'https://t.me/open_budget_bot' },
-      { id: '2', text: '🧾 To\'lov Cheklari & Isbotlar', url: 'https://t.me/' },
+      { id: '1', text: '💳 Pulni Kartaga Yechib Olish', url: 'https://t.me/open_budget_bot' },
+      { id: '2', text: '🧾 To\'lov Isbotlari & Cheklar', url: 'https://t.me/' },
     ],
   },
   {
     id: 'ref',
-    label: '👥 Referal Marafon (+5 000)',
-    icon: '👥',
+    label: '👥 Passiv Daromad (+5 000)',
+    icon: '🏆',
     text:
-      '👥 <b>DO\'STLARINGIZNI TAKLIF QILING VA PUL ISHLANG!</b>\n\n' +
-      'Har bir sizning havolangiz orqali kirgan do\'stingiz uchun <b>+5 000 so\'m</b> darhol hisobingizga tushadi!\n\n' +
-      '10 ta do\'st = <b>50 000 so\'m</b>\n' +
-      '50 ta do\'st = <b>250 000 so\'m</b> 💰\n\n' +
-      'Shaxsiy havolangizni oling va guruhlarga ulashing 👇',
+      '👥 <b>HECH QANDAY MEHNATSIZ KUNIGA 300 000 SO\'M ISHLANG!</b>\n\n' +
+      'O\'zingiz ovoz berib bo\'ldingizmi? Endi do\'stlaringiz orqali katta pul ishlang!\n\n' +
+      'Sizning havolangizdan kirgan har bir inson uchun: <b>+5 000 so\'m naqd pul!</b>\n' +
+      '👥 20 ta do\'st = <b>100 000 so\'m</b>\n' +
+      '👥 60 ta do\'st = <b>300 000 so\'m</b> 💸\n\n' +
+      'Shaxsiy havolangizni oling va do\'stlaringizga yuboring 👇',
     buttons: [
       { id: '1', text: '🔗 Shaxsiy Referal Havolam', url: 'https://t.me/open_budget_bot' },
-      { id: '2', text: '🏆 Eng Ko\'p Pul Ishlaganlar', url: 'https://t.me/' },
+      { id: '2', text: '🏆 Top Daromad Qiluvchilar', url: 'https://t.me/' },
     ],
   },
   {
     id: 'fomo',
-    label: '⏳ So\'nggi Soatlar Qoldi!',
-    icon: '⏰',
+    label: '⏰ Shoshiling! So\'nggi Ovozlar',
+    icon: '🚨',
     text:
-      '⏳ <b>SHOSHILING! OVOZ BERISH YAKUNLANMOQDA!</b>\n\n' +
-      'Mavsum yakunlanishiga juda oz vaqt qoldi. O\'z ovozingizni berib <b>30 000 so\'m</b> mukofotni qo\'lga kiritishga ulgurib qoling!\n\n' +
-      '⚠️ <i>Vaqt tugagach, mukofot berish to\'xtatiladi.</i>\n\n' +
-      'Hoziroq ovoz berish uchun bosing 👇',
+      '🚨 <b>DIQQAT! OVOZ BERISH JARAYONI YAKUNLANMOQDA!</b>\n\n' +
+      'Mahallamiz uchun ajratilgan ovozlar limiti <b>90% ga to\'ldi</b>. Limit to\'lishi bilan ovoz qabul qilish va to\'lovlar to\'xtatiladi!\n\n' +
+      '🔥 Oxirgi imkoniyatdan foydalaning va <b>30 000 so\'m</b> daromadingizni olib qoling!\n\n' +
+      'Hoziroq ovoz berish uchun pastdagi tugmani bosing 👇',
     buttons: [
-      { id: '1', text: '🔥 So\'nggi Imkoniyat (Ovoz Berish)', url: 'https://t.me/open_budget_bot' },
+      { id: '1', text: '🔥 So\'nggi Ovozni Berish (+30 000)', url: 'https://t.me/open_budget_bot' },
+      { id: '2', text: '📞 Yordam Markazi', url: 'https://t.me/' },
+    ],
+  },
+  {
+    id: 'bonus',
+    label: '🎁 Bugungi Maxsus Bonus',
+    icon: '🎉',
+    text:
+      '🎉 <b>BUGUNGI MAXSUS KATTA AKSIYA!</b>\n\n' +
+      'Bugun ovoz bergan foydalanuvchilar uchun navbatsiz, <b>eng tezkor to\'lov kafolati</b> beriladi!\n\n' +
+      '📍 Mahalla: <b>Ochiq Budjet Loyihasi</b>\n' +
+      '💰 To\'lov: <b>30 000 so\'m</b> (Darhol kartaga)\n\n' +
+      'Imkoniyatni qo\'ldan boy bermang 👇',
+    buttons: [
+      { id: '1', text: '🎁 Ovoz Berish & Bonusni Olish', url: 'https://t.me/open_budget_bot' },
+      { id: '2', text: '💬 Admin bilan bog\'lanish', url: 'https://t.me/' },
     ],
   },
 ];
