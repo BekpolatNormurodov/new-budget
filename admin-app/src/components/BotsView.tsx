@@ -165,130 +165,157 @@ export const BotsView: React.FC<BotsViewProps> = ({
 
       {/* Grid View */}
       {viewMode === 'grid' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredBots.map((bot) => {
-            const percentage = Math.min(100, Math.round((bot.currentVotes / (bot.targetVotes || 5000)) * 100 * 10) / 10);
-            const remaining = Math.max(0, (bot.targetVotes || 5000) - bot.currentVotes);
+            const target = bot.targetVotes || 5000;
+            const percentage = Math.min(100, Math.round((bot.currentVotes / target) * 100 * 10) / 10);
+            const isOnline = bot.status === 'ONLINE';
 
             return (
               <div
                 key={bot.id}
-                className="p-5 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-md dark:shadow-xl transition-all flex flex-col justify-between"
+                className="group relative rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80 hover:border-indigo-500/50 dark:hover:border-indigo-500/50 shadow-lg hover:shadow-2xl transition-all duration-300 flex flex-col justify-between overflow-hidden p-5"
               >
+                {/* Top Subtle Ambient Glow */}
+                <div className={`absolute -top-12 -right-12 w-32 h-32 rounded-full blur-3xl pointer-events-none transition-opacity duration-500 ${
+                  isOnline ? 'bg-emerald-500/15 group-hover:bg-emerald-500/25' : 'bg-rose-500/10'
+                }`} />
+
                 <div>
-                  {/* Top Avatar & Status */}
+                  {/* Header: Avatar, Name, Status */}
                   <div className="flex items-start justify-between gap-3 mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold text-base shadow-md">
-                        {bot.mahallaName.charAt(0)}
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="relative shrink-0">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-500 flex items-center justify-center text-white font-black text-lg shadow-md shadow-indigo-500/20">
+                          {bot.mahallaName.charAt(0)}
+                        </div>
+                        <span className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-slate-900 ${
+                          isOnline ? 'bg-emerald-500' : 'bg-slate-400'
+                        }`} />
                       </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">{bot.mahallaName}</h4>
-                        <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">
-                          {bot.botUsername ? `@${bot.botUsername}` : bot.name}
-                        </p>
-                        <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">ID: {bot.mahallaId}</p>
-                        {bot.description && (
-                          <p className="text-[11px] text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60 mt-1 line-clamp-1 italic">
-                            💬 {bot.description}
-                          </p>
-                        )}
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                          {bot.mahallaName}
+                        </h4>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-xs font-mono font-semibold text-indigo-600 dark:text-indigo-400 truncate">
+                            {bot.botUsername ? `@${bot.botUsername}` : bot.name}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            • #{bot.mahallaId?.slice(-6) || bot.id}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
-                    <span
-                      className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
-                        bot.status === 'ONLINE'
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 shadow-sm shadow-emerald-500/10'
-                          : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
-                      }`}
-                    >
-                      {bot.status === 'ONLINE' ? '🟢 Online' : '⏸ To\'xtatilgan'}
-                    </span>
+                    <div className={`shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                      isOnline
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 shadow-sm shadow-emerald-500/10'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                      <span>{isOnline ? 'Online' : "To'xtatilgan"}</span>
+                    </div>
                   </div>
 
-                  {/* Progress & Target Section */}
-                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800/80 space-y-2 mb-4">
-                    <div className="flex justify-between text-xs font-semibold">
-                      <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                        <Target className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                        Reja bajarilishi:
+                  {/* Description / Extra Note Pill */}
+                  {bot.description && (
+                    <div className="mb-4 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/60 dark:border-slate-800/60 text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                      <span className="text-indigo-500">💬</span>
+                      <span className="truncate italic">{bot.description}</span>
+                    </div>
+                  )}
+
+                  {/* 🎯 Progress & Goal Card */}
+                  <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-950/60 border border-slate-200/60 dark:border-slate-800/60 space-y-2.5 mb-4">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                        <Target className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>Reja bajarilishi</span>
                       </span>
-                      <span className="text-slate-900 dark:text-white font-bold">{percentage}%</span>
+                      <span className="font-mono font-extrabold text-sm text-indigo-600 dark:text-indigo-400">
+                        {percentage}%
+                      </span>
                     </div>
 
-                    <div className="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                    {/* Enhanced Gradient Progress Bar */}
+                    <div className="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-800/80 overflow-hidden p-0.5">
                       <div
-                        className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 rounded-full transition-all duration-500"
-                        style={{ width: `${Math.max(3, percentage)}%` }}
-                      ></div>
+                        className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 rounded-full transition-all duration-700 shadow-sm"
+                        style={{ width: `${Math.max(4, percentage)}%` }}
+                      />
                     </div>
 
-                    <div className="flex justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-1">
-                      <span>Yig'ildi: <b className="text-slate-900 dark:text-white font-bold">{formatSum(bot.currentVotes)}</b> ta</span>
-                      <span>Reja: <b className="text-slate-900 dark:text-white font-bold">{formatSum(bot.targetVotes)}</b> ta</span>
+                    <div className="flex items-center justify-between text-[11px] font-medium text-slate-500 dark:text-slate-400 pt-0.5">
+                      <span>Yig'ildi: <b className="text-slate-900 dark:text-white font-bold font-mono">{formatSum(bot.currentVotes)}</b> ta</span>
+                      <span>Reja: <b className="text-slate-700 dark:text-slate-300 font-bold font-mono">{formatSum(bot.targetVotes)}</b> ta</span>
                     </div>
                   </div>
 
-                  {/* Financial settings pills */}
-                  <div className="grid grid-cols-2 gap-2 text-xs mb-4">
-                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block">1 Ovoz mukofoti:</span>
-                      <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatSum(bot.voteReward || 30000)} so'm</span>
+                  {/* 💰 Financial Configuration Grid */}
+                  <div className="grid grid-cols-2 gap-2.5 mb-4 text-xs">
+                    <div className="p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-950/60 border border-slate-200/60 dark:border-slate-800/60">
+                      <span className="text-[10px] font-medium text-slate-400 block mb-0.5">1 Ovoz mukofoti:</span>
+                      <span className="font-mono font-bold text-sm text-emerald-600 dark:text-emerald-400">
+                        {formatSum(bot.voteReward || 30000)} so'm
+                      </span>
                     </div>
-                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Referal:</span>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+
+                    <div className="p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-950/60 border border-slate-200/60 dark:border-slate-800/60">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[10px] font-medium text-slate-400">Referal:</span>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
                           bot.isRefActive !== false
                             ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                            : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                            : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
                         }`}>
-                          {bot.isRefActive !== false ? '🟢 Faol' : "⚪️ To'xtatilgan"}
+                          {bot.isRefActive !== false ? 'Faol' : "To'xtatilgan"}
                         </span>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-400">+{formatSum(bot.refBonus || 5000)} so'm</span>
+                      <span className="font-mono font-bold text-sm text-purple-600 dark:text-purple-400">
+                        +{formatSum(bot.refBonus || 5000)} so'm
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Bottom Action Buttons */}
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                {/* Bottom Action Footer */}
+                <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5">
-                    {bot.status === 'ONLINE' ? (
+                    {isOnline ? (
                       <button
                         onClick={() => onStopBot(bot.id)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-colors cursor-pointer"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-all active:scale-95 cursor-pointer shadow-sm"
                         title="Botni to'xtatish"
                       >
-                        <Square className="w-3.5 h-3.5" />
-                        To'xtatish
+                        <Square className="w-3.5 h-3.5 fill-current" />
+                        <span>To'xtatish</span>
                       </button>
                     ) : (
                       <button
                         onClick={() => onStartBot(bot.id)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 transition-colors cursor-pointer"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all active:scale-95 cursor-pointer shadow-sm"
                         title="Botni ishga tushirish"
                       >
-                        <Play className="w-3.5 h-3.5" />
-                        Ishga tushirish
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Ishga tushirish</span>
                       </button>
                     )}
 
                     <button
                       onClick={() => onOpenEditBot(bot)}
-                      className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
-                      title="Tahrirlash"
+                      className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 transition-all active:scale-95 cursor-pointer shadow-sm"
+                      title="Sozlamalarni tahrirlash"
                     >
-                      <Edit2 className="w-4 h-4" />
+                      <Edit2 className="w-3.5 h-3.5" />
                     </button>
 
                     <button
                       onClick={() => onDeleteBot(bot.id, bot.mahallaName)}
-                      className="p-1.5 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
+                      className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all active:scale-95 cursor-pointer"
                       title="O'chirish"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
@@ -297,7 +324,7 @@ export const BotsView: React.FC<BotsViewProps> = ({
                       href={`https://t.me/${bot.botUsername}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 font-medium"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
                     >
                       <span>Bot</span>
                       <ExternalLink className="w-3 h-3" />
