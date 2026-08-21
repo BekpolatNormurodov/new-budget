@@ -176,7 +176,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      const digitPng = await sharp(digitCanvas, { raw: { width, height, channels: 1 } })
+      const digitPng = await sharp(digitCanvas, { raw: { width, height, channels: 1 }, failOn: 'none' })
         .withMetadata({ density: 300 })
         .png()
         .toBuffer();
@@ -187,7 +187,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         const cw = c.end - c.start;
         if (cw < 2) continue;
 
-        const charImg = await sharp(digitPng)
+        const charImg = await sharp(digitPng, { failOn: 'none' })
           .extract({ left: c.start, top: 0, width: cw, height })
           .extend({ top: 20, bottom: 20, left: 20, right: 20, background: { r: 255, g: 255, b: 255 } })
           .resize(100, 100, { fit: 'contain', background: { r: 255, g: 255, b: 255 } })
