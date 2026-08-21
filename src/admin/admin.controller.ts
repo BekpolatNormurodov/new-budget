@@ -122,8 +122,11 @@ export class AdminController {
 
   // Marketing Broadcast Trigger (Avtomatik Eslatma)
   @Post('broadcast/marketing-trigger')
-  async triggerMarketingBroadcast(@Body('slot') slot?: 'MORNING' | 'EVENING' | 'TEST') {
-    return this.adminService.triggerMarketingBroadcast(slot || 'MORNING');
+  async triggerMarketingBroadcast(
+    @Body('slot') slot?: 'MORNING' | 'EVENING' | 'TEST',
+    @Body('targetBotId') targetBotId?: number,
+  ) {
+    return this.adminService.triggerMarketingBroadcast(slot || 'MORNING', targetBotId ? Number(targetBotId) : undefined);
   }
 
   // Custom Ad Broadcast (Banner, Matn, Formatlash, Inline Tugmalar)
@@ -136,8 +139,12 @@ export class AdminController {
       buttonText?: string;
       buttonUrl?: string;
       buttons?: Array<{ text: string; url: string }>;
+      targetBotId?: number;
     },
   ) {
-    return this.adminService.triggerCustomAdBroadcast(body);
+    return this.adminService.triggerCustomAdBroadcast({
+      ...body,
+      targetBotId: body.targetBotId ? Number(body.targetBotId) : undefined,
+    });
   }
 }

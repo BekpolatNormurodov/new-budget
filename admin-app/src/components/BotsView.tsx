@@ -402,6 +402,7 @@ export const BotsView: React.FC<BotsViewProps> = ({
       <MarketingBroadcastModal
         isOpen={isBroadcastModalOpen}
         onClose={() => setIsBroadcastModalOpen(false)}
+        bots={bots}
       />
     </div>
   );

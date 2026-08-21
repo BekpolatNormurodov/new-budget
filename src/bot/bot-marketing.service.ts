@@ -82,7 +82,10 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
    * Xabarlarni yuborishni bajarish (Ertalabki, Kechki yoki Test)
    * QOIDA: Barcha faol botlar o'z foydalanuvchilariga mustaqil xabar yuboradi!
    */
-  public async executeBroadcast(slot: 'MORNING' | 'EVENING' | 'TEST' = 'TEST'): Promise<BroadcastResult> {
+  public async executeBroadcast(
+    slot: 'MORNING' | 'EVENING' | 'TEST' = 'MORNING',
+    targetBotId?: number,
+  ): Promise<BroadcastResult> {
     const startTime = Date.now();
 
     // 1. Agar xotirada botlar ishga tushmagan bo'lsa, barchasini ishga tushiramiz
@@ -91,7 +94,10 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
     }
 
     const activeBotsRecords = await this.prisma.botInstance.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        ...(targetBotId ? { id: targetBotId } : {}),
+      },
     });
 
     // 2. Bazadagi barcha haqiqiy foydalanuvchilarni olish
@@ -293,6 +299,7 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
     buttonText?: string;
     buttonUrl?: string;
     buttons?: Array<{ text: string; url: string }>;
+    targetBotId?: number;
   }): Promise<{
     sentCount: number;
     failedCount: number;
@@ -303,6 +310,7 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
       where: {
         isBanned: false,
         telegramId: { notIn: ['0', ''] },
+        ...(params.targetBotId ? { botInstanceId: params.targetBotId } : {}),
       },
     });
 

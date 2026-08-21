@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   X,
   Send,
@@ -24,11 +24,19 @@ import {
   Undo2,
   Redo2,
   Eraser,
+  Target,
+  Users,
+  Flame,
+  Zap,
+  Wallet,
+  Clock,
 } from 'lucide-react';
+import { BotInstanceItem } from '../types';
 
 interface MarketingBroadcastModalProps {
   isOpen: boolean;
   onClose: () => void;
+  bots?: BotInstanceItem[];
 }
 
 interface InlineButton {
@@ -43,31 +51,100 @@ interface BroadcastResult {
   durationMs: number;
 }
 
-const DEFAULT_AD_TEXT =
-  '🔥 <b>DIQQAT, KATTA IMKONIYAT!</b>\n\n' +
-  'Ochiq Budjet loyihasida ovoz berib <b>30 000 so\'m</b> kafolatlangan mukofotga ega bo\'ling!\n\n' +
-  '📌 <i>Barcha oila a\'zolaringiz raqamlaridan ham ovoz berishingiz mumkin!</i>\n\n' +
-  'Hoziroq quyidagi tugmalar orqali boshlang 👇';
+const TEMPLATES = [
+  {
+    id: 'vote',
+    label: '🗳 Ovoz Berish (+30 000)',
+    icon: '🔥',
+    text:
+      '🔥 <b>DIQQAT, KATTA IMKONIYAT!</b>\n\n' +
+      'Ochiq Budjet loyihasida ovoz berib <b>30 000 so\'m</b> kafolatlangan mukofotga ega bo\'ling!\n\n' +
+      '📍 <i>Barcha oila a\'zolaringiz va yaqinlaringiz raqamlaridan ham ovoz berishingiz mumkin!</i>\n\n' +
+      'Hoziroq quyidagi tugmalar orqali boshlang 👇',
+    buttons: [
+      { id: '1', text: '🗳 Ovoz Berish (+30 000 so\'m)', url: 'https://t.me/open_budget_bot' },
+      { id: '2', text: '📞 Rasmiy Admin / Bog\'lanish', url: 'https://t.me/' },
+    ],
+  },
+  {
+    id: 'new_mahalla',
+    label: '🚀 Yangi Mahalla Boshlandi',
+    icon: '⚡️',
+    text:
+      '🚀 <b>YANGI MAHALLA UCHUN OVOZ BERISH OCHILDI!</b>\n\n' +
+      'Siz boshqa mahallaga ovoz bergan bo\'lsangiz ham, <b>ushbu yangi mahallamizga yangi raqamlar orqali</b> yana ovoz berib pul ishlashingiz mumkin!\n\n' +
+      '💰 Har bir tasdiqlangan ovoz uchun: <b>30 000 so\'m darhol to\'lanadi!</b>\n\n' +
+      'Birinchilardan bo\'lib ovoz bering 👇',
+    buttons: [
+      { id: '1', text: '⚡️ Yangi Mahallaga Ovoz Berish', url: 'https://t.me/open_budget_bot' },
+      { id: '2', text: '📢 Rasmiy Telegram Kanal', url: 'https://t.me/' },
+    ],
+  },
+  {
+    id: 'withdraw',
+    label: '💳 Pul Yechish Eslatmasi',
+    icon: '💳',
+    text:
+      '💳 <b>PULLARNI YECHIB OLISH ESLATMASI!</b>\n\n' +
+      'Hisobingizda to\'plangan mukofot pullarini <b>Uzcard, Humo yoki Paynet</b> orqali 1 daqiqada yechib oling!\n\n' +
+      '✅ Minimal yechish: <b>10 000 so\'m</b>\n' +
+      '✅ To\'lovlar 100% avtomatlashgan va tezkor amalga oshiriladi.\n\n' +
+      'Balansingizni tekshirib, pulni yechib oling 👇',
+    buttons: [
+      { id: '1', text: '💳 Balansni Yechib Olish', url: 'https://t.me/open_budget_bot' },
+      { id: '2', text: '🧾 To\'lov Cheklari & Isbotlar', url: 'https://t.me/' },
+    ],
+  },
+  {
+    id: 'ref',
+    label: '👥 Referal Marafon (+5 000)',
+    icon: '👥',
+    text:
+      '👥 <b>DO\'STLARINGIZNI TAKLIF QILING VA PUL ISHLANG!</b>\n\n' +
+      'Har bir sizning havolangiz orqali kirgan do\'stingiz uchun <b>+5 000 so\'m</b> darhol hisobingizga tushadi!\n\n' +
+      '10 ta do\'st = <b>50 000 so\'m</b>\n' +
+      '50 ta do\'st = <b>250 000 so\'m</b> 💰\n\n' +
+      'Shaxsiy havolangizni oling va guruhlarga ulashing 👇',
+    buttons: [
+      { id: '1', text: '🔗 Shaxsiy Referal Havolam', url: 'https://t.me/open_budget_bot' },
+      { id: '2', text: '🏆 Eng Ko\'p Pul Ishlaganlar', url: 'https://t.me/' },
+    ],
+  },
+  {
+    id: 'fomo',
+    label: '⏳ So\'nggi Soatlar Qoldi!',
+    icon: '⏰',
+    text:
+      '⏳ <b>SHOSHILING! OVOZ BERISH YAKUNLANMOQDA!</b>\n\n' +
+      'Mavsum yakunlanishiga juda oz vaqt qoldi. O\'z ovozingizni berib <b>30 000 so\'m</b> mukofotni qo\'lga kiritishga ulgurib qoling!\n\n' +
+      '⚠️ <i>Vaqt tugagach, mukofot berish to\'xtatiladi.</i>\n\n' +
+      'Hoziroq ovoz berish uchun bosing 👇',
+    buttons: [
+      { id: '1', text: '🔥 So\'nggi Imkoniyat (Ovoz Berish)', url: 'https://t.me/open_budget_bot' },
+    ],
+  },
+];
 
 export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = ({
   isOpen,
   onClose,
+  bots = [],
 }) => {
   const [activeTab, setActiveTab] = useState<'custom_ad' | 'reminder'>('custom_ad');
+
+  // Targeting: ALL or specific bot ID
+  const [selectedBotTarget, setSelectedBotTarget] = useState<string>('ALL');
 
   // Tab 1: Reminder State
   const [selectedSlot, setSelectedSlot] = useState<'MORNING' | 'EVENING'>('MORNING');
 
   // Tab 2: Custom Ad State
-  const [adText, setAdText] = useState<string>(DEFAULT_AD_TEXT);
+  const [adText, setAdText] = useState<string>(TEMPLATES[0].text);
   const [bannerImage, setBannerImage] = useState<string>('');
-  const [buttons, setButtons] = useState<InlineButton[]>([
-    { id: '1', text: '🗳 Hoziroq Ovoz Berish (+30 000)', url: 'https://t.me/open_budget_bot' },
-    { id: '2', text: '📢 Rasmiy Telegram Kanal', url: 'https://t.me/' },
-  ]);
+  const [buttons, setButtons] = useState<InlineButton[]>(TEMPLATES[0].buttons);
 
   // History stack for Undo/Redo (Ctrl+Z / Ctrl+Y)
-  const historyRef = useRef<string[]>([DEFAULT_AD_TEXT]);
+  const historyRef = useRef<string[]>([TEMPLATES[0].text]);
   const historyIndexRef = useRef<number>(0);
 
   const [loading, setLoading] = useState<boolean>(false);
@@ -79,7 +156,7 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
   const pushToHistory = (newVal: string) => {
     const nextHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
     nextHistory.push(newVal);
-    if (nextHistory.length > 50) nextHistory.shift(); // keep max 50 states
+    if (nextHistory.length > 50) nextHistory.shift();
     historyRef.current = nextHistory;
     historyIndexRef.current = nextHistory.length - 1;
     setAdText(newVal);
@@ -116,7 +193,7 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
     }
   };
 
-  // Insert HTML tag into textarea cleanly with selection preservation
+  // Clean HTML tag insert
   const insertTag = (openTag: string, closeTag: string, placeholder = 'matn') => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -144,7 +221,6 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setAdText(val);
-    // Debounce pushing normal typing to history
     pushToHistory(val);
   };
 
@@ -180,54 +256,23 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
   };
 
   // Preset Template loader
-  const loadPresetTemplate = (type: 'vote' | 'withdraw' | 'ref') => {
-    let t = '';
-    let b: InlineButton[] = [];
-
-    if (type === 'vote') {
-      t =
-        '🔥 <b>DIQQAT, KATTA IMKONIYAT!</b>\n\n' +
-        'Ochiq Budjet loyihasida ovoz berib <b>30 000 so\'m</b> kafolatlangan mukofotga ega bo\'ling!\n\n' +
-        '📌 <i>Barcha oila a\'zolaringiz raqamlaridan ham ovoz berishingiz mumkin!</i>\n\n' +
-        'Hoziroq quyidagi tugmalar orqali boshlang 👇';
-      b = [
-        { id: '1', text: '🗳 Ovoz Berish (+30 000 so\'m)', url: 'https://t.me/open_budget_bot' },
-        { id: '2', text: '📢 Rasmiy Telegram Kanal', url: 'https://t.me/' },
-      ];
-    } else if (type === 'withdraw') {
-      t =
-        '💳 <b>PULLARNI YECHIB OLISH ESLATMASI!</b>\n\n' +
-        'Hisobingizda to\'plangan mukofot mablag\'larini <b>Uzcard, Humo yoki Paynet</b> orqali bir zumda yechib oling!\n\n' +
-        'Minimal yechish summasi: <b>10 000 so\'m</b>\n' +
-        'To\'lovlar 100% kafolatlangan va tezkor amalga oshiriladi ✅';
-      b = [
-        { id: '1', text: '💳 Balansni Yechib Olish', url: 'https://t.me/open_budget_bot' },
-        { id: '2', text: '🧾 To\'lov Isbotlari & Cheklar', url: 'https://t.me/' },
-      ];
-    } else if (type === 'ref') {
-      t =
-        '👥 <b>DO\'STLARINGIZNI TAKLIF QILING VA PUL ISHLANG!</b>\n\n' +
-        'Har bir taklif qilgan do\'stingiz uchun <b>+5 000 so\'m</b> darhol hisobingizga tushadi!\n\n' +
-        'Qancha ko\'p do\'stingiz kelsa — shuncha ko\'p daromad olasiz 💰';
-      b = [
-        { id: '1', text: '🔗 Shaxsiy Referal Havolam', url: 'https://t.me/open_budget_bot' },
-      ];
-    }
-
-    pushToHistory(t);
-    setButtons(b);
+  const applyTemplate = (tmpl: typeof TEMPLATES[0]) => {
+    pushToHistory(tmpl.text);
+    setButtons(tmpl.buttons.map((b) => ({ ...b, id: Math.random().toString() })));
   };
 
   const handleSendBroadcast = async () => {
     setLoading(true);
     setResult(null);
 
+    const targetBotId = selectedBotTarget === 'ALL' ? undefined : Number(selectedBotTarget);
+
     try {
       if (activeTab === 'reminder') {
         const res = await fetch('/api/admin/broadcast/marketing-trigger', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ slot: selectedSlot }),
+          body: JSON.stringify({ slot: selectedSlot, targetBotId }),
         });
         const data = await res.json();
         setResult({
@@ -253,6 +298,7 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
             text: adText.trim(),
             photoBase64OrUrl: bannerImage || undefined,
             buttons: validButtons.length > 0 ? validButtons : undefined,
+            targetBotId,
           }),
         });
         const data = await res.json();
@@ -300,9 +346,38 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
           </button>
         </div>
 
-        {/* Tab Selector */}
+        {/* Global Controls Bar: Target Filter & Tab Selector */}
         {!result && (
-          <div className="px-5 pt-3 bg-white dark:bg-slate-900 shrink-0">
+          <div className="px-5 pt-3 pb-2 bg-white dark:bg-slate-900 space-y-2.5 border-b border-slate-200 dark:border-slate-800 shrink-0">
+            {/* Target Audience / Mahalla Selector */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <Target className="w-4 h-4 text-orange-500 shrink-0" />
+                <div>
+                  <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                    Qaysi auditoriyaga yuborilsin?
+                  </span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Barcha mahallalarga yoki faqat tanlangan bot foydalanuvchilariga
+                  </span>
+                </div>
+              </div>
+
+              <select
+                value={selectedBotTarget}
+                onChange={(e) => setSelectedBotTarget(e.target.value)}
+                className="bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-semibold text-xs rounded-xl px-3 py-1.5 border border-slate-300 dark:border-slate-700 focus:outline-none focus:border-orange-500 cursor-pointer shadow-sm"
+              >
+                <option value="ALL">🌐 Barcha Mahallalar (Hamma Foydalanuvchilar)</option>
+                {bots.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    📍 {b.mahallaName} ({b.botUsername ? `@${b.botUsername}` : b.name})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Tab Selector */}
             <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
               <button
                 type="button"
@@ -341,33 +416,25 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
                 {/* Left Column: Composer Controls (7 cols) */}
                 <div className="lg:col-span-7 space-y-4">
-                  {/* Preset Template Chips */}
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mr-1 flex items-center gap-1">
+                  {/* 5 Preset Marketing Templates Chips */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block flex items-center gap-1">
                       <Sparkles className="w-3 h-3 text-orange-500" />
-                      Shablonlar:
+                      5 ta Tayyor Marketing Shablonlari (1-Click):
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => loadPresetTemplate('vote')}
-                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition cursor-pointer"
-                    >
-                      🗳 Ovoz berish
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => loadPresetTemplate('withdraw')}
-                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition cursor-pointer"
-                    >
-                      💳 Pul yechish
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => loadPresetTemplate('ref')}
-                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition cursor-pointer"
-                    >
-                      👥 Referal
-                    </button>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {TEMPLATES.map((tmpl) => (
+                        <button
+                          key={tmpl.id}
+                          type="button"
+                          onClick={() => applyTemplate(tmpl)}
+                          className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-100 dark:bg-slate-800 hover:bg-orange-500/10 hover:border-orange-500/40 hover:text-orange-600 dark:hover:text-orange-400 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition cursor-pointer flex items-center gap-1 shadow-sm"
+                        >
+                          <span>{tmpl.icon}</span>
+                          <span>{tmpl.label}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Banner Image Upload */}
@@ -612,10 +679,16 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
                 {/* Right Column: Real-Time Telegram Bubble Preview (5 cols) */}
                 <div className="lg:col-span-5 flex flex-col">
                   <div className="sticky top-0 space-y-2">
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                      <MessageSquare className="w-3.5 h-3.5 text-sky-500" />
-                      <span>Telegramdagi Jonli Ko'rinishi (Preview)</span>
-                    </span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                        <MessageSquare className="w-3.5 h-3.5 text-sky-500" />
+                        <span>Telegramdagi Jonli Ko'rinishi (Preview)</span>
+                      </span>
+
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/20">
+                        {selectedBotTarget === 'ALL' ? '🌐 Barchaga' : '📍 Aniq Mahallaga'}
+                      </span>
+                    </div>
 
                     {/* Telegram Screen Frame */}
                     <div className="p-3.5 rounded-3xl bg-[#73899c]/20 dark:bg-[#0e1621] border border-slate-200 dark:border-slate-800 shadow-inner">
@@ -670,7 +743,8 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
                 <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-300 text-xs flex items-start gap-3">
                   <Radio className="w-5 h-5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
                   <p className="leading-relaxed">
-                    Avtomatik kunlik eslatma tizimi barcha mahallalar holatini tahlil qiladi va rejasiga yetmagan mahallalar uchun maxsus ovoz berish xabarnomasini yuboradi.
+                    Avtomatik kunlik eslatma tizimi{' '}
+                    <b>{selectedBotTarget === 'ALL' ? 'barcha mahallalar' : 'tanlangan mahalla'}</b> foydalanuvchilariga ovoz yig'ish chaqiruvini yuboradi.
                   </p>
                 </div>
 
@@ -727,7 +801,9 @@ export const MarketingBroadcastModal: React.FC<MarketingBroadcastModalProps> = (
                 <CheckCircle2 className="w-7 h-7 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <div>
                   <h4 className="font-bold text-sm">Xabarnoma Muvaffaqiyatli Yetkazildi!</h4>
-                  <p className="text-xs text-emerald-700 dark:text-emerald-400">Barcha botlar orqali foydalanuvchilarga xabarlar jo'natildi.</p>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                    {selectedBotTarget === 'ALL' ? 'Barcha botlar' : 'Tanlangan mahalla boti'} orqali xabarlar jo\'natildi.
+                  </p>
                 </div>
               </div>
 

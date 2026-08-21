@@ -564,8 +564,8 @@ export class AdminService {
   /**
    * Kunlik ertalabki/kechki marketing xabarlarini qo'lda yoki zudlik bilan ishga tushirish
    */
-  async triggerMarketingBroadcast(slot: 'MORNING' | 'EVENING' | 'TEST' = 'TEST') {
-    return this.botMarketingService.executeBroadcast(slot);
+  async triggerMarketingBroadcast(slot: 'MORNING' | 'EVENING' | 'TEST' = 'MORNING', targetBotId?: number) {
+    return this.botMarketingService.executeBroadcast(slot, targetBotId);
   }
 
   /**
@@ -577,6 +577,7 @@ export class AdminService {
     buttonText?: string;
     buttonUrl?: string;
     buttons?: Array<{ text: string; url: string }>;
+    targetBotId?: number;
   }) {
     return this.botMarketingService.executeCustomAdBroadcast(params);
   }
