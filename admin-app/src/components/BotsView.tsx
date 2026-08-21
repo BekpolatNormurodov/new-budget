@@ -195,7 +195,16 @@ export const BotsView: React.FC<BotsViewProps> = ({
                       <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatSum(bot.voteReward || 30000)} so'm</span>
                     </div>
                     <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Referal bonusi:</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Referal:</span>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                          bot.isRefActive !== false
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                        }`}>
+                          {bot.isRefActive !== false ? '🟢 Faol' : "⚪️ To'xtatilgan"}
+                        </span>
+                      </div>
                       <span className="font-bold text-purple-600 dark:text-purple-400">+{formatSum(bot.refBonus || 5000)} so'm</span>
                     </div>
                   </div>
@@ -319,7 +328,16 @@ export const BotsView: React.FC<BotsViewProps> = ({
 
                       <td className="p-4 font-semibold text-slate-800 dark:text-slate-200">{formatSum(bot.targetVotes)} ta</td>
                       <td className="p-4 font-bold text-emerald-600 dark:text-emerald-400">{formatSum(bot.voteReward || 30000)} so'm</td>
-                      <td className="p-4 font-bold text-purple-600 dark:text-purple-400">+{formatSum(bot.refBonus || 5000)} so'm</td>
+                      <td className="p-4">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-bold text-purple-600 dark:text-purple-400">+{formatSum(bot.refBonus || 5000)} so'm</span>
+                          <span className={`text-[9px] font-semibold ${
+                            bot.isRefActive !== false ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'
+                          }`}>
+                            {bot.isRefActive !== false ? '🟢 Faol' : "⚪️ To'xtatilgan"}
+                          </span>
+                        </div>
+                      </td>
 
                       <td className="p-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">

@@ -23,6 +23,7 @@ export interface BotInstanceItem {
   isTargetReached?: boolean;
   voteReward: number;
   refBonus: number;
+  isRefActive?: boolean;
   isActive: boolean;
   status: string;
   avatarUrl?: string;

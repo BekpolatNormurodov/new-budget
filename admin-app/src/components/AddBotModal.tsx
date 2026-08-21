@@ -248,6 +248,50 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
             </div>
           </div>
 
+          {/* Referal Tizimi Holati Toggle */}
+          <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${
+                newBot.isRefActive !== false
+                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                  : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+              }`}>
+                <Gift className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <span>Referal Tizimi</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
+                    newBot.isRefActive !== false
+                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+                  }`}>
+                    {newBot.isRefActive !== false ? 'FAOL' : "TO'XTATILGAN"}
+                  </span>
+                </p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                  {newBot.isRefActive !== false
+                    ? "Do'stlarni taklif qilganda bonus beriladi"
+                    : "Botda referal to'xtatiladi, xabar bilan ogohlantiriladi"}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setNewBot({ ...newBot, isRefActive: newBot.isRefActive === false ? true : false })}
+              className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 ${
+                newBot.isRefActive !== false ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'
+              }`}
+            >
+              <div
+                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                  newBot.isRefActive !== false ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
           <div className="flex justify-end space-x-2 pt-3 border-t border-slate-200 dark:border-slate-800">
             <button
               type="button"

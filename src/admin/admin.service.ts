@@ -226,6 +226,7 @@ export class AdminService {
     targetVotes?: number;
     voteReward?: number;
     refBonus?: number;
+    isRefActive?: boolean;
     description?: string;
   }) {
     return this.botManagerService.addAndStartNewBot(params);
@@ -251,6 +252,7 @@ export class AdminService {
     targetVotes?: number;
     voteReward?: number;
     refBonus?: number;
+    isRefActive?: boolean;
     avatarUrl?: string;
     description?: string;
   }) {
@@ -293,6 +295,7 @@ export class AdminService {
         ...(data.targetVotes !== undefined && { targetVotes: Number(data.targetVotes) }),
         ...(data.voteReward !== undefined && { voteReward: Number(data.voteReward) }),
         ...(data.refBonus !== undefined && { refBonus: Number(data.refBonus) }),
+        ...(data.isRefActive !== undefined && { isRefActive: Boolean(data.isRefActive) }),
         ...(data.description !== undefined && { description: data.description ? data.description.trim() : null }),
         ...(avatarUrl !== undefined && { avatarUrl }),
         currentVotes: actualVotesCount,

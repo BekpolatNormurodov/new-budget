@@ -35,6 +35,7 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
   const [targetVotes, setTargetVotes] = useState(5000);
   const [voteReward, setVoteReward] = useState(30000);
   const [refBonus, setRefBonus] = useState(5000);
+  const [isRefActive, setIsRefActive] = useState<boolean>(true);
   const [description, setDescription] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -49,6 +50,7 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
       setTargetVotes(bot.targetVotes || 5000);
       setVoteReward(bot.voteReward || 30000);
       setRefBonus(bot.refBonus || 5000);
+      setIsRefActive(bot.isRefActive !== false);
       setDescription(bot.description || '');
       setAvatarUrl(bot.avatarUrl || '/assets/open_budget_avatar.jpg');
     }
@@ -82,6 +84,7 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
       targetVotes: Number(targetVotes),
       voteReward: Number(voteReward),
       refBonus: Number(refBonus),
+      isRefActive,
       description,
       avatarUrl,
     });
@@ -282,6 +285,50 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
                 className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-slate-900 dark:text-white font-bold text-xs"
               />
             </div>
+          </div>
+
+          {/* Referal Tizimi Holati Toggle */}
+          <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${
+                isRefActive
+                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                  : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+              }`}>
+                <Gift className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <span>Referal Tizimi</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
+                    isRefActive
+                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+                  }`}>
+                    {isRefActive ? 'FAOL (YOQILGAN)' : "TO'XTATILGAN (O'CHIRILGAN)"}
+                  </span>
+                </p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                  {isRefActive
+                    ? "Foydalanuvchilar do'stlarini taklif qilib bonus olishi mumkin"
+                    : "Botda referal bo'limi to'xtatiladi, bonus berilmaydi"}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsRefActive(!isRefActive)}
+              className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 ${
+                isRefActive ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'
+              }`}
+            >
+              <div
+                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                  isRefActive ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              />
+            </button>
           </div>
 
           <div className="flex justify-end space-x-2 pt-3 border-t border-slate-200 dark:border-slate-800">

@@ -24,6 +24,7 @@ model BotInstance {
   currentVotes   Int       @default(0)
   voteReward     Int       @default(30000)
   refBonus       Int       @default(5000)
+  isRefActive    Boolean   @default(true) // Referal tizimi faolmi (true/false)
   isActive       Boolean   @default(true)
   status         String    @default("ONLINE") // ONLINE | STOPPED | ERROR
   avatarUrl      String?   @db.Text

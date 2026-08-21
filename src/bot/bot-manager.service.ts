@@ -270,6 +270,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     targetVotes?: number;
     voteReward?: number;
     refBonus?: number;
+    isRefActive?: boolean;
     avatarUrl?: string;
     description?: string;
   }) {
@@ -304,6 +305,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         targetVotes: params.targetVotes || 5000,
         voteReward: params.voteReward || 30000,
         refBonus: params.refBonus || 5000,
+        isRefActive: params.isRefActive !== undefined ? Boolean(params.isRefActive) : true,
         avatarUrl: avatarUrl || '/assets/open_budget_avatar.jpg',
         description: params.description ? params.description.trim() : null,
         isActive: true,
@@ -643,12 +645,24 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     // 5. 🔗 Referal ssilka (/referral va tugma)
     const handleReferralTrigger = async (ctx: Context) => {
       try {
+        const freshBot = await this.prisma.botInstance.findUnique({ where: { id: botRecord.id } });
+        const isRefEnabled = freshBot ? freshBot.isRefActive : (botRecord.isRefActive ?? true);
+
+        if (!isRefEnabled) {
+          await ctx.reply(
+            '⚠️ <b>Referal tizimi vaqtincha to\'xtatilgan.</b>\n\n' +
+            'Hozirda do\'stlarni taklif qilish orqali bonus berish to\'xtatilgan. Siz to\'g\'ridan-to\'g\'ri ovoz berish orqali mukofot olishingiz mumkin.',
+            { parse_mode: 'HTML' }
+          );
+          return;
+        }
+
         const user = await this.getOrCreateBotUser(ctx, botRecord.id);
         if (!user) return;
 
         const refCount = await this.prisma.user.count({ where: { referredById: user.id } });
-        const refBonus = botRecord.refBonus || 5000;
-        const botUsername = botRecord.botUsername || 'open_budget_bot';
+        const refBonus = freshBot?.refBonus || botRecord.refBonus || 5000;
+        const botUsername = freshBot?.botUsername || botRecord.botUsername || 'open_budget_bot';
         const refLink = `https://t.me/${botUsername}?start=ref_${user.referralCode}`;
 
         await ctx.reply(
@@ -934,7 +948,10 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      if (startPayload) {
+      const botObj = await this.prisma.botInstance.findUnique({ where: { id: botId } });
+      const isRefActive = botObj ? (botObj.isRefActive ?? true) : true;
+
+      if (startPayload && isRefActive) {
         const cleanRef = startPayload.replace(/^ref_/, '').trim();
         const referrer = await this.prisma.user.findFirst({
           where: {
