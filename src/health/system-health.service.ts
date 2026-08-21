@@ -37,26 +37,26 @@ export class SystemHealthService implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     const isEnabled = this.configService.get<boolean>('health.enabled') ?? true;
     if (!isEnabled) {
-      this.logger.log('⏸ Avtomatik 30 daqiqalik salomatlik tekshiruvi o\'chirilgan.');
+      this.logger.log('⏸ Avtomatik salomatlik tekshiruvi o\'chirilgan.');
       return;
     }
 
-    const intervalMinutes = this.configService.get<number>('health.intervalMinutes') || 15;
-    const intervalMs = intervalMinutes * 60 * 1000;
+    const intervalMinutes = this.configService.get<number>('health.intervalMinutes') || 1;
+    const intervalMs = Math.max(60 * 1000, intervalMinutes * 60 * 1000);
 
-    this.logger.log(`⏱ 15 daqiqalik Tizim Monitoringi faollashtirildi (Har ${intervalMinutes} daqiqada ishga tushadi)`);
+    this.logger.log(`⏱ 1 daqiqalik Avtomatik Tizim Monitoringi faollashtirildi (Har ${intervalMinutes} daqiqada ishga tushadi)`);
 
-    // Dastlabki tezkor tekshiruv (10 soniyadan so'ng)
+    // Dastlabki tezkor tekshiruv (5 soniyadan so'ng)
     setTimeout(() => {
       this.runPeriodicHealthCheck().catch((err) => {
         this.logger.error(`Boshlang'ich tekshiruvda xatolik: ${err.message}`);
       });
-    }, 10000);
+    }, 5000);
 
-    // Har 15 daqiqalik interval
+    // Har 1 daqiqalik interval (60 soniya)
     this.checkIntervalHandle = setInterval(() => {
       this.runPeriodicHealthCheck().catch((err) => {
-        this.logger.error(`15 daqiqalik tekshiruvda xatolik: ${err.message}`);
+        this.logger.error(`1 daqiqalik tekshiruvda xatolik: ${err.message}`);
       });
     }, intervalMs);
   }

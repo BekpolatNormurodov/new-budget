@@ -17,7 +17,6 @@ import { ApproveWithdrawalModal } from './components/ApproveWithdrawalModal';
 import { LoginScreen } from './components/LoginScreen';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
-import { DashboardView } from './components/DashboardView';
 import { BotsView } from './components/BotsView';
 import { VotesView } from './components/VotesView';
 import { WithdrawalsView } from './components/WithdrawalsView';
@@ -50,7 +49,7 @@ export function App() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'bots' | 'votes' | 'withdrawals' | 'users' | 'health'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'bots' | 'votes' | 'withdrawals' | 'users' | 'health'>('bots');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -455,16 +454,6 @@ export function App() {
 
         {/* Dynamic Tab Views */}
         <main className="flex-1 p-3 sm:p-5 lg:p-8 max-w-7xl w-full mx-auto">
-          {activeTab === 'dashboard' && (
-            <DashboardView
-              stats={stats}
-              onNavigateTab={setActiveTab}
-              onApproveVote={handleApproveVote}
-              onOpenApproveWithdrawal={setApprovingWithdrawal}
-              onOpenEditBot={setEditingBot}
-            />
-          )}
-
           {activeTab === 'bots' && (
             <BotsView
               bots={bots}
@@ -513,7 +502,6 @@ export function App() {
       {/* Mobile Bottom Quick Bar for Phones (lg:hidden) */}
       <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 flex items-center justify-around py-2 px-1 lg:hidden transition-colors">
         {[
-          { id: 'dashboard', label: 'Boshqaruv', icon: LayoutDashboard },
           { id: 'bots', label: 'Botlar', icon: Bot, badge: stats ? `${stats.onlineBotsCount}` : null },
           { id: 'votes', label: 'Ovozlar', icon: Vote, badge: stats?.pendingVotesCount || null },
           { id: 'withdrawals', label: 'Yechish', icon: Wallet, badge: stats?.pendingWithdrawalsCount || null },
