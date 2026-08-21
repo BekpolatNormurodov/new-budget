@@ -1,8 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import sharp from 'sharp';
 import { createWorker, Worker } from 'tesseract.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 
 export interface CaptchaSolveResult {
   success: boolean;
@@ -13,46 +14,98 @@ export interface CaptchaSolveResult {
 }
 
 @Injectable()
-export class CaptchaSolverService implements OnModuleDestroy {
+export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CaptchaSolverService.name);
-  private workerInstance: Worker | null = null;
+  private workers: Worker[] = [];
+  private availableWorkers: Worker[] = [];
+  private waitQueue: Array<(worker: Worker) => void> = [];
+  private isInitialized = false;
   private isInitializing = false;
+  private poolSize = 4;
 
-  async getWorker(): Promise<Worker> {
-    if (this.workerInstance) return this.workerInstance;
+  async onModuleInit() {
+    // Dynamic pool size based on CPU cores (min 2, max 8) for parallel multi-core OCR
+    const cpuCount = os.cpus()?.length || 2;
+    this.poolSize = Math.max(2, Math.min(8, cpuCount));
+    this.logger.log(`⚡ Initializing Tesseract OCR Multi-Worker Pool (${this.poolSize} workers across ${cpuCount} CPU cores)...`);
+    
+    await this.initWorkerPool();
+  }
 
-    if (this.isInitializing) {
-      // Wait for initialization to complete
-      while (this.isInitializing) {
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
-      if (this.workerInstance) return this.workerInstance;
-    }
+  private async createSingleWorker(): Promise<Worker> {
+    const bestLangPath = path.resolve(__dirname, '../../node_modules/@tesseract.js-data/eng/4.0.0_best_int');
+    const fallbackLangPath = path.resolve(__dirname, '../../node_modules/@tesseract.js-data/eng/4.0.0');
+    const localData = fs.existsSync(bestLangPath) ? bestLangPath : (fs.existsSync(fallbackLangPath) ? fallbackLangPath : undefined);
 
+    const worker = await createWorker('eng', 1, {
+      langPath: localData,
+      gzip: false,
+    });
+
+    await worker.setParameters({
+      tessedit_char_whitelist: '0123456789+-*/=xXlIoO| ',
+      tessedit_pageseg_mode: '7' as any,
+    });
+
+    return worker;
+  }
+
+  private async initWorkerPool() {
+    if (this.isInitializing || this.isInitialized) return;
     this.isInitializing = true;
+
     try {
-      const bestLangPath = path.resolve(__dirname, '../../node_modules/@tesseract.js-data/eng/4.0.0_best_int');
-      const fallbackLangPath = path.resolve(__dirname, '../../node_modules/@tesseract.js-data/eng/4.0.0');
-      const localData = fs.existsSync(bestLangPath) ? bestLangPath : (fs.existsSync(fallbackLangPath) ? fallbackLangPath : undefined);
+      const promises: Promise<Worker>[] = [];
+      for (let i = 0; i < this.poolSize; i++) {
+        promises.push(this.createSingleWorker());
+      }
 
-      const worker = await createWorker('eng', 1, {
-        langPath: localData,
-        gzip: false,
-      });
-
-      await worker.setParameters({
-        tessedit_char_whitelist: '0123456789+-*/=xXlIoO| ',
-        tessedit_pageseg_mode: '7' as any,
-      });
-
-      this.workerInstance = worker;
-      this.logger.log('✅ Tesseract OCR Worker initialized successfully');
-      return worker;
+      const initializedWorkers = await Promise.all(promises);
+      this.workers = initializedWorkers;
+      this.availableWorkers = [...initializedWorkers];
+      this.isInitialized = true;
+      this.logger.log(`✅ Tesseract OCR Multi-Worker Pool ready with ${this.workers.length} active workers in RAM!`);
     } catch (err) {
-      this.logger.error('Failed to initialize Tesseract Worker', err);
-      throw err;
+      this.logger.error('Failed to initialize full Tesseract Worker Pool, attempting single worker fallback...', err);
+      try {
+        const fallback = await this.createSingleWorker();
+        this.workers = [fallback];
+        this.availableWorkers = [fallback];
+        this.isInitialized = true;
+        this.logger.log('✅ Fallback single worker initialized');
+      } catch (e2) {
+        this.logger.error('Fallback worker creation also failed', e2);
+      }
     } finally {
       this.isInitializing = false;
+    }
+  }
+
+  async acquireWorker(): Promise<Worker> {
+    if (!this.isInitialized || this.workers.length === 0) {
+      await this.initWorkerPool();
+    }
+
+    if (this.availableWorkers.length > 0) {
+      return this.availableWorkers.pop()!;
+    }
+
+    // Wait in queue for next available worker
+    return new Promise<Worker>((resolve) => {
+      this.waitQueue.push(resolve);
+    });
+  }
+
+  async getWorker(): Promise<Worker> {
+    return this.acquireWorker();
+  }
+
+  releaseWorker(worker: Worker) {
+    if (this.waitQueue.length > 0) {
+      const nextResolver = this.waitQueue.shift()!;
+      nextResolver(worker);
+    } else {
+      this.availableWorkers.push(worker);
     }
   }
 
@@ -189,8 +242,8 @@ export class CaptchaSolverService implements OnModuleDestroy {
       return { success: false, error: 'Noto\'g\'ri rasm formati.' };
     }
 
+    const worker = await this.acquireWorker();
     try {
-      const worker = await this.getWorker();
       const thresholds = [115, 100, 130, 145];
       const allTexts: string[] = [];
 
@@ -222,13 +275,15 @@ export class CaptchaSolverService implements OnModuleDestroy {
     } catch (err: any) {
       this.logger.error('Captcha solver error', err);
       return { success: false, error: err.message || 'Captcha OCR xatoligi' };
+    } finally {
+      this.releaseWorker(worker);
     }
   }
 
   async onModuleDestroy() {
-    if (this.workerInstance) {
-      await this.workerInstance.terminate();
-      this.workerInstance = null;
-    }
+    this.logger.log('🛑 Terminating Tesseract OCR Multi-Worker Pool...');
+    await Promise.all(this.workers.map((w) => w.terminate().catch(() => {})));
+    this.workers = [];
+    this.availableWorkers = [];
   }
 }

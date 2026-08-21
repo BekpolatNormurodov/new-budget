@@ -100,6 +100,9 @@ export class SystemHealthService implements OnModuleInit, OnModuleDestroy {
     try {
       const worker = await this.captchaSolver.getWorker().catch(() => null);
       capResolved = !!worker;
+      if (worker) {
+        this.captchaSolver.releaseWorker(worker);
+      }
     } catch (e: any) {
       issues.push(`Captcha solver xatoligi: ${e.message}`);
     }

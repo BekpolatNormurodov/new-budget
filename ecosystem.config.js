@@ -3,19 +3,22 @@ module.exports = {
     {
       name: 'open-budget-orchestrator',
       script: 'dist/main.js',
-      instances: 1,
+      instances: 1, // Single supervisor instance to avoid Telegram Polling 409 conflict
       exec_mode: 'fork',
-      autorestart: true,
-      watch: false,
-      max_memory_restart: '1G',
+      max_memory_restart: '3500M',
+      node_args: '--max-old-space-size=4096',
       env: {
         NODE_ENV: 'production',
-        PORT: 3000,
+        UV_THREADPOOL_SIZE: '128',
       },
-      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-      error_file: 'logs/pm2-error.log',
-      out_file: 'logs/pm2-out.log',
-      merge_logs: true,
+      env_production: {
+        NODE_ENV: 'production',
+        UV_THREADPOOL_SIZE: '128',
+      },
+      watch: false,
+      autorestart: true,
+      restart_delay: 2000,
+      exp_backoff_restart_delay: 100,
     },
   ],
 };

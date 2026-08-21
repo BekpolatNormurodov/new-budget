@@ -1,9 +1,25 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
+import http from 'http';
+import https from 'https';
 import { ConfigService } from '@nestjs/config';
 import { CaptchaSolverService } from './captcha-solver.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProxyManagerService } from '../proxy/proxy-manager.service';
+
+const httpKeepAliveAgent = new http.Agent({
+  keepAlive: true,
+  maxSockets: 1000,
+  maxFreeSockets: 100,
+  timeout: 30000,
+});
+
+const httpsKeepAliveAgent = new https.Agent({
+  keepAlive: true,
+  maxSockets: 1000,
+  maxFreeSockets: 100,
+  timeout: 30000,
+});
 
 export interface SendSmsResult {
   success: boolean;
@@ -264,11 +280,16 @@ export class OpenBudgetService {
       if (enableLiveApi) {
         try {
           const stickyAxiosConfig = this.proxyManager.getAxiosConfig(clean12);
+          const baseAxiosOpts = {
+            httpAgent: httpKeepAliveAgent,
+            httpsAgent: httpsKeepAliveAgent,
+            ...stickyAxiosConfig,
+          };
 
           const captchaRes = await axios.get(`${this.baseUrl}/vote/captcha`, {
             responseType: 'arraybuffer',
             timeout: 6000,
-            ...stickyAxiosConfig,
+            ...baseAxiosOpts,
           });
 
           const captchaBuffer = Buffer.from(captchaRes.data);
@@ -288,7 +309,7 @@ export class OpenBudgetService {
               board_id: initiative.boardId,
               captcha_result: solved.answer,
             },
-            { timeout: 9000, ...stickyAxiosConfig },
+            { timeout: 9000, ...baseAxiosOpts },
           );
 
           return {
@@ -340,6 +361,11 @@ export class OpenBudgetService {
       if (enableLiveApi && sessionId) {
         try {
           const stickyAxiosConfig = this.proxyManager.getAxiosConfig(clean12);
+          const baseAxiosOpts = {
+            httpAgent: httpKeepAliveAgent,
+            httpsAgent: httpsKeepAliveAgent,
+            ...stickyAxiosConfig,
+          };
 
           const verifyRes = await axios.post(
             `${this.baseUrl}/vote/verify`,
@@ -348,7 +374,7 @@ export class OpenBudgetService {
               code: code,
               session_id: sessionId,
             },
-            { timeout: 9000, ...stickyAxiosConfig },
+            { timeout: 9000, ...baseAxiosOpts },
           );
 
           if (verifyRes.data?.status === 'success' || verifyRes.data?.success) {
