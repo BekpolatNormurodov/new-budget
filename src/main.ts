@@ -6,7 +6,7 @@ import { AppModule } from './app.module';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { json, urlencoded } from 'express';
-import compression from 'compression';
+import * as compression from 'compression';
 import * as os from 'os';
 
 async function bootstrap() {
