@@ -72,6 +72,9 @@ services:
       - app_receipts:/app/public/receipts
       - app_avatars:/app/public/avatars
       - app_logs:/app/logs
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     networks:
       - open_budget_network
 
