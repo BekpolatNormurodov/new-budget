@@ -481,7 +481,7 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
                 { name: 'Elbek Muxtorov', username: 'Elbek_Muxtorovv', phone: '998943489900' },
                 { name: 'Jonibek Ismoilov', username: 'JONIBEKISMOILOV', phone: '998990652651' },
               ]).map((contact: any, index: number) => (
-                <div key={index} className="flex items-center gap-2 bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+                <div key={index} className="grid grid-cols-2 sm:grid-cols-[1fr_1fr_1.3fr_auto] gap-2 items-center bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
                   <input
                     type="text"
                     placeholder="Ism (masalan: Elbek)"
@@ -494,7 +494,7 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
                       list[index] = { ...list[index], name: e.target.value };
                       setNewBot({ ...newBot, adminContactsList: list });
                     }}
-                    className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white"
+                    className="w-full min-w-0 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white"
                   />
                   <input
                     type="text"
@@ -508,7 +508,7 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
                       list[index] = { ...list[index], username: e.target.value };
                       setNewBot({ ...newBot, adminContactsList: list });
                     }}
-                    className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white font-mono text-[11px]"
+                    className="w-full min-w-0 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white font-mono text-[11px]"
                   />
                   <input
                     type="text"
@@ -522,7 +522,7 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
                       list[index] = { ...list[index], phone: e.target.value };
                       setNewBot({ ...newBot, adminContactsList: list });
                     }}
-                    className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white font-mono text-[11px]"
+                    className="col-span-2 sm:col-span-1 w-full min-w-0 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white font-mono text-[11px]"
                   />
                   {index >= 2 && (
                     <button
@@ -532,7 +532,7 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
                         list.splice(index, 1);
                         setNewBot({ ...newBot, adminContactsList: list });
                       }}
-                      className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg cursor-pointer"
+                      className="col-span-2 sm:col-span-1 justify-self-end p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg cursor-pointer"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
