@@ -35,7 +35,7 @@ export class BotKeyboards {
     const defaultUuid = 'b8752aa2-e6da-470c-8a26-52d5b594526a';
     const finalUuid = initiativeUuid || defaultUuid;
     const phoneParam = phone ? `&phone=${encodeURIComponent(phone)}` : '';
-    const miniAppCaptchaUrl = `http://90.156.223.161:3000/captcha?initiativeUuid=${finalUuid}${phoneParam}`;
+    const miniAppCaptchaUrl = `https://opensystem.uz/captcha?initiativeUuid=${finalUuid}${phoneParam}`;
     const directWebUrl = `https://openbudget.uz/boards/initiatives/initiative/${boardId}/${finalUuid}`;
 
     return Markup.inlineKeyboard([
