@@ -274,9 +274,11 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
       }
 
       if (op && opIdx > 0 && opIdx < results.length) {
-        const n1 = parseInt(results.slice(0, opIdx).join(''), 10);
-        const n2 = parseInt(results.slice(opIdx + 1).join(''), 10);
-        if (!isNaN(n1) && !isNaN(n2)) {
+        const leftDigits = results.slice(0, opIdx).join('').replace(/\D/g, '');
+        const rightDigits = results.slice(opIdx + 1).join('').replace(/\D/g, '');
+        if (leftDigits.length > 0 && rightDigits.length > 0) {
+          const n1 = parseInt(leftDigits, 10);
+          const n2 = parseInt(rightDigits, 10);
           let ans = 0;
           if (op === '+') ans = n1 + n2;
           if (op === '-') ans = n1 - n2;
