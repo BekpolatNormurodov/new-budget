@@ -175,13 +175,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         return true;
       }
 
-      const proxyConfig = this.proxyManagerService.getAxiosConfig();
-      const telegrafOptions: any = {};
-      if (proxyConfig && proxyConfig.httpsAgent) {
-        telegrafOptions.telegram = { agent: proxyConfig.httpsAgent };
-      }
-
-      const bot = new Telegraf(botRecord.token, telegrafOptions);
+      const bot = new Telegraf(botRecord.token);
       this.setupBotHandlers(bot, botRecord);
 
       const botInfo = await bot.telegram.getMe();
