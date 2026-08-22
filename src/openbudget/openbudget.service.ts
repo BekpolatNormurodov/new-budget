@@ -385,12 +385,12 @@ export class OpenBudgetService {
 
       for (let attempt = 1; attempt <= 8; attempt++) {
         try {
-          const capRes = await this.executeOpenBudgetCurl('https://new.openbudget.uz/api/v2/vote/captcha-2', {
+          const capRes = await this.executeOpenBudgetCurl('https://openbudget.uz/api/v2/vote/captcha-2', {
             headers: {
               'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
               'Accept': 'application/json, text/plain, */*',
-              'Origin': 'https://new.openbudget.uz',
-              'Referer': 'https://new.openbudget.uz/',
+              'Origin': 'https://openbudget.uz',
+              'Referer': 'https://openbudget.uz/',
             },
             sessionKey: clean12,
           });
@@ -417,8 +417,8 @@ export class OpenBudgetService {
 
           const reqHeaders: Record<string, string> = {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Origin': 'https://new.openbudget.uz',
-            'Referer': 'https://new.openbudget.uz/',
+            'Origin': 'https://openbudget.uz',
+            'Referer': 'https://openbudget.uz/',
           };
 
           if (cookie) {
@@ -426,7 +426,7 @@ export class OpenBudgetService {
           }
 
           const otpRes = await this.executeOpenBudgetCurl(
-            'https://new.openbudget.uz/api/v1/login/send-otp',
+            'https://openbudget.uz/api/v1/login/send-otp',
             {
               method: 'POST',
               data: {
@@ -556,12 +556,12 @@ export class OpenBudgetService {
         try {
           const reqHeaders = {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Origin': 'https://new.openbudget.uz',
-            'Referer': 'https://new.openbudget.uz/',
+            'Origin': 'https://openbudget.uz',
+            'Referer': 'https://openbudget.uz/',
           };
 
           const verifyRes = await this.executeOpenBudgetCurl(
-            'https://new.openbudget.uz/api/v1/login/verify-otp',
+            'https://openbudget.uz/api/v1/login/verify-otp',
             {
               method: 'POST',
               data: {
