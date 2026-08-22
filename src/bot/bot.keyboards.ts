@@ -29,6 +29,24 @@ export class BotKeyboards {
   }
 
   /**
+   * Ovoz berish variantlari inline klaviaturasi (Web App + Brauzer)
+   */
+  static voteOptionsInline(initiativeUuid?: string, boardId: number | string = 55) {
+    const webUrl = initiativeUuid
+      ? `https://openbudget.uz/boards/initiatives/initiative/${boardId}/${initiativeUuid}`
+      : 'https://openbudget.uz/';
+    
+    return Markup.inlineKeyboard([
+      [
+        Markup.button.webApp('🗳 Ochiq Budjetda Ovoz Berish (Web)', webUrl),
+      ],
+      [
+        Markup.button.url('🌐 Rasmiy saytda ochish', webUrl),
+      ],
+    ]);
+  }
+
+  /**
    * SMS kutish jarayonidagi inline tugma (Qayta SMS so'rash)
    */
   static smsWaitingInline() {
