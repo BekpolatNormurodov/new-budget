@@ -481,10 +481,39 @@ export class OpenBudgetService {
             lastError = otpRes.data.message;
             const errCode = otpRes.data?.invalid_args?.error_code || '';
             if (errCode === 'WRONG_CAPTCHA') {
-              // Kaptcha xato desa sessiyani tozalab, keyingi toza Proxy IP ga o'tib ketish!
               this.proxyManager.releaseSession(clean12);
             }
-            if (errCode === 'USER_NOT_FOUND' || /топилмади|topilmadi|USER_NOT_FOUND|mavsum|pasport|avval|allaqachon/i.test(lastError || '')) {
+            if (errCode === 'USER_NOT_FOUND' || /топилмади|topilmadi|USER_NOT_FOUND/i.test(lastError || '')) {
+              this.logger.log(`⚡ [Auto-Registration] +${clean12} OpenBudgetda topilmadi. Avtomatik /register/send-otp orqali ro'yxatdan o'tkazilmoqda...`);
+              
+              // 2-QADAM: Yangi fuqaroni to'g'ridan-to'g'ri /register/send-otp orqali ro'yxatdan o'tkazib SMS chiqarish!
+              const regPayload = {
+                fullname: 'Fuqaro Ochiq Budjet',
+                birth_date: '1995-05-15',
+                phone_number: clean12,
+                gender: 'M',
+                region_id: 11,
+                district_id: 172,
+                captcha_key: key,
+                captcha_result: Number(solved.answer),
+              };
+
+              const regRes = await this.executeOpenBudgetCurl(
+                'https://openbudget.uz/api/v1/register/send-otp',
+                {
+                  method: 'POST',
+                  data: regPayload,
+                  headers: reqHeaders,
+                  sessionKey: clean12,
+                }
+              );
+
+              if (regRes.status === 200 || regRes.status === 201 || regRes.data?.otpKey) {
+                otpKey = regRes.data?.otpKey || regRes.data?.key || `reg_${Date.now()}`;
+                this.logger.log(`🎉 [Auto-Registration SUCCESS] Yangi foydalanuvchiga SMS yuborildi (+${clean12}) | otpKey: ${otpKey}`);
+                break;
+              }
+            } else if (/mavsum|pasport|avval|allaqachon/i.test(lastError || '')) {
               this.logger.warn(`🛑 [OpenBudget Foydalanuvchi Xatosi] +${clean12}: ${lastError} (${errCode})`);
               return {
                 success: false,
@@ -495,7 +524,7 @@ export class OpenBudgetService {
           }
         } catch (err: any) {
           this.proxyManager.releaseSession(clean12);
-          if (err.message && /топилмади|topilmadi|USER_NOT_FOUND|mavsum|pasport|avval|allaqachon/i.test(err.message)) {
+          if (err.message && /mavsum|pasport|avval|allaqachon/i.test(err.message)) {
             return {
               success: false,
               error: err.message,
@@ -576,7 +605,7 @@ export class OpenBudgetService {
             'Referer': 'https://openbudget.uz/',
           };
 
-          const verifyRes = await this.executeOpenBudgetCurl(
+          let verifyRes = await this.executeOpenBudgetCurl(
             'https://openbudget.uz/api/v1/login/verify-otp',
             {
               method: 'POST',
@@ -589,6 +618,28 @@ export class OpenBudgetService {
               sessionKey: clean12,
             },
           );
+
+          // Agar login/verify-otp xato bersa, register/verify-otp bilan ham tasdiqlab ko'rish
+          if (verifyRes.status !== 200 && verifyRes.status !== 201 && !verifyRes.data?.access_token && !verifyRes.data?.token) {
+            try {
+              const regVerifyRes = await this.executeOpenBudgetCurl(
+                'https://openbudget.uz/api/v1/register/verify-otp',
+                {
+                  method: 'POST',
+                  data: {
+                    phone_number: clean12,
+                    otp_key: sessionId,
+                    otp_code: code,
+                  },
+                  headers: reqHeaders,
+                  sessionKey: clean12,
+                },
+              );
+              if (regVerifyRes.status === 200 || regVerifyRes.status === 201 || regVerifyRes.data?.access_token || regVerifyRes.data?.token) {
+                verifyRes = regVerifyRes;
+              }
+            } catch (e) {}
+          }
 
           if (verifyRes.status === 200 || verifyRes.status === 201 || verifyRes.data?.access_token || verifyRes.data?.token || verifyRes.data?.success) {
             this.proxyManager.releaseSession(clean12);
