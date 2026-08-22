@@ -119,7 +119,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       this.activeCaptchaMessages.delete(key);
     }
 
-    const sent = await ctx.replyWithPhoto({ source: imageBuffer }, { caption, parse_mode: 'HTML' });
+    const sent = await ctx.replyWithPhoto({ source: imageBuffer, filename: 'captcha.jpg' }, { caption, parse_mode: 'HTML' });
     this.activeCaptchaMessages.set(key, sent.message_id);
   }
 
