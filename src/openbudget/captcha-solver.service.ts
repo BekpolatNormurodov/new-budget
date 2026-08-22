@@ -40,7 +40,8 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
     const worker = await createWorker('eng');
     await worker.setParameters({
       tessedit_char_whitelist: '0123456789+-*',
-      tessedit_pageseg_mode: '7' as any, // PSM 7: single text line
+      // PSM 10: single character — har bir doira uchun eng mos
+      tessedit_pageseg_mode: '10' as any,
       user_defined_dpi: '300' as any,
     });
     return worker;
@@ -55,7 +56,6 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
       for (let i = 0; i < this.poolSize; i++) {
         promises.push(this.createSingleWorker());
       }
-
       const initializedWorkers = await Promise.all(promises);
       this.workers = initializedWorkers;
       this.availableWorkers = [...initializedWorkers];
@@ -81,11 +81,9 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
     if (!this.isInitialized || this.workers.length === 0) {
       await this.initWorkerPool();
     }
-
     if (this.availableWorkers.length > 0) {
       return this.availableWorkers.pop()!;
     }
-
     return new Promise<Worker>((resolve) => {
       this.waitQueue.push(resolve);
     });
@@ -101,24 +99,33 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Kaptcha rasmdan matematik ifodani ajratib olish.
    * OpenBudget qoidalari:
-   *  - Operandlar doimo 0..20 oralig'ida
-   *  - Natija hech qachon manfiy bo'lmaydi (ya'ni a - b faqat a >= b bo'lganda)
+   *  - Operandlar doimo 0..20
+   *  - Natija hech qachon manfiy bo'lmaydi
    */
-  private parseExpression(raw: string): { expression: string; ans: number } | null {
-    // Faqat raqamlar va operatorlar
-    const cleaned = raw.replace(/[^0-9+\-*]/g, '').trim();
+  private parseExpression(parts: string[]): { expression: string; ans: number } | null {
+    // Operator topish
+    let op: string | null = null;
+    let opIdx = -1;
+    for (let i = 0; i < parts.length; i++) {
+      if (parts[i] === '+' || parts[i] === '-' || parts[i] === '*') {
+        op = parts[i];
+        opIdx = i;
+        break;
+      }
+    }
 
-    // Regex: raqam + operator + raqam
-    const m = cleaned.match(/^(\d{1,2})([\+\-\*])(\d{1,2})$/);
-    if (!m) return null;
+    if (!op || opIdx <= 0 || opIdx >= parts.length - 1) return null;
 
-    const n1 = parseInt(m[1], 10);
-    const op = m[2];
-    const n2 = parseInt(m[3], 10);
+    const leftStr = parts.slice(0, opIdx).join('').replace(/\D/g, '');
+    const rightStr = parts.slice(opIdx + 1).join('').replace(/\D/g, '');
 
-    // Operandlar chegarasi
+    if (!leftStr || !rightStr) return null;
+
+    const n1 = parseInt(leftStr, 10);
+    const n2 = parseInt(rightStr, 10);
+
+    // Operandlar chegarasi 0..20
     if (n1 < 0 || n1 > 20 || n2 < 0 || n2 > 20) return null;
 
     // Manfiy natijani rad etish
@@ -133,38 +140,62 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * ASOSIY STRATEGIYA: Butun rasmni bitta satr sifatida o'qish (PSM 7).
-   * Kaptcha fonini oqlash, kontrastni oshirish, keskinlashtirish.
+   * Bitta doira/blob ichidagi belgini OCR qilish uchun preprocessing.
+   * innerTh: ichki oq piksellar uchun threshold
    */
-  private async solveFullImage(rawBuffer: Buffer, worker: Worker, threshold: number): Promise<{ expression: string; ans: number } | null> {
-    try {
-      const processed = await sharp(rawBuffer, { failOn: 'none' })
-        .grayscale()
-        // Kontrastni kuchli oshirish
-        .linear(2.5, -(128 * 2.5 - 128))
-        // Ikkiliklashtirish (threshold)
-        .threshold(threshold)
-        // Kattalashtirish (OCR aniqroq ishlaydi)
-        .resize(400, 120, { fit: 'contain', background: { r: 255, g: 255, b: 255 } })
-        // Qo'shimcha oq chegara
-        .extend({ top: 20, bottom: 20, left: 20, right: 20, background: { r: 255, g: 255, b: 255 } })
-        .withMetadata({ density: 300 })
-        .png()
-        .toBuffer();
+  private async prepareCircleImage(
+    data: Buffer,
+    width: number,
+    height: number,
+    bg: boolean[][],
+    c: { minX: number; maxX: number; minY: number; maxY: number },
+    innerTh: number,
+  ): Promise<Buffer | null> {
+    const innerPoints: Array<{ y: number; x: number }> = [];
 
-      const result = await worker.recognize(processed);
-      const raw = result.data.text.trim();
-
-      return this.parseExpression(raw);
-    } catch {
-      return null;
+    for (let y = c.minY; y <= c.maxY; y++) {
+      for (let x = c.minX; x <= c.maxX; x++) {
+        if (!bg[y][x] && data[y * width + x] > innerTh) {
+          innerPoints.push({ y, x });
+        }
+      }
     }
+
+    if (innerPoints.length < 5) return null;
+
+    let minX = width, maxX = 0, minY = height, maxY = 0;
+    for (const p of innerPoints) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+
+    const cw = maxX - minX + 1;
+    const ch = maxY - minY + 1;
+
+    if (cw < 2 || ch < 2) return null;
+
+    const canvas = Buffer.alloc(cw * ch, 255);
+    for (const p of innerPoints) {
+      canvas[(p.y - minY) * cw + (p.x - minX)] = 0;
+    }
+
+    // Yaxshi preprocessing: kattalashtirish + keng oq chegara
+    const scale = Math.max(4, Math.round(80 / Math.max(cw, ch)));
+    return sharp(canvas, { raw: { width: cw, height: ch, channels: 1 }, failOn: 'none' })
+      .resize(cw * scale, ch * scale, { kernel: 'nearest' })
+      .extend({ top: 40, bottom: 40, left: 40, right: 40, background: { r: 255, g: 255, b: 255 } })
+      .withMetadata({ density: 300 })
+      .png()
+      .toBuffer();
   }
 
-  /**
-   * ZAXIRA STRATEGIYA: Doira segmentatsiyasi bilan per-belgi OCR.
-   */
-  async solveFullCaptchaWithWorker(rawBuffer: Buffer, worker: Worker, innerTh: number = 135): Promise<{ expression: string; ans: number } | null> {
+  async solveFullCaptchaWithWorker(
+    rawBuffer: Buffer,
+    worker: Worker,
+    innerTh: number = 135,
+  ): Promise<{ expression: string; ans: number } | null> {
     try {
       const { data, info } = await sharp(rawBuffer, { failOn: 'none' })
         .grayscale()
@@ -173,7 +204,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
 
       const { width, height } = info;
 
-      // Tashqi oq fonni flood fill bilan belgilash
+      // --- Tashqi oq fonni flood fill bilan belgilash ---
       const bg = Array.from({ length: height }, () => Array(width).fill(false));
       const q: [number, number][] = [];
       for (let x = 0; x < width; x++) {
@@ -184,12 +215,10 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         if (data[y * width] > 150 && !bg[y][0]) { q.push([y, 0]); bg[y][0] = true; }
         if (data[y * width + width - 1] > 150 && !bg[y][width - 1]) { q.push([y, width - 1]); bg[y][width - 1] = true; }
       }
-
       while (q.length > 0) {
         const [cy, cx] = q.shift()!;
         for (const [dy, dx] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
-          const ny = cy + dy;
-          const nx = cx + dx;
+          const ny = cy + dy, nx = cx + dx;
           if (ny >= 0 && ny < height && nx >= 0 && nx < width && !bg[ny][nx] && data[ny * width + nx] > 150) {
             bg[ny][nx] = true;
             q.push([ny, nx]);
@@ -197,7 +226,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      // Faqat qora doiralar (bloblar)
+      // --- Qora bloblarni topish ---
       const isBlack = Array.from({ length: height }, () => Array(width).fill(false));
       for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
@@ -206,7 +235,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
       }
 
       const visited = Array.from({ length: height }, () => Array(width).fill(false));
-      const circles: Array<{ minX: number; maxX: number; minY: number; maxY: number; count: number }> = [];
+      const blobs: Array<{ minX: number; maxX: number; minY: number; maxY: number; count: number }> = [];
 
       for (let x = 0; x < width; x++) {
         for (let y = 0; y < height; y++) {
@@ -218,53 +247,46 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
             while (qC.length > 0) {
               const [cy, cx] = qC.shift()!;
               count++;
-              if (cx < minX) minX = cx;
-              if (cx > maxX) maxX = cx;
-              if (cy < minY) minY = cy;
-              if (cy > maxY) maxY = cy;
+              if (cx < minX) minX = cx; if (cx > maxX) maxX = cx;
+              if (cy < minY) minY = cy; if (cy > maxY) maxY = cy;
 
               for (const [dy, dx] of [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
-                const ny = cy + dy;
-                const nx = cx + dx;
+                const ny = cy + dy, nx = cx + dx;
                 if (ny >= 0 && ny < height && nx >= 0 && nx < width && isBlack[ny][nx] && !visited[ny][nx]) {
                   visited[ny][nx] = true;
                   qC.push([ny, nx]);
                 }
               }
             }
-
             if (count >= 25 && (maxX - minX + 1) >= 5) {
-              circles.push({ minX, maxX, minY, maxY, count });
+              blobs.push({ minX, maxX, minY, maxY, count });
             }
           }
         }
       }
 
-      circles.sort((a, b) => a.minX - b.minX);
+      blobs.sort((a, b) => a.minX - b.minX);
 
       const results: string[] = [];
-      for (let i = 0; i < circles.length; i++) {
-        const c = circles[i];
-        const bw = c.maxX - c.minX + 1, bh = c.maxY - c.minY + 1;
+
+      for (let i = 0; i < blobs.length; i++) {
+        const c = blobs[i];
+        const bw = c.maxX - c.minX + 1;
+        const bh = c.maxY - c.minY + 1;
+
+        // Minus belgisi: keng, yassi chiziq
         if (bw > bh * 1.5 || bh <= 12) {
-          if (bw >= 14 && bh >= 3 && i > 0 && i < circles.length - 1) {
+          if (bw >= 14 && bh >= 3 && i > 0 && i < blobs.length - 1) {
             results.push('-');
           }
           continue;
         }
 
-        const innerPoints: Array<{ y: number; x: number }> = [];
-
-        for (let y = c.minY; y <= c.maxY; y++) {
-          for (let x = c.minX; x <= c.maxX; x++) {
-            if (!bg[y][x] && data[y * width + x] > innerTh) {
-              innerPoints.push({ y, x });
-            }
-          }
-        }
-
-        if (innerPoints.length < 5) {
-          if (bw >= 12 && bh >= 3 && bw > bh * 1.4 && results.length > 0 && i < circles.length - 1) {
+        // Doira ichidagi belgini tayyorlash
+        const png = await this.prepareCircleImage(data, width, height, bg, c, innerTh);
+        if (!png) {
+          // Minimal ichki point → minus ehtimoli
+          if (bw >= 12 && bh >= 3 && bw > bh * 1.4 && results.length > 0 && i < blobs.length - 1) {
             if (!results.some(r => r === '+' || r === '-' || r === '*')) {
               results.push('-');
             }
@@ -272,47 +294,20 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
           continue;
         }
 
-        let minX = width, maxX = 0, minY = height, maxY = 0;
-        for (const p of innerPoints) {
-          if (p.x < minX) minX = p.x;
-          if (p.x > maxX) maxX = p.x;
-          if (p.y < minY) minY = p.y;
-          if (p.y > maxY) maxY = p.y;
-        }
-
-        const cw = maxX - minX + 1;
-        const ch = maxY - minY + 1;
-
-        const canvas = Buffer.alloc(cw * ch, 255);
-        for (const p of innerPoints) {
-          canvas[(p.y - minY) * cw + (p.x - minX)] = 0;
-        }
-
-        const png = await sharp(canvas, { raw: { width: cw, height: ch, channels: 1 }, failOn: 'none' })
-          .resize(cw * 4, ch * 4, { kernel: 'nearest' })
-          .extend({ top: 30, bottom: 30, left: 30, right: 30, background: { r: 255, g: 255, b: 255 } })
-          .resize(100, 100, { fit: 'contain', background: { r: 255, g: 255, b: 255 } })
-          .withMetadata({ density: 300 })
-          .png()
-          .toBuffer();
-
         const ret = await worker.recognize(png);
-        let txt = ret.data.text.trim().replace(/[^0-9\+\-\*lI|OQo=]/g, '');
-        txt = txt.replace(/[lI|]/g, '1').replace(/[OQo]/g, '0');
+        let txt = ret.data.text.trim().replace(/[^0-9+\-*]/g, '');
 
+        // Birinchi belgi minus bo'lmasligi kerak
         if (results.length === 0 && txt === '-') continue;
 
-        const hasExistingOp = results.some(r => r === '+' || r === '-' || r === '*');
-        if (i === circles.length - 1 && hasExistingOp && (txt === '-' || txt === '1' || txt === '=')) {
-          continue;
-        }
+        // Operator allaqachon bor bo'lsa, oxirgi belgida minus/1/= bo'lmasligi kerak
+        const hasOp = results.some(r => r === '+' || r === '-' || r === '*');
+        if (i === blobs.length - 1 && hasOp && (txt === '-' || txt === '1' || txt === '=')) continue;
 
-        if (txt && txt !== '=') {
-          results.push(txt);
-        }
+        if (txt) results.push(txt);
       }
 
-      return this.parseExpression(results.join(''));
+      return this.parseExpression(results);
     } catch (err: any) {
       this.logger.error('solveFullCaptchaWithWorker error:', err);
       return null;
@@ -337,13 +332,8 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
 
     const worker = await this.acquireWorker();
     try {
-      // === ASOSIY: Butun rasm OCR (PSM 7) — eng ishonchli ===
-      let parsed = await this.solveFullImage(buffer, worker, 128);
-      if (!parsed) parsed = await this.solveFullImage(buffer, worker, 100);
-      if (!parsed) parsed = await this.solveFullImage(buffer, worker, 150);
-
-      // === ZAXIRA: Doira segmentatsiyasi ===
-      if (!parsed) parsed = await this.solveFullCaptchaWithWorker(buffer, worker, 135);
+      // Multi-pass: turli threshold qiymatlar bilan
+      let parsed = await this.solveFullCaptchaWithWorker(buffer, worker, 135);
       if (!parsed) parsed = await this.solveFullCaptchaWithWorker(buffer, worker, 110);
       if (!parsed) parsed = await this.solveFullCaptchaWithWorker(buffer, worker, 155);
 
