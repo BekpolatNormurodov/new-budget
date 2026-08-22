@@ -96,6 +96,17 @@ export const VotesView: React.FC<VotesViewProps> = ({
 
   const totalPages = Math.ceil(filteredVotes.length / pageSize) || 1;
 
+  // Har bir status tabi uchun aniq sonlar (butun ro'yxat bo'yicha)
+  const statusCounts = useMemo(() => {
+    let pending = 0;
+    let verified = 0;
+    for (const v of combinedVotes) {
+      if (v.status === 'PENDING_VERIFICATION') pending++;
+      else if (v.status === 'VERIFIED') verified++;
+    }
+    return { pending, verified, all: combinedVotes.length };
+  }, [combinedVotes]);
+
   const handleExportCsv = () => {
     exportToCsv(
       'OpenBudget_Ovozlar',
@@ -140,7 +151,7 @@ export const VotesView: React.FC<VotesViewProps> = ({
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              ⏳ Kutilmoqda ({pendingVotes.length})
+              ⏳ Kutilmoqda ({statusCounts.pending})
             </button>
             <button
               onClick={() => { setStatusTab('VERIFIED'); setCurrentPage(1); }}
@@ -150,7 +161,7 @@ export const VotesView: React.FC<VotesViewProps> = ({
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              ✅ Tasdiqlangan
+              ✅ Tasdiqlangan ({statusCounts.verified})
             </button>
             <button
               onClick={() => { setStatusTab('ALL'); setCurrentPage(1); }}
@@ -160,7 +171,7 @@ export const VotesView: React.FC<VotesViewProps> = ({
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              Barchasi
+              Barchasi ({statusCounts.all})
             </button>
           </div>
 

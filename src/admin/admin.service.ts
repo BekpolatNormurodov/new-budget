@@ -338,6 +338,17 @@ export class AdminService {
     });
   }
 
+  // Admin panel "Ovozlar" bo'limi uchun barcha ovozlar (kutilayotgan + tasdiqlangan).
+  // status berilsa faqat o'sha holatdagilar qaytadi.
+  async listAllVotes(status?: string) {
+    return this.prisma.vote.findMany({
+      where: status ? { status } : {},
+      include: { user: true, initiative: true, botInstance: true },
+      orderBy: { createdAt: 'desc' },
+      take: 2000,
+    });
+  }
+
   async approveVote(voteId: number) {
     const vote = await this.prisma.vote.findUnique({
       where: { id: voteId },

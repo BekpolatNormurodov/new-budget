@@ -58,6 +58,7 @@ export function App() {
   const [bots, setBots] = useState<BotInstanceItem[]>([]);
   const [agents, setAgents] = useState<AgentItem[]>([]);
   const [pendingVotes, setPendingVotes] = useState<VoteItem[]>([]);
+  const [allVotes, setAllVotes] = useState<VoteItem[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalItem[]>([]);
   const [users, setUsers] = useState<UserItem[]>([]);
   const [globalSearch, setGlobalSearch] = useState('');
@@ -142,11 +143,12 @@ export function App() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [statsRes, usersRes, withdrawalsRes, agentsRes] = await Promise.all([
+      const [statsRes, usersRes, withdrawalsRes, agentsRes, allVotesRes] = await Promise.all([
         fetch('/api/admin/stats', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/admin/users?limit=100', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/admin/withdrawals', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/admin/agents', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/admin/votes/all', { headers: { Authorization: `Bearer ${token}` } }),
       ]);
 
       if (statsRes.ok) {
@@ -154,6 +156,11 @@ export function App() {
         setStats(statsData);
         setBots(statsData.bots || []);
         setPendingVotes(statsData.pendingVotes || []);
+      }
+
+      if (allVotesRes.ok) {
+        const allVotesData = await allVotesRes.json();
+        setAllVotes(Array.isArray(allVotesData) ? allVotesData : []);
       }
 
       if (usersRes.ok) {
@@ -588,7 +595,7 @@ export function App() {
           {activeTab === 'votes' && (
             <VotesView
               pendingVotes={pendingVotes}
-              allVotes={pendingVotes}
+              allVotes={allVotes}
               bots={bots}
               onApproveVote={handleApproveVote}
               onApproveAll={handleApproveAllVotes}

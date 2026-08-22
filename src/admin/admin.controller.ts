@@ -75,6 +75,11 @@ export class AdminController {
     return this.adminService.listPendingVotes();
   }
 
+  @Get('votes/all')
+  async getAllVotes(@Query('status') status?: string) {
+    return this.adminService.listAllVotes(status);
+  }
+
   @Post('votes/:id/approve')
   async approveVote(@Param('id') id: string) {
     return this.adminService.approveVote(parseInt(id, 10));
