@@ -53,10 +53,10 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       const timeout = setTimeout(() => {
         if (this.pendingCaptchaResolvers.get(key)) {
           this.pendingCaptchaResolvers.delete(key);
-          this.updateCaptchaCaption(ctx, key, '⏳ <b>Vaqt tugadi!</b>\n\nYangi captcha tayyorlanmoqda...');
+          this.updateCaptchaCaption(ctx, key, '⏳ <b>Vaqt yetmadi, hechqisi yo\'q!</b>\n\n🔄 Bir zumda yangi captcha tayyor bo\'ladi - uni hisoblab, javobini yozib yuborsangiz kifoya 👇');
           resolve(null);
         }
-      }, 90000);
+      }, 120000);
 
       this.pendingCaptchaResolvers.set(key, { resolve, timeout });
 
