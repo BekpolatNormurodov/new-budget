@@ -383,7 +383,7 @@ export class OpenBudgetService {
       let otpKey: string | null = null;
       let lastError: string | null = null;
 
-      for (let attempt = 1; attempt <= 20; attempt++) {
+      for (let attempt = 1; attempt <= 6; attempt++) {
         try {
           const capRes = await this.executeOpenBudgetCurl('https://new.openbudget.uz/api/v2/vote/captcha-2', {
             headers: {
