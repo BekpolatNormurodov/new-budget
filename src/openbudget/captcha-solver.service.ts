@@ -200,18 +200,22 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
           continue;
         }
 
-        const border = 1;
         const innerPoints: Array<{ y: number; x: number }> = [];
 
-        for (let y = c.minY + border; y <= c.maxY - border; y++) {
-          for (let x = c.minX + border; x <= c.maxX - border; x++) {
-            if (!bg[y][x] && data[y * width + x] > 140) {
+        for (let y = c.minY; y <= c.maxY; y++) {
+          for (let x = c.minX; x <= c.maxX; x++) {
+            if (!bg[y][x] && data[y * width + x] > 135) {
               innerPoints.push({ y, x });
             }
           }
         }
 
-        if (innerPoints.length < 8) {
+        if (innerPoints.length < 5) {
+          if (bw >= 12 && bh >= 3 && bw > bh * 1.4 && results.length > 0 && i < circles.length - 1) {
+            if (!results.some(r => r === '+' || r === '-' || r === '*')) {
+              results.push('-');
+            }
+          }
           continue;
         }
 
@@ -226,13 +230,6 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         const cw = maxX - minX + 1;
         const ch = maxY - minY + 1;
 
-        if (cw > ch * 1.8 && ch <= 12) {
-          if (cw >= 14 && i > 0 && i < circles.length - 1) {
-            results.push('-');
-          }
-          continue;
-        }
-
         const canvas = Buffer.alloc(cw * ch, 255);
         for (const p of innerPoints) {
           canvas[(p.y - minY) * cw + (p.x - minX)] = 0;
@@ -240,25 +237,31 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
 
         const png = await sharp(canvas, { raw: { width: cw, height: ch, channels: 1 }, failOn: 'none' })
           .resize(cw * 4, ch * 4, { kernel: 'nearest' })
-          .extend({ top: 35, bottom: 35, left: 35, right: 35, background: { r: 255, g: 255, b: 255 } })
+          .extend({ top: 30, bottom: 30, left: 30, right: 30, background: { r: 255, g: 255, b: 255 } })
           .resize(100, 100, { fit: 'contain', background: { r: 255, g: 255, b: 255 } })
           .withMetadata({ density: 300 })
           .png()
           .toBuffer();
 
         const ret = await worker.recognize(png);
-        let txt = ret.data.text.trim().replace(/[^0-9\+\-\*lI|OQo]/g, '');
+        let txt = ret.data.text.trim().replace(/[^0-9\+\-\*lI|OQo=]/g, '');
         txt = txt.replace(/[lI|]/g, '1').replace(/[OQo]/g, '0');
-        // Oxirgi tenglik (=) belgisini tashlab yuborish
-        const hasExistingOp = results.some(r => r === '+' || r === '-' || r === '*');
-        if (i === circles.length - 1 && hasExistingOp && (txt === '-' || txt === '1')) {
+
+        // Boshida kelgan noto'g'ri minusni tozalash
+        if (results.length === 0 && txt === '-') {
           continue;
         }
-        if (txt) results.push(txt);
-      }
 
-      const expr = results.join(' ');
-      const cleanExpr = results.join('');
+        // Oxirgi tenglik (=) yoki oxirgi ortiqcha belgini tashlab yuborish
+        const hasExistingOp = results.some(r => r === '+' || r === '-' || r === '*');
+        if (i === circles.length - 1 && hasExistingOp && (txt === '-' || txt === '1' || txt === '=')) {
+          continue;
+        }
+
+        if (txt && txt !== '=') {
+          results.push(txt);
+        }
+      }
 
       let op = null;
       let opIdx = -1;
@@ -282,6 +285,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
+      const cleanExpr = results.join('');
       const m = cleanExpr.match(/^(\d+)([\+\-\*])(\d+)$/);
       if (m) {
         const n1 = parseInt(m[1], 10);
