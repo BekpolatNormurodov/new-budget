@@ -196,6 +196,23 @@ export class WebAppController {
       // Agar ichki iframeda ishlasa, iframeni bloklamasligi uchun eval tekshiruvini zararsizlantirish
       bodyRaw = bodyRaw.replace(/window\.location\.href\s*=\s*['"]https:\/\/openbudget\.uz['"]/g, 'console.log("In-app captcha loaded")');
 
+      // 30 soniyalik / 30 daqiqalik vaqt tugaganda chiroyli bildirishnoma chiqarib yangilash
+      const timerEnhancement = `
+      <script>
+        window.addEventListener('DOMContentLoaded', () => {
+          setTimeout(() => {
+            const container = document.querySelector('.container') || document.body;
+            const alertBox = document.createElement('div');
+            alertBox.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#ef4444;color:white;padding:12px 24px;border-radius:12px;font-weight:bold;z-index:9999;box-shadow:0 10px 25px rgba(0,0,0,0.3);font-family:sans-serif;text-align:center;font-size:14px;';
+            alertBox.innerHTML = '⚠️ Captcha vaqti tugadi! Sahifa yangilanmoqda...';
+            document.body.appendChild(alertBox);
+            setTimeout(() => window.location.reload(), 1500);
+          }, 30000);
+        });
+      </script>
+      `;
+      bodyRaw = bodyRaw.replace('</body>', `${timerEnhancement}</body>`);
+
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.send(bodyRaw);
     } catch (err: any) {
