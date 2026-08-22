@@ -415,21 +415,21 @@ export class ProxyManagerService implements OnModuleInit {
         try {
           const auth = proxy.auth ? `${proxy.auth.username}:${proxy.auth.password}@` : '';
           const { stdout } = await execFileAsync('curl', [
-            '-sI',
-            '--connect-timeout', '5',
-            '--max-time', '10',
+            '-s', '-i',
+            '--connect-timeout', '8',
+            '--max-time', '12',
             '-x', `http://${auth}${proxy.host}:${proxy.port}`,
             'https://openbudget.uz/api/v2/vote/captcha-2'
           ]);
 
-          if (stdout.includes('200') || stdout.includes('HTTP/')) {
+          if (stdout.includes('200') || stdout.includes('captchaKey') || stdout.includes('image')) {
             proxy.isAlive = true;
             proxy.latencyMs = Date.now() - startTime;
             proxy.lastCheckedAt = new Date();
             proxy.failCount = 0;
             alive++;
           } else {
-            throw new Error('Status not 200');
+            throw new Error('Status not 200 / No captcha in body');
           }
         } catch (err) {
           proxy.isAlive = false;
