@@ -161,6 +161,25 @@ export class ProxyManagerService implements OnModuleInit {
   }
 
   /**
+   * Nosoz proxyni belgilash va vaqtincha chetlatish
+   */
+  public markProxyFailure(proxy: ProxyItem) {
+    proxy.failCount++;
+    if (proxy.failCount >= 3) {
+      proxy.isAlive = false;
+      this.logger.warn(`⚠️ Proxy ${proxy.host}:${proxy.port} 3 marta xato bergani uchun vaqtincha nofaol qilindi`);
+    }
+  }
+
+  /**
+   * Muvaffaqiyatli ishlagan proxyni tiklash
+   */
+  public markProxySuccess(proxy: ProxyItem) {
+    proxy.failCount = 0;
+    proxy.isAlive = true;
+  }
+
+  /**
    * Axios konfiguratsiyasi uchun Proxy sozlamalarini tayyorlash
    */
   public getAxiosConfig(sessionKey?: string): any {

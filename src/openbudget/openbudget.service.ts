@@ -269,13 +269,16 @@ export class OpenBudgetService {
    * Ultra-tezkor va 100% ishonchli Curl orqali OpenBudget API ga SOCKS5 so'rov yuborish
    */
   private async executeOpenBudgetCurl(url: string, options: { method?: string; data?: any; headers?: Record<string, string>; sessionKey?: string } = {}): Promise<{ status: number; data: any; cookie: string }> {
-    const proxy = this.proxyManager.getNextProxy();
-    const args: string[] = ['-s', '-i', '--connect-timeout', '5', '--max-time', '10'];
+    const proxy = options.sessionKey 
+      ? this.proxyManager.getStickyProxy(options.sessionKey) 
+      : this.proxyManager.getNextProxy();
+
+    const args: string[] = ['-s', '-i', '--connect-timeout', '4', '--max-time', '8'];
 
     if (proxy) {
       const auth = proxy.auth ? `${proxy.auth.username}:${proxy.auth.password}@` : '';
-      // socks5-hostname port 62389 orqali 100% kafolatlangan ulanish
-      const socksPort = proxy.port === 62388 ? 62389 : proxy.port;
+      // SOCKS5 port: 62389, 64303, 64149 va hk (agar HTTP port bo'lsa +1 qilib socks5 ga o'tkazish)
+      const socksPort = proxy.port % 2 === 0 ? proxy.port + 1 : proxy.port;
       args.push('--socks5-hostname', `${auth}${proxy.host}:${socksPort}`);
     }
 
@@ -316,7 +319,10 @@ export class OpenBudgetService {
 
       return { status, data: parsedData, cookie };
     } catch (err: any) {
-      this.logger.error(`Curl request failed for ${url}:`, err.message);
+      if (proxy) {
+        this.proxyManager.markProxyFailure(proxy);
+      }
+      this.logger.warn(`Curl request failed for ${url} via proxy ${proxy?.host}: ${err.message}`);
       throw err;
     }
   }
