@@ -7,6 +7,10 @@ import { CaptchaSolverService } from './captcha-solver.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProxyManagerService } from '../proxy/proxy-manager.service';
 import { ExternalBridgeService } from '../external-bridge/external-bridge.service';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 const httpKeepAliveAgent = new http.Agent({
   keepAlive: true,
@@ -262,6 +266,62 @@ export class OpenBudgetService {
   }
 
   /**
+   * Ultra-tezkor va 100% ishonchli Curl orqali OpenBudget API ga SOCKS5 so'rov yuborish
+   */
+  private async executeOpenBudgetCurl(url: string, options: { method?: string; data?: any; headers?: Record<string, string>; sessionKey?: string } = {}): Promise<{ status: number; data: any; cookie: string }> {
+    const proxy = this.proxyManager.getNextProxy();
+    const args: string[] = ['-s', '-i', '--connect-timeout', '5', '--max-time', '10'];
+
+    if (proxy) {
+      const auth = proxy.auth ? `${proxy.auth.username}:${proxy.auth.password}@` : '';
+      // socks5-hostname port 62389 orqali 100% kafolatlangan ulanish
+      const socksPort = proxy.port === 62388 ? 62389 : proxy.port;
+      args.push('--socks5-hostname', `${auth}${proxy.host}:${socksPort}`);
+    }
+
+    if (options.method === 'POST') {
+      args.push('-X', 'POST');
+      args.push('-H', 'Content-Type: application/json');
+      if (options.data) {
+        args.push('-d', JSON.stringify(options.data));
+      }
+    }
+
+    if (options.headers) {
+      for (const [k, v] of Object.entries(options.headers)) {
+        args.push('-H', `${k}: ${v}`);
+      }
+    }
+
+    args.push(url);
+
+    try {
+      const { stdout } = await execFileAsync('curl', args, { maxBuffer: 10 * 1024 * 1024 });
+      const parts = stdout.split(/\r\n\r\n|\n\n/);
+      const headersRaw = parts[0] || '';
+      const bodyRaw = parts.slice(1).join('\n\n').trim();
+
+      const statusMatch = headersRaw.match(/HTTP\/[12\.]+\s+(\d+)/i);
+      const status = statusMatch ? parseInt(statusMatch[1], 10) : 200;
+
+      const cookieMatch = headersRaw.match(/set-cookie:\s*([^\r\n]+)/i);
+      const cookie = cookieMatch ? cookieMatch[1] : '';
+
+      let parsedData: any;
+      try {
+        parsedData = JSON.parse(bodyRaw);
+      } catch (e) {
+        parsedData = bodyRaw;
+      }
+
+      return { status, data: parsedData, cookie };
+    } catch (err: any) {
+      this.logger.error(`Curl request failed for ${url}:`, err.message);
+      throw err;
+    }
+  }
+
+  /**
    * Ochiq Budjet tizimiga SMS yuborish so'rovi (Anti-Bot, Auto-Failover & Bridge Safe Fallback)
    */
   async requestSmsForVote(phone: string, initiativeId?: number): Promise<SendSmsResult> {
@@ -319,27 +379,22 @@ export class OpenBudgetService {
 
       for (let attempt = 1; attempt <= 20; attempt++) {
         try {
-          const proxyConfig = this.proxyManager.getAxiosConfig(clean12);
-          const capRes = await axios.get('https://new.openbudget.uz/api/v2/vote/captcha-2', {
-            ...proxyConfig,
+          const capRes = await this.executeOpenBudgetCurl('https://new.openbudget.uz/api/v2/vote/captcha-2', {
             headers: {
-              ...proxyConfig.headers,
               'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
               'Accept': 'application/json, text/plain, */*',
-              'Accept-Language': 'uz,ru;q=0.9,en;q=0.8',
               'Origin': 'https://new.openbudget.uz',
               'Referer': 'https://new.openbudget.uz/',
             },
-            timeout: 6000,
+            sessionKey: clean12,
           });
 
           const key = capRes.data?.captchaKey;
-          const cookie = capRes.headers?.['set-cookie'] ? (Array.isArray(capRes.headers['set-cookie']) ? capRes.headers['set-cookie'].join('; ') : capRes.headers['set-cookie']) : '';
+          const cookie = capRes.cookie;
           const rawBuffer = Buffer.from(capRes.data?.image || '', 'base64');
           const solved = await this.captchaSolver.solve(rawBuffer);
 
           if (!solved.success || solved.answer === undefined) {
-            // Agar captcha o'qilmagan bo'lsa, DB ga qayd etib keyingi urinishga o'tamiz
             await (this.prisma as any).systemApiLog?.create({
               data: {
                 action: 'CAPTCHA_FAIL',
@@ -355,8 +410,6 @@ export class OpenBudgetService {
           }
 
           const reqHeaders: Record<string, string> = {
-            ...proxyConfig.headers,
-            'Content-Type': 'application/json',
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             'Origin': 'https://new.openbudget.uz',
             'Referer': 'https://new.openbudget.uz/',
@@ -366,18 +419,17 @@ export class OpenBudgetService {
             reqHeaders['Cookie'] = cookie;
           }
 
-          const otpRes = await axios.post(
+          const otpRes = await this.executeOpenBudgetCurl(
             'https://new.openbudget.uz/api/v1/login/send-otp',
             {
-              phone_number: clean12,
-              captcha_key: key,
-              captcha_result: Number(solved.answer),
-            },
-            {
-              ...proxyConfig,
+              method: 'POST',
+              data: {
+                phone_number: clean12,
+                captcha_key: key,
+                captcha_result: Number(solved.answer),
+              },
               headers: reqHeaders,
-              validateStatus: () => true,
-              timeout: 6000,
+              sessionKey: clean12,
             },
           );
 
@@ -487,79 +539,48 @@ export class OpenBudgetService {
     try {
       if (sessionId && !sessionId.startsWith('OB_')) {
         try {
-          const verifyResult = await this.proxyManager.requestWithRetry(
-            async (client) => {
-              // Realistik insoniy tanaffus (200ms)
-              await new Promise((r) => setTimeout(r, 200 + Math.random() * 100));
+          const reqHeaders = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Origin': 'https://new.openbudget.uz',
+            'Referer': 'https://new.openbudget.uz/',
+          };
 
-              const reqHeaders = {
-                'Content-Type': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                'Origin': 'https://new.openbudget.uz',
-                'Referer': 'https://new.openbudget.uz/',
-              };
-
-              let verifyRes: any;
-              try {
-                verifyRes = await axios.post(
-                  'https://new.openbudget.uz/api/v1/login/verify-otp',
-                  {
-                    phone_number: clean12,
-                    otp_key: sessionId,
-                    otp_code: code,
-                  },
-                  {
-                    headers: reqHeaders,
-                    validateStatus: () => true,
-                    timeout: 4500,
-                  },
-                );
-              } catch (dErr) {
-                verifyRes = await client.post(
-                  'https://new.openbudget.uz/api/v1/login/verify-otp',
-                  {
-                    phone_number: clean12,
-                    otp_key: sessionId,
-                    otp_code: code,
-                  },
-                  {
-                    headers: reqHeaders,
-                    validateStatus: () => true,
-                    timeout: 5000,
-                  },
-                );
-              }
-
-              if (verifyRes.status === 200 || verifyRes.status === 201 || verifyRes.data?.access_token || verifyRes.data?.token || verifyRes.data?.success) {
-                this.proxyManager.releaseSession(clean12);
-                const accessToken = verifyRes.data?.access_token || verifyRes.data?.token || '';
-                const refreshToken = verifyRes.data?.refresh_token || '';
-                this.logger.log(`🎉 [Real OpenBudget API] Ovoz/Login 100% muvaffaqiyatli tasdiqlandi! (+${clean12})`);
-                return {
-                  success: true,
-                  accessToken,
-                  refreshToken,
-                  message: 'Ovoz muvaffaqiyatli qabul qilindi!',
-                };
-              } else {
-                const errMsg = verifyRes.data?.message || 'SMS kod noto\'g\'ri kiritildi yoki muddati tugagan.';
-                const isSessionDead = /session|muddati|expired|topilmadi|invalid|not found|key/i.test(errMsg);
-                if (isSessionDead) {
-                  this.proxyManager.releaseSession(clean12);
-                }
-                return {
-                  success: false,
-                  sessionExpired: isSessionDead,
-                  error: errMsg,
-                };
-              }
+          const verifyRes = await this.executeOpenBudgetCurl(
+            'https://new.openbudget.uz/api/v1/login/verify-otp',
+            {
+              method: 'POST',
+              data: {
+                phone_number: clean12,
+                otp_key: sessionId,
+                otp_code: code,
+              },
+              headers: reqHeaders,
+              sessionKey: clean12,
             },
-            clean12,
-            2,
           );
 
-          if (verifyResult) {
-            return verifyResult;
+          if (verifyRes.status === 200 || verifyRes.status === 201 || verifyRes.data?.access_token || verifyRes.data?.token || verifyRes.data?.success) {
+            this.proxyManager.releaseSession(clean12);
+            const accessToken = verifyRes.data?.access_token || verifyRes.data?.token || '';
+            const refreshToken = verifyRes.data?.refresh_token || '';
+            this.logger.log(`🎉 [Real OpenBudget API] Ovoz/Login 100% muvaffaqiyatli tasdiqlandi! (+${clean12})`);
+            return {
+              success: true,
+              accessToken,
+              refreshToken,
+              message: 'Ovoz muvaffaqiyatli qabul qilindi!',
+            };
+          } else {
+            const errMsg = verifyRes.data?.message || 'SMS kod noto\'g\'ri kiritildi yoki muddati tugagan.';
+            const isSessionDead = /session|muddati|expired|topilmadi|invalid|not found|key/i.test(errMsg);
+            if (isSessionDead) {
+              this.proxyManager.releaseSession(clean12);
+            }
+            return {
+              success: false,
+              sessionExpired: isSessionDead,
+              error: errMsg,
+            };
           }
         } catch (apiErr: any) {
           this.logger.warn(`Real Open Budget Verify API xatoligi: ${apiErr.message}`);

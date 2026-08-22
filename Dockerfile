@@ -24,8 +24,8 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Install Tesseract, OpenSSL & Graphics libraries for CAPTCHA OCR
-RUN apk add --no-cache tesseract-ocr vips openssl libc6-compat
+# Install Tesseract, OpenSSL, curl & Graphics libraries for CAPTCHA OCR & Ultra-Fast SOCKS5 Proxying
+RUN apk add --no-cache tesseract-ocr vips openssl libc6-compat curl
 
 COPY package*.json ./
 COPY prisma ./prisma/
