@@ -46,16 +46,12 @@ export const UsersView: React.FC<UsersViewProps> = ({
     setCurrentPage(1);
   };
 
-  const filteredUsers = useMemo(() => {
+  // Status'dan tashqari barcha filtrlar (bot, sana, qidiruv) qo'llangan ro'yxat
+  const baseFiltered = useMemo(() => {
     const todayStr = tashkentToday();
     const yesterday = tashkentYesterday();
 
     return users.filter((u) => {
-      // Status filter
-      if (statusFilter === 'ACTIVE' && (u.isBanned || u.role === 'ADMIN')) return false;
-      if (statusFilter === 'BANNED' && !u.isBanned) return false;
-      if (statusFilter === 'ADMIN' && u.role !== 'ADMIN') return false;
-
       // Mahalla/Bot filter
       if (selectedBotId !== 'ALL') {
         const bot = bots.find((b) => String(b.id) === selectedBotId);
@@ -81,7 +77,29 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
       return true;
     });
-  }, [users, statusFilter, selectedBotId, activePreset, startDate, endDate, search, bots]);
+  }, [users, selectedBotId, activePreset, startDate, endDate, search, bots]);
+
+  // Tab sonlari — joriy filtrlangan ro'yxat bo'yicha
+  const statusCounts = useMemo(() => {
+    let active = 0;
+    let admin = 0;
+    let banned = 0;
+    for (const u of baseFiltered) {
+      if (u.isBanned) banned++;
+      else if (u.role === 'ADMIN') admin++;
+      else active++;
+    }
+    return { all: baseFiltered.length, active, admin, banned };
+  }, [baseFiltered]);
+
+  const filteredUsers = useMemo(() => {
+    return baseFiltered.filter((u) => {
+      if (statusFilter === 'ACTIVE' && (u.isBanned || u.role === 'ADMIN')) return false;
+      if (statusFilter === 'BANNED' && !u.isBanned) return false;
+      if (statusFilter === 'ADMIN' && u.role !== 'ADMIN') return false;
+      return true;
+    });
+  }, [baseFiltered, statusFilter]);
 
   const paginatedUsers = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
@@ -137,7 +155,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              Barchasi ({users.length})
+              Barchasi ({statusCounts.all})
             </button>
             <button
               onClick={() => { setStatusFilter('ACTIVE'); setCurrentPage(1); }}
@@ -147,7 +165,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              🟢 Faol
+              🟢 Faol ({statusCounts.active})
             </button>
             <button
               onClick={() => { setStatusFilter('ADMIN'); setCurrentPage(1); }}
@@ -157,7 +175,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              👑 Adminlar
+              👑 Adminlar ({statusCounts.admin})
             </button>
             <button
               onClick={() => { setStatusFilter('BANNED'); setCurrentPage(1); }}
@@ -167,7 +185,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              🚫 Bloklangan
+              🚫 Bloklangan ({statusCounts.banned})
             </button>
           </div>
 

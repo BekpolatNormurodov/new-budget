@@ -53,14 +53,12 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
     setCurrentPage(1);
   };
 
-  const filteredWithdrawals = useMemo(() => {
+  // Status'dan tashqari barcha filtrlar (sana, qidiruv) qo'llangan ro'yxat
+  const baseFiltered = useMemo(() => {
     const todayStr = tashkentToday();
     const yesterday = tashkentYesterday();
 
     return withdrawals.filter((w) => {
-      // Status filter
-      if (statusTab !== 'ALL' && w.status !== statusTab) return false;
-
       // Date filter
       const wDate = toTashkentDateStr(w.createdAt);
       if (activePreset === 'TODAY' && wDate !== todayStr) return false;
@@ -82,7 +80,17 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
 
       return true;
     });
-  }, [withdrawals, statusTab, activePreset, startDate, endDate, search]);
+  }, [withdrawals, activePreset, startDate, endDate, search]);
+
+  // Tab sonlari — joriy filtrlangan ro'yxat bo'yicha
+  const pendingCount = baseFiltered.filter((w) => w.status === 'PENDING').length;
+  const approvedCount = baseFiltered.filter((w) => w.status === 'APPROVED').length;
+  const rejectedCount = baseFiltered.filter((w) => w.status === 'REJECTED').length;
+
+  const filteredWithdrawals = useMemo(() => {
+    if (statusTab === 'ALL') return baseFiltered;
+    return baseFiltered.filter((w) => w.status === statusTab);
+  }, [baseFiltered, statusTab]);
 
   const paginatedWithdrawals = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
@@ -90,10 +98,6 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
   }, [filteredWithdrawals, currentPage, pageSize]);
 
   const totalPages = Math.ceil(filteredWithdrawals.length / pageSize) || 1;
-
-  const pendingCount = withdrawals.filter((w) => w.status === 'PENDING').length;
-  const approvedCount = withdrawals.filter((w) => w.status === 'APPROVED').length;
-  const rejectedCount = withdrawals.filter((w) => w.status === 'REJECTED').length;
 
   const handleExportCsv = () => {
     exportToCsv(
@@ -172,7 +176,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              Barchasi ({withdrawals.length})
+              Barchasi ({baseFiltered.length})
             </button>
           </div>
 

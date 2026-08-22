@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { X, CheckCircle, Upload, Image, Trash2, CreditCard, User, DollarSign } from 'lucide-react';
+import { CheckCircle, Upload, Image, Trash2, CreditCard, User, DollarSign } from 'lucide-react';
 import { WithdrawalItem } from '../types';
-import { formatMoney, formatSum } from '../utils/format';
+import { formatMoney } from '../utils/format';
+import { Modal, ModalCancelButton } from './Modal';
 
 interface ApproveWithdrawalModalProps {
   isOpen: boolean;
@@ -49,18 +50,28 @@ export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
     : withdrawal.accountDetails;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="glass-modal rounded-3xl p-6 max-w-lg w-full space-y-4 border border-emerald-500/30 shadow-2xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95">
-        <div className="flex justify-between items-center">
-          <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-emerald-500" />
-            <span>To'lovni Tasdiqlash & Chek Yuklash</span>
-          </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer">
-            <X className="w-5 h-5" />
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="To'lovni Tasdiqlash & Chek Yuklash"
+      icon={<CheckCircle className="w-5 h-5" />}
+      accent="emerald"
+      size="md"
+      onSubmit={handleSubmit}
+      bodyClassName="space-y-4"
+      footer={
+        <>
+          <ModalCancelButton onClick={onClose} />
+          <button
+            type="submit"
+            className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:opacity-95 text-white rounded-xl font-bold text-xs shadow-lg cursor-pointer transition flex items-center gap-1.5"
+          >
+            <CheckCircle className="w-4 h-4" />
+            <span>To'lovni Tasdiqlash & Yuborish</span>
           </button>
-        </div>
-
+        </>
+      }
+    >
         {/* Withdrawal details summary card */}
         <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-2.5 text-xs">
           <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-800">
@@ -103,7 +114,7 @@ export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
           )}
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
+        <div className="space-y-3.5 text-xs">
           {/* Chek rasmini yuklash */}
           <div className="space-y-2">
             <label className="block text-slate-700 dark:text-slate-300 font-bold flex items-center gap-1.5">
@@ -162,24 +173,7 @@ export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
             />
           </div>
 
-          <div className="flex justify-end space-x-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition"
-            >
-              Bekor qilish
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:opacity-95 text-white rounded-xl font-bold shadow-lg cursor-pointer transition flex items-center gap-1.5"
-            >
-              <CheckCircle className="w-4 h-4" />
-              <span>To'lovni Tasdiqlash & Yuborish</span>
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </div>
+    </Modal>
   );
 };

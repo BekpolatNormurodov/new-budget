@@ -51,15 +51,13 @@ export const VotesView: React.FC<VotesViewProps> = ({
     return list;
   }, [allVotes, pendingVotes]);
 
-  const filteredVotes = useMemo(() => {
+  // Status'dan tashqari barcha filtrlar (bot, sana, qidiruv) qo'llangan ro'yxat.
+  // Tab sonlari ham, ro'yxat ham shundan kelib chiqadi.
+  const baseFiltered = useMemo(() => {
     const todayStr = tashkentToday();
     const yesterday = tashkentYesterday();
 
     return combinedVotes.filter((v) => {
-      // Status filter
-      if (statusTab === 'PENDING' && v.status !== 'PENDING_VERIFICATION') return false;
-      if (statusTab === 'VERIFIED' && v.status !== 'VERIFIED') return false;
-
       // Mahalla/Bot filter
       if (selectedBotId !== 'ALL') {
         const bot = bots.find((b) => String(b.id) === selectedBotId);
@@ -86,7 +84,25 @@ export const VotesView: React.FC<VotesViewProps> = ({
 
       return true;
     });
-  }, [combinedVotes, statusTab, selectedBotId, activePreset, startDate, endDate, search, bots]);
+  }, [combinedVotes, selectedBotId, activePreset, startDate, endDate, search, bots]);
+
+  // Tab sonlari — joriy filtrlangan ro'yxat bo'yicha
+  const statusCounts = useMemo(() => {
+    let pending = 0;
+    let verified = 0;
+    for (const v of baseFiltered) {
+      if (v.status === 'PENDING_VERIFICATION') pending++;
+      else if (v.status === 'VERIFIED') verified++;
+    }
+    return { pending, verified, all: baseFiltered.length };
+  }, [baseFiltered]);
+
+  // Status tabi qo'llangan yakuniy ro'yxat
+  const filteredVotes = useMemo(() => {
+    if (statusTab === 'PENDING') return baseFiltered.filter((v) => v.status === 'PENDING_VERIFICATION');
+    if (statusTab === 'VERIFIED') return baseFiltered.filter((v) => v.status === 'VERIFIED');
+    return baseFiltered;
+  }, [baseFiltered, statusTab]);
 
   // Paginated records
   const paginatedVotes = useMemo(() => {
@@ -95,17 +111,6 @@ export const VotesView: React.FC<VotesViewProps> = ({
   }, [filteredVotes, currentPage, pageSize]);
 
   const totalPages = Math.ceil(filteredVotes.length / pageSize) || 1;
-
-  // Har bir status tabi uchun aniq sonlar (butun ro'yxat bo'yicha)
-  const statusCounts = useMemo(() => {
-    let pending = 0;
-    let verified = 0;
-    for (const v of combinedVotes) {
-      if (v.status === 'PENDING_VERIFICATION') pending++;
-      else if (v.status === 'VERIFIED') verified++;
-    }
-    return { pending, verified, all: combinedVotes.length };
-  }, [combinedVotes]);
 
   const handleExportCsv = () => {
     exportToCsv(

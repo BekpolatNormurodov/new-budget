@@ -78,6 +78,17 @@ export const SmartFilterBar: React.FC<SmartFilterBarProps> = ({
     onDateChange('', '', 'ALL');
   };
 
+  // Ixtiyoriy sana oralig'i tanlagich
+  const handleStartChange = (val: string) => {
+    // Boshlanish tugashdan keyin bo'lsa, tugashni ham moslaymiz
+    const end = endDate && endDate < val ? val : endDate;
+    onDateChange(val, end, 'CUSTOM');
+  };
+  const handleEndChange = (val: string) => {
+    const start = startDate && startDate > val ? val : startDate;
+    onDateChange(start, val, 'CUSTOM');
+  };
+
   const isSeasonActive =
     activePreset === 'SEASON' || (startDate === '2026-08-22' && endDate === '2026-08-31');
 
@@ -174,6 +185,49 @@ export const SmartFilterBar: React.FC<SmartFilterBarProps> = ({
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Custom Date Range Picker */}
+      <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800/80">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 flex-shrink-0">
+            <CalendarDays className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            Ixtiyoriy sana oralig'i:
+          </span>
+          <div className="flex items-center gap-2 flex-1">
+            <div className="relative flex-1 sm:flex-none">
+              <input
+                type="date"
+                value={startDate}
+                max={endDate || undefined}
+                onChange={(e) => handleStartChange(e.target.value)}
+                className="w-full sm:w-auto bg-slate-50 dark:bg-slate-950/80 border border-slate-300 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer"
+                aria-label="Boshlanish sanasi"
+              />
+            </div>
+            <span className="text-slate-400 dark:text-slate-500 text-xs flex-shrink-0">—</span>
+            <div className="relative flex-1 sm:flex-none">
+              <input
+                type="date"
+                value={endDate}
+                min={startDate || undefined}
+                onChange={(e) => handleEndChange(e.target.value)}
+                className="w-full sm:w-auto bg-slate-50 dark:bg-slate-950/80 border border-slate-300 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer"
+                aria-label="Tugash sanasi"
+              />
+            </div>
+            {(startDate || endDate) && (
+              <button
+                type="button"
+                onClick={() => onDateChange('', '', 'ALL')}
+                className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 border border-slate-200 dark:border-slate-700 transition-colors flex-shrink-0 cursor-pointer"
+                title="Sanani tozalash"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
