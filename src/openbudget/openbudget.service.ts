@@ -373,24 +373,28 @@ export class OpenBudgetService {
             },
           );
 
-          this.logger.log(`📡 [OTP Urinish #${attempt}] +${clean12} | Captcha: ${solved.expression} => ${solved.answer} | OpenBudget Status: ${otpRes.status} | Javob: ${JSON.stringify(otpRes.data)}`);
+          this.logger.log(`📡 [OTP Urinish #${attempt}/20] +${clean12} | Captcha: ${solved.expression} => ${solved.answer} | HTTP Status: ${otpRes.status} | Javob: ${JSON.stringify(otpRes.data)}`);
 
           const isSuccess = (otpRes.status === 200 || otpRes.status === 201) && Boolean(otpRes.data?.otpKey || otpRes.data?.key || otpRes.data?.token);
 
           // DB ga har bir zapros va server javobini saqlab borish
-          await (this.prisma as any).systemApiLog?.create({
-            data: {
-              action: 'SEND_OTP',
-              phone: clean12,
-              captchaKey: key,
-              captchaExpr: solved.expression,
-              captchaAns: Number(solved.answer),
-              httpStatus: otpRes.status,
-              responseBody: JSON.stringify(otpRes.data),
-              isSuccess,
-              errorMessage: isSuccess ? null : (otpRes.data?.message || null),
-            },
-          }).catch(() => {});
+          try {
+            await (this.prisma as any).systemApiLog.create({
+              data: {
+                action: 'SEND_OTP',
+                phone: clean12,
+                captchaKey: key,
+                captchaExpr: solved.expression,
+                captchaAns: Number(solved.answer),
+                httpStatus: otpRes.status,
+                responseBody: JSON.stringify(otpRes.data),
+                isSuccess,
+                errorMessage: isSuccess ? null : (otpRes.data?.message || `HTTP ${otpRes.status}`),
+              },
+            });
+          } catch (dbLogErr: any) {
+            this.logger.warn(`SystemApiLog yozishda xato: ${dbLogErr.message}`);
+          }
 
           if (isSuccess) {
             otpKey = otpRes.data?.otpKey || otpRes.data?.key || otpRes.data?.token;
