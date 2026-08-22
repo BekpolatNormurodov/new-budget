@@ -394,6 +394,33 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
             </div>
           </div>
 
+          {/* Referal tizimini yoqish/o'chirish */}
+          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-1.5">
+              <Gift className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+              <div>
+                <p className="text-slate-700 dark:text-slate-300 font-semibold text-xs">Referal tizimi</p>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                  {newBot.isRefActive !== false ? 'Yoqilgan - yangi referallar bonus oladi' : 'O\'chirilgan - referal bonusi berilmaydi'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setNewBot({ ...newBot, isRefActive: newBot.isRefActive === false })}
+              aria-pressed={newBot.isRefActive !== false}
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
+                newBot.isRefActive !== false ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-700'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  newBot.isRefActive !== false ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
           {/* 🏛 Loyiha Tavsifi & Loyiha Summasi (OpenBudget Avtomat yoki Qo'lda) */}
           <div className="space-y-3 p-3.5 rounded-2xl bg-indigo-50/50 dark:bg-slate-950/60 border border-indigo-100 dark:border-indigo-900/30">
             <div>
