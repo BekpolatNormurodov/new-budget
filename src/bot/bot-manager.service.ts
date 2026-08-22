@@ -810,25 +810,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
         this.startVotingSessionTimer(botRecord.id, user.id, user.telegramId);
 
-        const mahallaName = botRecord.mahallaName || 'Янги боги сурх MFY';
-        const voteReward = botRecord.voteReward || 30000;
-        const initiativeUuid = botRecord.initiativeUuid || 'b8752aa2-e6da-470c-8a26-52d5b594526a';
-        const boardId = botRecord.boardId || 55;
-
-        // 1-xabar: Ochiq Budjet rasmiy WebApp tugmasi bilan
-        await ctx.reply(
-          `🗳 <b>${mahallaName.toUpperCase()} UCHUN OVOZ BERING!</b>\n\n` +
-          `💰 <b>Sizga to'lanadigan mukofot:</b> <code>+${formatSum(voteReward)} so'm</code>\n\n` +
-          `👇 <b>Ovoz berish usulini tanlang:</b>\n` +
-          `1️⃣ Pastdagi <b>«🗳 Ochiq Budjetda Ovoz Berish»</b> tugmasini bosing va to'g'ridan-to'g'ri rasmiy Ochiq Budjet sahifasida ovoz bering!\n` +
-          `2️⃣ Yoki telefon raqamingizni pastdagi klaviatura orqali yuboring.`,
-          {
-            parse_mode: 'HTML',
-            ...BotKeyboards.voteOptionsInline(initiativeUuid, boardId),
-          }
-        );
-
-        // 2-xabar: Kontakt ulashish / Telefon kiritish so'rovi
+        // Toza, ortiqcha tugmalarsiz telefon kiritish so'rovi
         await ctx.reply(
           BOT_MESSAGES.VOTE_PROMPT,
           {
