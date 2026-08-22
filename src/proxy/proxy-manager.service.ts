@@ -3,6 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import * as http from 'http';
 import * as https from 'https';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+const execFileAsync = promisify(execFile);
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const { SocksProxyAgent } = require('socks-proxy-agent');
 
@@ -336,7 +339,7 @@ export class ProxyManagerService implements OnModuleInit {
   }
 
   /**
-   * Barcha proxylarning salomatligini tekshirish
+   * Barcha proxylarning salomatligini tekshirish (SOCKS5 orqali OpenBudget API ga)
    */
   public async checkAllProxiesHealth(): Promise<{ total: number; alive: number; dead: number }> {
     if (this.proxyPool.length === 0) {
@@ -351,24 +354,25 @@ export class ProxyManagerService implements OnModuleInit {
       this.proxyPool.map(async (proxy) => {
         const startTime = Date.now();
         try {
-          const authPart = proxy.auth?.username
-            ? `${encodeURIComponent(proxy.auth.username)}:${encodeURIComponent(proxy.auth.password || '')}@`
-            : '';
-          const proxyUrl = `http://${authPart}${proxy.host}:${proxy.port}`;
-          const agent = new HttpsProxyAgent(proxyUrl);
+          const auth = proxy.auth ? `${proxy.auth.username}:${proxy.auth.password}@` : '';
+          const socksPort = proxy.port % 2 === 0 ? proxy.port + 1 : proxy.port;
+          const { stdout } = await execFileAsync('curl', [
+            '-sI',
+            '--connect-timeout', '3',
+            '--max-time', '5',
+            '--socks5-hostname', `${auth}${proxy.host}:${socksPort}`,
+            'https://new.openbudget.uz/api/v2/vote/captcha-2'
+          ]);
 
-          const response = await axios.get('http://ipinfo.io/json', {
-            httpAgent: agent,
-            httpsAgent: agent,
-            proxy: false,
-            timeout: 4000,
-          });
-
-          proxy.isAlive = response.status >= 200 && response.status < 500;
-          proxy.latencyMs = Date.now() - startTime;
-          proxy.lastCheckedAt = new Date();
-          proxy.failCount = 0;
-          alive++;
+          if (stdout.includes('200') || stdout.includes('HTTP/')) {
+            proxy.isAlive = true;
+            proxy.latencyMs = Date.now() - startTime;
+            proxy.lastCheckedAt = new Date();
+            proxy.failCount = 0;
+            alive++;
+          } else {
+            throw new Error('Status not 200');
+          }
         } catch (err) {
           proxy.isAlive = false;
           proxy.failCount++;
