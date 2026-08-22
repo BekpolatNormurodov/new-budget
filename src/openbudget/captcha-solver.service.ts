@@ -281,6 +281,11 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
           const n2 = parseInt(rightDigits, 10);
           // OpenBudget faqat 0 dan 20 gacha bo'lgan sonlar bilan ishlaydi
           if (n1 >= 0 && n1 <= 20 && n2 >= 0 && n2 <= 20) {
+            // OpenBudget hech qachon manfiy natija bermaydi.
+            // Agar OCR "-" deb o'qigan bo'lsa, lekin n2 > n1 bo'lsa → bu xato o'qish, rad et.
+            if (op === '-' && n2 > n1) {
+              return null;
+            }
             let ans = 0;
             if (op === '+') ans = n1 + n2;
             if (op === '-') ans = n1 - n2;
@@ -297,6 +302,10 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         const opStr = m[2];
         const n2 = parseInt(m[3], 10);
         if (n1 >= 0 && n1 <= 20 && n2 >= 0 && n2 <= 20) {
+          // Xuddi shu qoida: manfiy natija bo'lsa → rad et
+          if (opStr === '-' && n2 > n1) {
+            return null;
+          }
           let ans = 0;
           if (opStr === '+') ans = n1 + n2;
           if (opStr === '-') ans = n1 - n2;
