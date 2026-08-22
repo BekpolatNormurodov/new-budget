@@ -29,14 +29,19 @@ export class BotKeyboards {
   }
 
   /**
-   * Ovoz berish variantlari inline klaviaturasi (Web App + Brauzer)
+   * Ovoz berish variantlari inline klaviaturasi (Telegram Bot + Web App + Brauzer)
    */
-  static voteOptionsInline(initiativeUuid?: string, boardId: number | string = 55) {
+  static voteOptionsInline(initiativeUuid?: string, boardId: number | string = 55, mahallaId: string = '055497192014') {
     const webUrl = initiativeUuid
       ? `https://openbudget.uz/boards/initiatives/initiative/${boardId}/${initiativeUuid}`
       : 'https://openbudget.uz/';
     
+    const tgBotUrl = `https://t.me/ochiqbudjetbot?start=${mahallaId}`;
+
     return Markup.inlineKeyboard([
+      [
+        Markup.button.url('🤖 Rasmiy Telegram Botda Ovoz Berish', tgBotUrl),
+      ],
       [
         Markup.button.webApp('🗳 Ochiq Budjetda Ovoz Berish (Web)', webUrl),
       ],

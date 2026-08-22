@@ -814,7 +814,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
           `⚡️ Ovoz OpenBudget tizimida qabul qilinishi bilan balansingizga avtomatik <b>+${formatSum(voteReward)} so'm</b> o'tkaziladi! 🚀`,
           {
             parse_mode: 'HTML',
-            ...BotKeyboards.voteOptionsInline(initiativeUuid, boardId),
+            ...BotKeyboards.voteOptionsInline(initiativeUuid, boardId, botRecord.mahallaId || '055497192014'),
           }
         );
       } catch (err) {
