@@ -319,15 +319,18 @@ export class OpenBudgetService {
 
       for (let attempt = 1; attempt <= 20; attempt++) {
         try {
+          const proxyConfig = this.proxyManager.getAxiosConfig(clean12);
           const capRes = await axios.get('https://new.openbudget.uz/api/v2/vote/captcha-2', {
+            ...proxyConfig,
             headers: {
+              ...proxyConfig.headers,
               'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
               'Accept': 'application/json, text/plain, */*',
               'Accept-Language': 'uz,ru;q=0.9,en;q=0.8',
               'Origin': 'https://new.openbudget.uz',
               'Referer': 'https://new.openbudget.uz/',
             },
-            timeout: 5000,
+            timeout: 6000,
           });
 
           const key = capRes.data?.captchaKey;
@@ -352,6 +355,7 @@ export class OpenBudgetService {
           }
 
           const reqHeaders: Record<string, string> = {
+            ...proxyConfig.headers,
             'Content-Type': 'application/json',
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             'Origin': 'https://new.openbudget.uz',
@@ -370,9 +374,10 @@ export class OpenBudgetService {
               captcha_result: Number(solved.answer),
             },
             {
+              ...proxyConfig,
               headers: reqHeaders,
               validateStatus: () => true,
-              timeout: 3000,
+              timeout: 6000,
             },
           );
 

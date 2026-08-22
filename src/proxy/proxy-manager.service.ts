@@ -3,7 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import * as http from 'http';
 import * as https from 'https';
-import { HttpsProxyAgent } from 'https-proxy-agent';
+const { HttpsProxyAgent } = require('https-proxy-agent');
+const { SocksProxyAgent } = require('socks-proxy-agent');
 
 export interface ProxyItem {
   url: string;
@@ -174,12 +175,19 @@ export class ProxyManagerService implements OnModuleInit {
       };
     }
 
-    // HTTP va HTTPS uchun maxsus HttpsProxyAgent orqali to'g'ridan-to'g'ri tunnel ochish
+    // HTTP va SOCKS5 protokollarini avtomatik moslashtirish
     const authPart = proxy.auth?.username
       ? `${encodeURIComponent(proxy.auth.username)}:${encodeURIComponent(proxy.auth.password || '')}@`
       : '';
-    const proxyUrl = `http://${authPart}${proxy.host}:${proxy.port}`;
-    const agent = new HttpsProxyAgent(proxyUrl);
+    
+    let agent: any;
+    if (proxy.protocol.startsWith('socks')) {
+      const socksUrl = `${proxy.protocol}://${authPart}${proxy.host}:${proxy.port}`;
+      agent = new SocksProxyAgent(socksUrl);
+    } else {
+      const proxyUrl = `http://${authPart}${proxy.host}:${proxy.port}`;
+      agent = new HttpsProxyAgent(proxyUrl);
+    }
 
     return {
       headers: baseHeaders,
