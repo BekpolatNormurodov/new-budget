@@ -178,16 +178,16 @@ export class WebAppController {
 
     try {
       const { stdout } = await execFileAsync('curl', args, { maxBuffer: 10 * 1024 * 1024 });
-      const parts = stdout.split(/\r\n\r\n|\n\n/).filter((p) => p.length > 0);
-      let bodyRaw = (parts[parts.length - 1] || '').trim();
-      const headersRaw = parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || '');
 
-      // Set-Cookie headerlarini mijoz brauzeriga uzatish
-      const cookieMatches = headersRaw.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
+      // Cookie larni mijozga uzatish
+      const cookieMatches = stdout.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
       for (const c of cookieMatches) {
         const val = c.replace(/^set-cookie:\s*/i, '');
         res.setHeader('Set-Cookie', val);
       }
+
+      const htmlStart = stdout.indexOf('<!DOCTYPE html>') !== -1 ? stdout.indexOf('<!DOCTYPE html>') : stdout.indexOf('<html');
+      let bodyRaw = htmlStart !== -1 ? stdout.slice(htmlStart) : stdout;
 
       // OpenBudget ichki form action manzillarini bizning proxy endpointga moslash
       bodyRaw = bodyRaw.replace(/action="\/api\/v2\/vote\/mvc\/captcha"/g, 'action="/api/v2/vote/mvc/captcha"');
@@ -238,15 +238,15 @@ export class WebAppController {
 
     try {
       const { stdout } = await execFileAsync('curl', args, { maxBuffer: 10 * 1024 * 1024 });
-      const parts = stdout.split(/\r\n\r\n|\n\n/).filter((p) => p.length > 0);
-      let bodyRaw = (parts[parts.length - 1] || '').trim();
-      const headersRaw = parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || '');
 
-      const cookieMatches = headersRaw.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
+      const cookieMatches = stdout.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
       for (const c of cookieMatches) {
         const val = c.replace(/^set-cookie:\s*/i, '');
         res.setHeader('Set-Cookie', val);
       }
+
+      const htmlStart = stdout.indexOf('<!DOCTYPE html>') !== -1 ? stdout.indexOf('<!DOCTYPE html>') : stdout.indexOf('<html');
+      let bodyRaw = htmlStart !== -1 ? stdout.slice(htmlStart) : stdout;
 
       bodyRaw = bodyRaw.replace(/action="\/api\/v2\/vote\/mvc\/captcha"/g, 'action="/api/v2/vote/mvc/captcha"');
       bodyRaw = bodyRaw.replace(/action="\/api\/v2\/vote\/mvc\/verify"/g, 'action="/api/v2/vote/mvc/verify"');
@@ -294,15 +294,15 @@ export class WebAppController {
 
     try {
       const { stdout } = await execFileAsync('curl', args, { maxBuffer: 10 * 1024 * 1024 });
-      const parts = stdout.split(/\r\n\r\n|\n\n/).filter((p) => p.length > 0);
-      let bodyRaw = (parts[parts.length - 1] || '').trim();
-      const headersRaw = parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || '');
 
-      const cookieMatches = headersRaw.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
+      const cookieMatches = stdout.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
       for (const c of cookieMatches) {
         const val = c.replace(/^set-cookie:\s*/i, '');
         res.setHeader('Set-Cookie', val);
       }
+
+      const htmlStart = stdout.indexOf('<!DOCTYPE html>') !== -1 ? stdout.indexOf('<!DOCTYPE html>') : stdout.indexOf('<html');
+      let bodyRaw = htmlStart !== -1 ? stdout.slice(htmlStart) : stdout;
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.send(bodyRaw);
