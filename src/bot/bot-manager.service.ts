@@ -800,21 +800,21 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
         const mahallaName = botRecord.mahallaName || 'Янги боги сурх MFY';
         const voteReward = botRecord.voteReward || 30000;
-        const initiativeUuid = botRecord.initiativeUuid || 'b8752aa2-e6da-470c-8a26-52d5b594526a';
-        const boardId = botRecord.boardId || 55;
-        const mahallaId = botRecord.mahallaId || '055497192014';
+
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { step: 'AWAITING_PHONE' },
+        });
 
         await ctx.reply(
           `🗳 <b>${mahallaName.toUpperCase()} UCHUN OVOZ BERISH</b>\n\n` +
           `💰 <b>Sizga to'lanadigan mukofot:</b> <code>+${formatSum(voteReward)} so'm</code>\n\n` +
-          `👇 <b>Ovoz berish uchun quyidagi tugmani bosing:</b>\n` +
-          `1️⃣ Telefon raqamingizni yozing.\n` +
-          `2️⃣ Rasmdagi 2 ta harfni belgilang.\n` +
-          `3️⃣ Kelgan SMS kodni kiriting.\n\n` +
-          `⚡️ Ovoz OpenBudget tizimida qabul qilinishi bilan balansingizga avtomatik <b>+${formatSum(voteReward)} so'm</b> o'tkaziladi! 🚀`,
+          `📱 <b>1-Qadam:</b> Telefon raqamingizni yuboring:\n` +
+          `👉 <code>901234567</code> yoki <code>+998901234567</code>\n\n` +
+          `<i>Yoki pastdagi «📱 Kontaktni yuborish» tugmasini bosing:</i>`,
           {
             parse_mode: 'HTML',
-            ...BotKeyboards.voteOptionsInline(initiativeUuid, boardId, mahallaId),
+            ...BotKeyboards.phoneRequestKeyboard(),
           }
         );
       } catch (err) {
@@ -1558,94 +1558,32 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    const waitMsg = await ctx.reply(BOT_MESSAGES.WAITING, { parse_mode: 'HTML' });
+    const initiativeUuid = botRecord.initiativeUuid || 'b8752aa2-e6da-470c-8a26-52d5b594526a';
+    const boardId = botRecord.boardId || 55;
+    const mahallaId = botRecord.mahallaId || '055497192014';
 
-    try {
-      const res = await this.openBudgetService.requestSmsForVote(
-        clean12,
-        undefined,
-        this.wrapCaptchaResolverWithWaitCleanup(ctx, botRecord.id, waitMsg.message_id),
-      );
-      this.clearActiveCaptchaMessage(ctx, botRecord.id, user.id);
-
-      if (!res.success) {
-        await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
-
-        // ⚡ Administratorga (Xurshid) zudlik bilan nosozlik xabarnomasini yuborish
-        const errMsg = res.error || 'SMS kod yuborilmadi';
-        const adminAlertText = `⚠️ <b>[BOT XATOLIK SIGNALI]</b>\n\n👤 <b>Foydalanuvchi:</b> ${user.firstName || 'Noma\'lum'} (@${user.username || 'yo\'q'})\n📱 <b>Telefon:</b> +${clean12}\n🤖 <b>Bot:</b> @${botRecord.botUsername || botRecord.id}\n❌ <b>Xatolik:</b> <code>${errMsg}</code>\n⏰ <b>Vaqt:</b> ${new Date().toLocaleTimeString('uz-UZ')}`;
-        
-        // 2053690211 - Xurshid Ismoilov Telegram ID
-        try {
-          const activeBot = this.activeBots.get(botRecord.id);
-          if (activeBot) {
-            await activeBot.bot.telegram.sendMessage('2053690211', adminAlertText, { parse_mode: 'HTML' }).catch(() => {});
-          }
-        } catch (e) {}
-
-        return ctx.reply(
-          errMsg.startsWith('⚠️') || errMsg.startsWith('❌') || errMsg.startsWith('⏳') || errMsg.startsWith('🏁') ? errMsg : `❌ ${errMsg}`,
-          { parse_mode: 'HTML', ...BotKeyboards.mainMenu(user.role === 'ADMIN') }
-        );
-      }
-
-      const smsSentAt = Date.now();
-
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        phone: clean12,
+        step: 'AWAITING_SMS_CODE',
+        tempData: JSON.stringify({
           phone: clean12,
-          step: 'AWAITING_SMS_CODE',
-          tempData: JSON.stringify({
-            phone: clean12,
-            sessionId: res.sessionId,
-            smsSentAt,
-            sessionStartedAt,
-            botId: botRecord.id,
-          }),
-        },
-      });
+          sessionStartedAt,
+          botId: botRecord.id,
+        }),
+      },
+    });
 
-      // 4. 2 DAQIQALIK (120 soniya) SMS TIMEOUT O'RNATISH
-      const timeoutKey = `${botRecord.id}_${user.id}`;
-      if (this.smsTimeouts.has(timeoutKey)) {
-        clearTimeout(this.smsTimeouts.get(timeoutKey));
+    await ctx.reply(
+      `📱 <b>Raqamingiz qabul qilindi:</b> <code>+${clean12}</code>\n\n` +
+      `👇 <b>2-Qadam:</b> Quyidagi tugmani bosing va rasmdagi <b>2 ta harfni</b> belgilang (25 soniya vaqt beriladi):\n\n` +
+      `<i>Telefoningizga ovoz berish SMS kodi yuboriladi!</i>`,
+      {
+        parse_mode: 'HTML',
+        ...BotKeyboards.voteOptionsInline(initiativeUuid, boardId, mahallaId, clean9),
       }
-      const timeoutHandle = setTimeout(async () => {
-        try {
-          const freshUser = await this.prisma.user.findUnique({ where: { id: user.id } });
-          if (freshUser && freshUser.step === 'AWAITING_SMS_CODE') {
-            await this.prisma.user.update({
-              where: { id: user.id },
-              data: { step: null, tempData: null },
-            });
-            const activeBot = this.activeBots.get(botRecord.id);
-            if (activeBot) {
-              await activeBot.bot.telegram.sendMessage(
-                user.telegramId,
-                `⏳ SMS kod kiritish vaqti (2 daqiqa) tugadi!\n\nIltimos, qaytadan "🗳 Ovoz berish" tugmasini bosing:`,
-                BotKeyboards.mainMenu(user.role === 'ADMIN')
-              ).catch(() => {});
-            }
-          }
-        } catch (e) {}
-      }, 120000); // 2 minut
-
-      this.smsTimeouts.set(timeoutKey, timeoutHandle);
-
-      await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
-      await ctx.reply(
-        `📩 Telefoningizga (+${clean12}) 6 xonali SMS kod yuborildi!\n\n⚠️ SMS kodni kiritish uchun sizda 2 daqiqa vaqt bor.\n\nIltimos, kelgan SMS kodni quyida yozib yuboring:`,
-        {
-          parse_mode: 'HTML',
-          ...BotKeyboards.smsWaitingInline(),
-        }
-      );
-    } catch (err) {
-      this.clearActiveCaptchaMessage(ctx, botRecord.id, user.id);
-      await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
-      await ctx.reply('❌ Nimadir xato ketdi. Iltimos, birozdan so\'ng qaytadan urinib ko\'ring.');
-    }
+    );
   }
 
   /**

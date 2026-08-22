@@ -153,6 +153,7 @@ export class WebAppController {
   @Get('/captcha')
   async getCaptchaPage(
     @Query('initiativeUuid') initiativeUuidQuery?: string,
+    @Query('phone') phoneQuery?: string,
     @Query('botId') botIdQuery?: string,
     @Headers('cookie') clientCookies?: string,
     @Res() res?: any,
@@ -196,22 +197,45 @@ export class WebAppController {
       // Agar ichki iframeda ishlasa, iframeni bloklamasligi uchun eval tekshiruvini zararsizlantirish
       bodyRaw = bodyRaw.replace(/window\.location\.href\s*=\s*['"]https:\/\/openbudget\.uz['"]/g, 'console.log("In-app captcha loaded")');
 
-      // 30 soniyalik / 30 daqiqalik vaqt tugaganda chiroyli bildirishnoma chiqarib yangilash
-      const timerEnhancement = `
+      // Timer'ni 25 soniya qilish (let t = 25000)
+      bodyRaw = bodyRaw.replace(/let\s+t\s*=\s*30000;/g, 'let t = 25000;');
+      bodyRaw = bodyRaw.replace(/30000\s*-\s*t/g, '25000 - t');
+      bodyRaw = bodyRaw.replace(/30000/g, '25000');
+
+      // Agar telefon raqam bot orqali uzatilgan bo'lsa (phoneQuery)
+      const cleanPhone = phoneQuery ? phoneQuery.replace(/[^0-9]/g, '').slice(-9) : '';
+      const formattedPhone = cleanPhone.length === 9 
+        ? `${cleanPhone.slice(0,2)} ${cleanPhone.slice(2,5)}-${cleanPhone.slice(5,7)}-${cleanPhone.slice(7,9)}`
+        : '';
+
+      const phoneAutofillScript = `
       <script>
         window.addEventListener('DOMContentLoaded', () => {
+          const phoneInput = document.getElementById('phone');
+          const prefilledPhone = "${formattedPhone}";
+          if (phoneInput && prefilledPhone) {
+            phoneInput.value = prefilledPhone;
+            phoneInput.readOnly = true;
+            phoneInput.style.backgroundColor = '#f1f5f9';
+            phoneInput.style.color = '#334155';
+            phoneInput.style.fontWeight = 'bold';
+            phoneInput.style.textAlign = 'center';
+            phoneInput.style.fontSize = '16px';
+            localStorage.setItem('phone', prefilledPhone);
+          }
+
+          // 25 soniyalik vaqt tugaganda ogohlantirish va reload
           setTimeout(() => {
-            const container = document.querySelector('.container') || document.body;
             const alertBox = document.createElement('div');
             alertBox.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#ef4444;color:white;padding:12px 24px;border-radius:12px;font-weight:bold;z-index:9999;box-shadow:0 10px 25px rgba(0,0,0,0.3);font-family:sans-serif;text-align:center;font-size:14px;';
-            alertBox.innerHTML = '⚠️ Captcha vaqti tugadi! Sahifa yangilanmoqda...';
+            alertBox.innerHTML = '⚠️ Captcha vaqti (25s) tugadi! Sahifa yangilanmoqda...';
             document.body.appendChild(alertBox);
-            setTimeout(() => window.location.reload(), 1500);
-          }, 30000);
+            setTimeout(() => window.location.reload(), 1200);
+          }, 25000);
         });
       </script>
       `;
-      bodyRaw = bodyRaw.replace('</body>', `${timerEnhancement}</body>`);
+      bodyRaw = bodyRaw.replace('</body>', `${phoneAutofillScript}</body>`);
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.send(bodyRaw);

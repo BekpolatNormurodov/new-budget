@@ -31,15 +31,16 @@ export class BotKeyboards {
   /**
    * Ovoz berish variantlari inline klaviaturasi (Telegram Bot + Web App + Brauzer)
    */
-  static voteOptionsInline(initiativeUuid?: string, boardId: number | string = 55, mahallaId: string = '055497192014') {
+  static voteOptionsInline(initiativeUuid?: string, boardId: number | string = 55, mahallaId: string = '055497192014', phone?: string) {
     const defaultUuid = 'b8752aa2-e6da-470c-8a26-52d5b594526a';
     const finalUuid = initiativeUuid || defaultUuid;
-    const miniAppCaptchaUrl = `http://90.156.223.161:3000/captcha?initiativeUuid=${finalUuid}`;
+    const phoneParam = phone ? `&phone=${encodeURIComponent(phone)}` : '';
+    const miniAppCaptchaUrl = `http://90.156.223.161:3000/captcha?initiativeUuid=${finalUuid}${phoneParam}`;
     const directWebUrl = `https://openbudget.uz/boards/initiatives/initiative/${boardId}/${finalUuid}`;
 
     return Markup.inlineKeyboard([
       [
-        Markup.button.webApp('🗳 Ovoz berish (Mini App)', miniAppCaptchaUrl),
+        Markup.button.webApp('🗳 Rasmdagi 2 ta harfni belgilash', miniAppCaptchaUrl),
       ],
       [
         Markup.button.url('🌐 Saytda ochish', directWebUrl),
