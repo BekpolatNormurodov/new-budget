@@ -355,6 +355,12 @@ export class OpenBudgetService {
     // HAR BIR yangi captchada foydalanuvchidan so'raladi (faqat 1 marta emas).
     let manualCaptchaRetryReason: 'wrong' | null = null;
     let manualRegCaptchaRetryReason: 'wrong' | null = null;
+    // regAttempt loop hisoblagichi captcha rasmi kelmasa ham (bo'sh rasm) oldinga
+    // siljishi mumkin - shuning uchun "bu foydalanuvchiga birinchi marta ro'yxatdan
+    // o'tish captchasi ko'rsatilishi" ni ALOHIDA flag orqali kuzatamiz (regAttempt===1
+    // emas), aks holda foydalanuvchi hali umuman javob bermagan holatda ham "captcha
+    // javobingiz qabul qilindi" deb noto'g'ri xabar berilishi mumkin edi.
+    let hasShownFirstRegCaptcha = false;
 
     // 1. Telefon raqam oldin ovoz berganligini tekshirish
     const existingVote = await this.prisma.vote.findFirst({
@@ -585,14 +591,17 @@ export class OpenBudgetService {
                   if (manualCaptchaResolver) {
                     const isRegRetry = manualRegCaptchaRetryReason === 'wrong';
                     manualRegCaptchaRetryReason = null;
-                    // Foydalanuvchi chalkashib qolmasligi uchun ("nega yana captcha?!"):
-                    // birinchi ro'yxatdan o'tish captchasida oldingi javobi to'g'ri qabul
-                    // qilinganini aniq aytamiz; keyingi urinishlarda esa (agar sabab xato
-                    // captcha bo'lmasa) bu server tomonidagi vaqtinchalik xato ekanini bildiramiz.
+                    const isFirstRegCaptcha = !hasShownFirstRegCaptcha;
+                    hasShownFirstRegCaptcha = true;
+                    // Har bir xabarda aniq "Ro'yxatdan o'tish" bosqichi ekanini aytamiz, shunda
+                    // foydalanuvchi qaysi qadamda ekanini tushunadi. Birinchi marta - tabriklab
+                    // qisqa izoh beramiz; keyingi urinishlarda (agar sabab xato captcha bo'lmasa,
+                    // masalan server vaqtinchalik javob bermasa) shu bosqich davom etayotganini
+                    // bildiramiz.
                     const regNote = !isRegRetry
-                      ? (regAttempt === 1
-                          ? '🎉 Ajoyib! Bu sizning birinchi ovozingiz - tashvishlanmang, bu atigi ~10 soniya vaqt oladi.\n\n✅ Captcha javobingiz qabul qilindi. Yakunlash uchun yana bitta captchani yeching:'
-                          : '🔄 Bir zumda tayyor bo\'ladi! (Captcha javobingiz xato emas edi, xavotir olmang.)\n\nQuyidagi yangi captchani yeching, davom etamiz:')
+                      ? (isFirstRegCaptcha
+                          ? '📝 <b>Ro\'yxatdan o\'tish boshlandi!</b> Bu atigi ~10 soniya vaqt oladi.\n\n✅ Captcha javobingiz qabul qilindi. Yakunlash uchun yana bitta captchani yeching:'
+                          : '📝 <b>Ro\'yxatdan o\'tish davom etmoqda...</b>\n\nQuyidagi yangi captchani yeching:')
                       : undefined;
                     try {
                       const manualRegAnswer = await manualCaptchaResolver(regBuffer, isRegRetry, regNote);

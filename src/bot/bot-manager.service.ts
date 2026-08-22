@@ -99,7 +99,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       this.activeNoteMessages.delete(key);
     }
     try {
-      const sent = await ctx.reply(note);
+      const sent = await ctx.reply(note, { parse_mode: 'HTML' });
       this.activeNoteMessages.set(key, sent.message_id);
     } catch {
       // Note xabari yuborilmasa ham captcha rasmi baribir yuboriladi - kritik emas.
