@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { OpenBudgetService } from '../openbudget/openbudget.service';
 import { WalletService } from '../wallet/wallet.service';
 import { VoteAutoApproverService } from '../openbudget/vote-auto-approver.service';
+import { ProxyManagerService } from '../proxy/proxy-manager.service';
 import { BOT_MESSAGES, BOT_BUTTONS, formatSum } from './bot.constants';
 import { BotKeyboards } from './bot.keyboards';
 
@@ -35,6 +36,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     private readonly openBudgetService: OpenBudgetService,
     private readonly walletService: WalletService,
     private readonly voteAutoApproverService: VoteAutoApproverService,
+    private readonly proxyManagerService: ProxyManagerService,
   ) {}
 
   private async clearAllTimeouts(botId: number, userId: number) {
@@ -173,7 +175,13 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         return true;
       }
 
-      const bot = new Telegraf(botRecord.token);
+      const proxyConfig = this.proxyManagerService.getAxiosConfig();
+      const telegrafOptions: any = {};
+      if (proxyConfig && proxyConfig.httpsAgent) {
+        telegrafOptions.telegram = { agent: proxyConfig.httpsAgent };
+      }
+
+      const bot = new Telegraf(botRecord.token, telegrafOptions);
       this.setupBotHandlers(bot, botRecord);
 
       const botInfo = await bot.telegram.getMe();
