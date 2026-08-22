@@ -192,8 +192,8 @@ export class SystemHealthService implements OnModuleInit, OnModuleDestroy {
       `📊 [30-Daqiqalik Monitoring Natijasi] Holat: ${overallStatus} | OpenBudget: ${obLatency}ms | Captcha: ${capLatency}ms | Botlar: ${onlineBots}/${bots.length} Online`
     );
 
-    // Agar tizimda jiddiy nosozlik aniqlansa, adminlarga bildirishnoma jo'natish (Asinxron)
-    if (overallStatus !== 'HEALTHY' && issues.length > 0) {
+    // Faqat haqiqiy xavfli holatlarda (OpenBudget qulasa yoki botlar oflayn bo'lsa) adminga xabar berish
+    if (overallStatus === 'UNHEALTHY') {
       this.notifyAdminsAboutIssues(report).catch(() => {});
     }
 
