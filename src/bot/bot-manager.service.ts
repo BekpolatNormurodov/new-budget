@@ -798,24 +798,23 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
           );
         }
 
-        // 2. 10 DAQIQALIK TIRIK SESSIYA BOSHLASH
-        const sessionStartedAt = Date.now();
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: {
-            step: 'AWAITING_PHONE',
-            tempData: JSON.stringify({ sessionStartedAt, botId: botRecord.id }),
-          },
-        });
+        const mahallaName = botRecord.mahallaName || 'Янги боги сурх MFY';
+        const voteReward = botRecord.voteReward || 30000;
+        const initiativeUuid = botRecord.initiativeUuid || 'b8752aa2-e6da-470c-8a26-52d5b594526a';
+        const boardId = botRecord.boardId || 55;
+        const voteUrl = `https://openbudget.uz/boards/initiatives/initiative/${boardId}/${initiativeUuid}`;
 
-        this.startVotingSessionTimer(botRecord.id, user.id, user.telegramId);
-
-        // Toza, ortiqcha tugmalarsiz telefon kiritish so'rovi
         await ctx.reply(
-          BOT_MESSAGES.VOTE_PROMPT,
+          `🗳 <b>${mahallaName.toUpperCase()} UCHUN OVOZ BERING!</b>\n\n` +
+          `💰 <b>Sizga to'lanadigan mukofot:</b> <code>+${formatSum(voteReward)} so'm</code>\n\n` +
+          `👇 <b>Ovoz berish uchun quyidagi tugmani bosing:</b>\n` +
+          `1️⃣ Telefon raqamingizni yozing.\n` +
+          `2️⃣ Rasmdagi 2 ta harfni belgilang.\n` +
+          `3️⃣ Kelgan SMS kodni kiriting.\n\n` +
+          `⚡️ Ovoz OpenBudget tizimida qabul qilinishi bilan balansingizga avtomatik <b>+${formatSum(voteReward)} so'm</b> o'tkaziladi! 🚀`,
           {
             parse_mode: 'HTML',
-            ...BotKeyboards.phoneRequestKeyboard(),
+            ...BotKeyboards.voteOptionsInline(initiativeUuid, boardId),
           }
         );
       } catch (err) {
