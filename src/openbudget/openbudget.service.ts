@@ -328,6 +328,16 @@ export class OpenBudgetService {
   }
 
   /**
+   * OpenBudget Frontend bilan 100% bir xil Access-Captcha tokeni generatsiyasi
+   */
+  private generateAccessCaptcha(t: number = 12): string {
+    const e = (t: number, n: number, r: number, e: number, a: number) => Buffer.from(`s${t}e${n}k${r}r${e}e${a}t`).toString('base64');
+    const s = (t: number) => Math.floor(t);
+    const a = (t: number = 10, n: number = 5) => s(Math.random() * (t - n) + n);
+    return e(a(-3) * t, a(2, 19) * t, a(10, 5) * t, a(10, 4) * t, a(10, 220));
+  }
+
+  /**
    * Ochiq Budjet tizimiga SMS yuborish so'rovi (Anti-Bot, Auto-Failover & Bridge Safe Fallback)
    */
   async requestSmsForVote(phone: string, initiativeId?: number): Promise<SendSmsResult> {
@@ -391,6 +401,7 @@ export class OpenBudgetService {
               'Accept': 'application/json, text/plain, */*',
               'Origin': 'https://openbudget.uz',
               'Referer': 'https://openbudget.uz/',
+              'Access-Captcha': this.generateAccessCaptcha(),
             },
             sessionKey: clean12,
           });
