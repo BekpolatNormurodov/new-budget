@@ -10,7 +10,7 @@ import {
   FileCheck,
 } from 'lucide-react';
 import { WithdrawalItem, BotInstanceItem } from '../types';
-import { formatSum } from '../utils/format';
+import { formatSum, toTashkentDateStr, tashkentToday, tashkentYesterday } from '../utils/format';
 import { Pagination } from './Pagination';
 import { exportToCsv } from '../utils/exportToCsv';
 import { ReceiptViewerModal } from './ReceiptViewerModal';
@@ -54,17 +54,17 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
   };
 
   const filteredWithdrawals = useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const todayStr = tashkentToday();
+    const yesterday = tashkentYesterday();
 
     return withdrawals.filter((w) => {
       // Status filter
       if (statusTab !== 'ALL' && w.status !== statusTab) return false;
 
       // Date filter
-      const wDate = w.createdAt.slice(0, 10);
-      if (activePreset === 'TODAY' && !w.createdAt.startsWith(todayStr)) return false;
-      if (activePreset === 'YESTERDAY' && !w.createdAt.startsWith(yesterday)) return false;
+      const wDate = toTashkentDateStr(w.createdAt);
+      if (activePreset === 'TODAY' && wDate !== todayStr) return false;
+      if (activePreset === 'YESTERDAY' && wDate !== yesterday) return false;
       if (startDate && wDate < startDate) return false;
       if (endDate && wDate > endDate) return false;
 
@@ -126,6 +126,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
         activePreset={activePreset}
         totalFilteredCount={filteredWithdrawals.length}
         totalFilteredLabel="Arizalar"
+        showBotFilter={false}
       />
 
       {/* 2. Status Tabs, Search and Actions */}

@@ -10,7 +10,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { UserItem, BotInstanceItem } from '../types';
-import { formatSum } from '../utils/format';
+import { formatSum, toTashkentDateStr, tashkentToday, tashkentYesterday } from '../utils/format';
 import { Pagination } from './Pagination';
 import { exportToCsv } from '../utils/exportToCsv';
 import { EditUserBalanceModal } from './EditUserBalanceModal';
@@ -47,8 +47,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
   };
 
   const filteredUsers = useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const todayStr = tashkentToday();
+    const yesterday = tashkentYesterday();
 
     return users.filter((u) => {
       // Status filter
@@ -56,10 +56,16 @@ export const UsersView: React.FC<UsersViewProps> = ({
       if (statusFilter === 'BANNED' && !u.isBanned) return false;
       if (statusFilter === 'ADMIN' && u.role !== 'ADMIN') return false;
 
+      // Mahalla/Bot filter
+      if (selectedBotId !== 'ALL') {
+        const bot = bots.find((b) => String(b.id) === selectedBotId);
+        if (bot && u.botInstance?.mahallaName !== bot.mahallaName) return false;
+      }
+
       // Date filter (Registration Date)
-      const uDate = u.createdAt.slice(0, 10);
-      if (activePreset === 'TODAY' && !u.createdAt.startsWith(todayStr)) return false;
-      if (activePreset === 'YESTERDAY' && !u.createdAt.startsWith(yesterday)) return false;
+      const uDate = toTashkentDateStr(u.createdAt);
+      if (activePreset === 'TODAY' && uDate !== todayStr) return false;
+      if (activePreset === 'YESTERDAY' && uDate !== yesterday) return false;
       if (startDate && uDate < startDate) return false;
       if (endDate && uDate > endDate) return false;
 
@@ -75,7 +81,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
       return true;
     });
-  }, [users, statusFilter, activePreset, startDate, endDate, search]);
+  }, [users, statusFilter, selectedBotId, activePreset, startDate, endDate, search, bots]);
 
   const paginatedUsers = useMemo(() => {
     const start = (currentPage - 1) * pageSize;

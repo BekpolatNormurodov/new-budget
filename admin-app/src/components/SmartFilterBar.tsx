@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { BotInstanceItem } from '../types';
 import { ProDropdown, ProDropdownOption } from './ProDropdown';
+import { tashkentToday, tashkentYesterday } from '../utils/format';
 
 export interface SmartFilterBarProps {
   bots: BotInstanceItem[];
@@ -18,6 +19,9 @@ export interface SmartFilterBarProps {
   activePreset: string;
   totalFilteredCount?: number;
   totalFilteredLabel?: string;
+  // Bot/Mahalla dropdown'ni ko'rsatish. Ma'lumotda mahalla bog'lanishi
+  // bo'lmagan sahifalarda (masalan Withdrawals) false qilinadi.
+  showBotFilter?: boolean;
 }
 
 // Open Budget 2026: Aniq 10 kunlik ovoz berish davri (22-avgustdan 31-avgustgacha)
@@ -44,10 +48,11 @@ export const SmartFilterBar: React.FC<SmartFilterBarProps> = ({
   activePreset,
   totalFilteredCount,
   totalFilteredLabel = 'Jami',
+  showBotFilter = true,
 }) => {
   const handleApplyPreset = (preset: string) => {
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const todayStr = tashkentToday();
+    const yesterdayStr = tashkentYesterday();
 
     if (preset === 'ALL') {
       onDateChange('', '', 'ALL');
@@ -97,14 +102,16 @@ export const SmartFilterBar: React.FC<SmartFilterBarProps> = ({
       {/* Top Controls: Pro UI Dropdown for Bot + Preset Chips */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
         {/* 1. Custom Pro Dropdown */}
-        <div className="flex-1 sm:max-w-xs">
-          <ProDropdown
-            options={botOptions}
-            value={selectedBotId}
-            onChange={onSelectBotId}
-            icon={<Building2 className="w-3.5 h-3.5" />}
-          />
-        </div>
+        {showBotFilter && (
+          <div className="flex-1 sm:max-w-xs">
+            <ProDropdown
+              options={botOptions}
+              value={selectedBotId}
+              onChange={onSelectBotId}
+              icon={<Building2 className="w-3.5 h-3.5" />}
+            />
+          </div>
+        )}
 
         {/* 2. Quick Preset Chips */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">

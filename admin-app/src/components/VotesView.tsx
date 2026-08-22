@@ -9,7 +9,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { VoteItem, BotInstanceItem } from '../types';
-import { formatSum } from '../utils/format';
+import { formatSum, toTashkentDateStr, tashkentToday, tashkentYesterday } from '../utils/format';
 import { Pagination } from './Pagination';
 import { exportToCsv } from '../utils/exportToCsv';
 import { SmartFilterBar } from './SmartFilterBar';
@@ -52,8 +52,8 @@ export const VotesView: React.FC<VotesViewProps> = ({
   }, [allVotes, pendingVotes]);
 
   const filteredVotes = useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const todayStr = tashkentToday();
+    const yesterday = tashkentYesterday();
 
     return combinedVotes.filter((v) => {
       // Status filter
@@ -66,10 +66,10 @@ export const VotesView: React.FC<VotesViewProps> = ({
         if (bot && v.botInstance?.mahallaName !== bot.mahallaName) return false;
       }
 
-      // Date filter
-      const vDate = v.createdAt.slice(0, 10);
-      if (activePreset === 'TODAY' && !v.createdAt.startsWith(todayStr)) return false;
-      if (activePreset === 'YESTERDAY' && !v.createdAt.startsWith(yesterday)) return false;
+      // Date filter (Toshkent vaqti bo'yicha)
+      const vDate = toTashkentDateStr(v.createdAt);
+      if (activePreset === 'TODAY' && vDate !== todayStr) return false;
+      if (activePreset === 'YESTERDAY' && vDate !== yesterday) return false;
       if (startDate && vDate < startDate) return false;
       if (endDate && vDate > endDate) return false;
 
