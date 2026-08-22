@@ -321,10 +321,13 @@ export class OpenBudgetService {
         try {
           const capRes = await axios.get('https://new.openbudget.uz/api/v2/vote/captcha-2', {
             headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-              'Accept': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+              'Accept': 'application/json, text/plain, */*',
+              'Accept-Language': 'uz,ru;q=0.9,en;q=0.8',
+              'Origin': 'https://new.openbudget.uz',
+              'Referer': 'https://new.openbudget.uz/',
             },
-            timeout: 2500,
+            timeout: 5000,
           });
 
           const key = capRes.data?.captchaKey;
