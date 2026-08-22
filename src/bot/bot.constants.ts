@@ -21,7 +21,7 @@ export const BOT_MESSAGES = {
     `👉 <code>901234567</code> yoki <code>+998901234567</code>\n\n` +
     `<i>Yoki pastdagi «📱 Kontaktni yuborish» tugmasini bosing.</i>`,
 
-  WAITING: `⏳ <b>Iltimos kuting, so'rovingiz qayta ishlanmoqda...</b>`,
+  WAITING: `⏳ <b>Biroz kuting...</b>\n\nSo'rovingiz yuborilmoqda 🚀`,
 
   SMS_SENT: (phone: string) => 
     `📩 <b>SMS KOD YUBORILDI!</b>\n\n` +

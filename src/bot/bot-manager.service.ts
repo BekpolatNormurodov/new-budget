@@ -30,6 +30,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
   private smsTimeouts: Map<string, NodeJS.Timeout> = new Map(); // key: "botId_userId"
   private votingSessionTimeouts: Map<string, NodeJS.Timeout> = new Map(); // key: "botId_userId"
   private pendingCaptchaResolvers: Map<string, { resolve: (v: number | null) => void; timeout: any }> = new Map(); // key: "botId_userId"
+  private activeCaptchaMessages: Map<string, number> = new Map(); // key: "botId_userId" -> captcha xabarining message_id'si (eski xabarlar to'planib qolmasligi uchun shu xabar tahrirlanadi)
 
   constructor(
     private readonly configService: ConfigService,
@@ -51,7 +52,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       const timeout = setTimeout(() => {
         if (this.pendingCaptchaResolvers.get(key)) {
           this.pendingCaptchaResolvers.delete(key);
-          ctx.reply('⏳ Vaqt tugadi (90 soniya)! Yangi kaptcha yuborilmoqda...').catch(() => {});
+          this.updateCaptchaCaption(ctx, key, '⏳ <b>Vaqt tugadi!</b>\n\nYangi captcha tayyorlanmoqda...');
           resolve(null);
         }
       }, 90000);
@@ -59,8 +60,8 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       this.pendingCaptchaResolvers.set(key, { resolve, timeout });
 
       const caption = isRetry
-        ? '❌ Xato javob berdingiz!\n\n🧮 Yangi kaptcha keldi, qaytadan hisoblab javobini (faqat son) yozib yuboring:'
-        : '🧮 Rasmdagi misolni hisoblab, javobini (faqat son) yozib yuboring:';
+        ? '❌ <b>Xato javob!</b>\n\n🧮 Yangi captcha keldi — misolni qaytadan hisoblang va javobni yuboring 👇\n<i>(faqat son, masalan: 12)</i>'
+        : '🔐 <b>Captchani yeching</b>\n\nRasmdagi misolni hisoblang va javobni yuboring 👇\n<i>(faqat son, masalan: 12)</i>';
 
       // `note` orqali qo'ng'iroq qiluvchi (openbudget.service.ts) kontekstga oid aniqlashtiruvchi
       // xabar berishi mumkin (masalan "ro'yxatdan o'tish ~10 soniya vaqt oladi") - foydalanuvchi
@@ -68,7 +69,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       // ALOHIDA, mustaqil xabar sifatida yuboramiz (ikkita aniq xabar - birlashtirilgan uzun
       // matn emas).
       (note ? ctx.reply(note).catch(() => {}) : Promise.resolve())
-        .then(() => ctx.replyWithPhoto({ source: imageBuffer }, { caption }))
+        .then(() => this.showCaptchaImage(ctx, key, imageBuffer, caption))
         .catch((err) => {
           // Rasm Telegramga yetkazilmadi (masalan IMAGE_PROCESS_FAILED) - bu foydalanuvchi
           // aybi emas, texnik xato. Chaqiruvchiga buni alohida bildiramiz (reject), shunda u
@@ -81,6 +82,53 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
           reject(deliveryError);
         });
     });
+  }
+
+  /**
+   * Captcha rasmini ko'rsatadi. Agar shu foydalanuvchi uchun captcha xabari allaqachon
+   * ekranda bo'lsa, YANGI xabar yubormasdan O'SHA xabarni tahrirlab (rasm+caption)
+   * yangilaydi - shunda chat eski captcha rasmlariga to'lib ketmaydi, foydalanuvchi bitta
+   * "jonli yangilanadigan" xabarni kuzatadi.
+   */
+  private async showCaptchaImage(ctx: Context, key: string, imageBuffer: Buffer, caption: string): Promise<void> {
+    const existingMsgId = this.activeCaptchaMessages.get(key);
+    if (existingMsgId) {
+      try {
+        await ctx.telegram.editMessageMedia(ctx.chat.id, existingMsgId, undefined, {
+          type: 'photo',
+          media: { source: imageBuffer },
+          caption,
+          parse_mode: 'HTML',
+        } as any);
+        return;
+      } catch {
+        // Eski xabar tahrirlanmadi (masalan o'chirilgan/juda eski) - yangi xabar yuboramiz.
+        this.activeCaptchaMessages.delete(key);
+      }
+    }
+
+    const sent = await ctx.replyWithPhoto({ source: imageBuffer }, { caption, parse_mode: 'HTML' });
+    this.activeCaptchaMessages.set(key, sent.message_id);
+  }
+
+  /**
+   * Captcha xabarining caption'ini (rasmni o'zgartirmasdan) tahrirlaydi - qisqa holat
+   * xabarlari uchun ("✅ Tekshirilmoqda...", "⏳ Vaqt tugadi...") - alohida yangi xabar
+   * yubormasdan, xuddi shu rasm ustida holat yangilanadi.
+   */
+  private updateCaptchaCaption(ctx: Context, key: string, caption: string): void {
+    const msgId = this.activeCaptchaMessages.get(key);
+    if (!msgId) return;
+    ctx.telegram.editMessageCaption(ctx.chat.id, msgId, undefined, caption, { parse_mode: 'HTML' } as any).catch(() => {});
+  }
+
+  /**
+   * Foydalanuvchi uchun captcha sessiyasi butunlay tugaganda (ovoz/SMS jarayoni
+   * yakunlanganda - muvaffaqiyatli yoki xato bilan) chaqiriladi, shunda KEYINGI ovoz
+   * berish urinishi eski xabarni emas, yangi captcha xabarini boshlaydi.
+   */
+  private clearActiveCaptchaMessage(botId: number, userId: number): void {
+    this.activeCaptchaMessages.delete(`${botId}_${userId}`);
   }
 
   /**
@@ -1137,6 +1185,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
                 undefined,
                 this.wrapCaptchaResolverWithWaitCleanup(ctx, botRecord.id, resendWait.message_id),
               );
+              this.clearActiveCaptchaMessage(botRecord.id, user.id);
               await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
 
               if (!res.success) {
@@ -1229,17 +1278,21 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
           const match = text.replace(/\s/g, '').match(/-?\d+/);
           const num = match ? parseInt(match[0], 10) : NaN;
 
+          // Foydalanuvchining o'z javob xabarini o'chiramiz - chat faqat bitta "jonli"
+          // captcha xabarini ko'rsatib turadi, ortiqcha xabarlar bilan to'lib ketmaydi.
+          await ctx.deleteMessage().catch(() => {});
+
           if (Number.isNaN(num)) {
             // Raqam topilmadi - hozirgi kaptchani bekor qilmasdan, faqat qaytadan so'raymiz
             // (avtomatik OCR o'chirilgani uchun yangi rasmni behuda yubormaymiz).
-            await ctx.reply('⚠️ Raqam aniqlanmadi. Iltimos, rasmdagi javobni faqat son ko\'rinishida yuboring (masalan: 12):');
+            this.updateCaptchaCaption(ctx, pendingCaptchaKey, '⚠️ <b>Raqam aniqlanmadi</b>\n\nIltimos, javobni faqat son ko\'rinishida yozib yuboring 👇\n<i>(masalan: 12)</i>');
             return;
           }
 
           clearTimeout(pendingCaptcha.timeout);
           this.pendingCaptchaResolvers.delete(pendingCaptchaKey);
+          this.updateCaptchaCaption(ctx, pendingCaptchaKey, '✅ <b>Qabul qilindi!</b>\n\n⏳ Tekshirilmoqda...');
           pendingCaptcha.resolve(num);
-          await ctx.reply('✅ Rahmat! Javobingiz qabul qilindi, davom etilmoqda...');
           return;
         }
 
@@ -1486,6 +1539,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         undefined,
         this.wrapCaptchaResolverWithWaitCleanup(ctx, botRecord.id, waitMsg.message_id),
       );
+      this.clearActiveCaptchaMessage(botRecord.id, user.id);
 
       if (!res.success) {
         await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
@@ -1607,6 +1661,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
               undefined,
               this.wrapCaptchaResolverWithWaitCleanup(ctx, botRecord.id, resendWait.message_id),
             );
+            this.clearActiveCaptchaMessage(botRecord.id, user.id);
             await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
 
             if (newSms.success) {
