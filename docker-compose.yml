@@ -42,7 +42,7 @@ services:
       PORT: 3000
       UV_THREADPOOL_SIZE: 128
       NODE_OPTIONS: "--max-old-space-size=4096"
-      DATABASE_URL: mysql://root:${DB_ROOT_PASSWORD:-khurshid-2827}@mysql_db:3306/open_budget
+      DATABASE_URL: mysql://root:${DB_ROOT_PASSWORD:-khurshid-2827}@127.0.0.1:3306/open_budget
       
       # Asosiy Birlamchi Bot va Admin Sozlamalari
       BOT_TOKEN: ${BOT_TOKEN:-8973530886:AAFjlBqhJgVaKseHVs1Eved6_ARENGeCAoc}
@@ -66,17 +66,7 @@ services:
       EXTERNAL_SERVICE_ENABLED: ${EXTERNAL_SERVICE_ENABLED:-false}
       PROXY_ENABLED: ${PROXY_ENABLED:-false}
       PROXY_LIST: ${PROXY_LIST:-}
-    ports:
-      - "3000:3000"
-    volumes:
-      - app_receipts:/app/public/receipts
-      - app_avatars:/app/public/avatars
-      - app_logs:/app/logs
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
-    networks:
-      - open_budget_network
+    network_mode: "host"
 
 # =========================================================================
 # Persistent Volumes (Ma'lumotlar, Cheklar va Avatarlar yo'qolmasligi uchun)
