@@ -1541,8 +1541,9 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (globalExistingVote) {
+      const mahalla = globalExistingVote.botInstance?.mahallaName || 'boshqa';
       return ctx.reply(
-        `⚠️ Ushbu telefon raqam (+${clean12}) yoki ushbu pasport nomidagi boshqa raqam orqali allaqachon ovoz berilgan!\n\n📌 <b>Ochiq Budjet qoidasi:</b> Bitta pasport (shaxs) nomiga rasmiylashtirilgan barcha raqamlardan faqat 1 marta ovoz berish mumkin.\n\nIltimos, boshqa fuqaro / pasport nomidagi telefon raqam kiriting (masalan: 901234567):`,
+        `⚠️ <b>Ushbu telefon raqam (+${clean12}) orqali allaqachon "${mahalla}" mahallasiga ovoz berilgan!</b>\n\n📌 <b>Ochiq Budjet qoidasi:</b> Bitta fuqaro (pasport) yoki telefon raqam nomidan bir mavsumda faqat 1 marta ovoz berish mumkin.\n\nSiz boshqa yaqinlaringiz nomidagi telefon raqamlaridan ovoz berib pul ishlashingiz mumkin!`,
         { parse_mode: 'HTML', ...BotKeyboards.phoneRequestKeyboard() }
       );
     }
