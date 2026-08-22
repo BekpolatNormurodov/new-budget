@@ -36,34 +36,93 @@ export class VoteAutoApproverService {
         for (const vote of pendingVotes) {
           try {
             let shouldApprove = false;
+            let shouldReject = false;
+            let rejectReason = '';
             let checkReason = '';
 
-            // 1. Agar foydalanuvchida OpenBudget JWT Token bo'lsa -> OpenBudget API dan tekshirish
+            const botRecord = vote.botInstance;
             const token = vote.jwtToken || vote.user?.openBudgetJwt;
+
+            // 1. OPENBUDGET RASMIY API TEKSHIRUVI (Har 30 soniyada jonli tekshiruv)
             if (token) {
               const res = await this.openBudgetService.getUserVotedInitiatives(token);
-              if (res.success && res.initiatives && res.initiatives.length > 0) {
-                shouldApprove = true;
-                checkReason = `[OpenBudget API tasdiqladi: ${res.initiatives.length} ta ovoz]`;
+              if (res.success && Array.isArray(res.initiatives)) {
+                if (res.initiatives.length > 0) {
+                  // Foydalanuvchi biror mahallaga ovoz bergan!
+                  // Endi tekshiramiz: Aynan bizning botdagi mahallamizmi yoki boshqa mahalla?
+                  let matched = false;
+                  let votedQuarterTitle = '';
+
+                  for (const init of res.initiatives) {
+                    votedQuarterTitle = init.quarter_title || init.title || '';
+                    const initUuid = init.id;
+                    const publicId = init.public_id;
+
+                    // Match formula:
+                    // 1. UUID mosligi
+                    // 2. 12 xonali Mahalla ID mosligi
+                    // 3. Mahalla nomi mosligi (qisman yoki to'liq)
+                    const isUuidMatch = botRecord?.initiativeUuid && initUuid && botRecord.initiativeUuid.toLowerCase() === initUuid.toLowerCase();
+                    const isPublicIdMatch = botRecord?.mahallaId && publicId && String(botRecord.mahallaId) === String(publicId);
+                    const isNameMatch = botRecord?.mahallaName && votedQuarterTitle && (
+                      botRecord.mahallaName.toLowerCase().includes(votedQuarterTitle.toLowerCase()) ||
+                      votedQuarterTitle.toLowerCase().includes(botRecord.mahallaName.toLowerCase().replace(/mfy|mahalla/g, '').trim())
+                    );
+
+                    if (isUuidMatch || isPublicIdMatch || isNameMatch || !botRecord) {
+                      matched = true;
+                      break;
+                    }
+                  }
+
+                  if (matched) {
+                    shouldApprove = true;
+                    checkReason = `[OpenBudget API 100% tasdiqladi: ${votedQuarterTitle}]`;
+                  } else {
+                    // Boshqa mahallaga ovoz berilgan!
+                    shouldReject = true;
+                    rejectReason = `Siz boshqa mahallaga (${votedQuarterTitle || 'noma\'lum'}) ovoz bergansiz! Ushbu bot faqat ${botRecord?.mahallaName || 'ushbu mahalla'} uchun mo'ljallangan.`;
+                  }
+                }
               }
             }
 
-            // 2. Agar 2 soat (yoki belgilangan vaqt) o'tgan bo'lsa -> Vaqt bo'yicha avto-tasdiqlash
+            // 2. RAD ETISH HOLATI (Boshqa mahallaga ovoz berilgan bo'lsa)
+            if (shouldReject) {
+              await this.prisma.vote.update({
+                where: { id: vote.id },
+                data: {
+                  status: 'REJECTED',
+                  errorMessage: rejectReason,
+                },
+              });
+              this.logger.warn(`❌ [Auto-Approver] Ovoz #${vote.id} (+${vote.phone}) rad etildi: ${rejectReason}`);
+
+              const rejectMsg = `⚠️ <b>Ovoz qabul qilinmadi!</b>\n\n` +
+                `📌 <b>Sabab:</b> ${rejectReason}\n\n` +
+                `Siz boshqa yaqinlaringiz raqamidan ushbu mahalla foydasiga ovoz berib pul ishlashingiz mumkin!`;
+
+              await sendMessageCallback(vote.botInstanceId, vote.user.telegramId, rejectMsg).catch(() => {});
+              continue;
+            }
+
+            // 3. 2-SOATLIK ZAXIRA FORMULASI (Fallback delay)
+            // Agar OpenBudget API'si kechiksa yoki yangilanmasa, haqiqiy SMS tasdiqlangan foydalanuvchini 2 soatdan keyin tasdiqlash
             const elapsed = Date.now() - new Date(vote.createdAt).getTime();
             if (!shouldApprove && elapsed >= fallbackDelayMs) {
               shouldApprove = true;
-              checkReason = `[Vaqt muddati (${autoApproveHours} soat) to'ldi]`;
+              checkReason = `[SMS orqali tasdiqlangan va vaqt muddati (${autoApproveHours} soat) to'ldi]`;
             }
 
-            // 3. Tasdiqlash va hisobga pul o'tkazish
+            // 4. TASDIQLASH VA HISOBGA PUL O'TKAZISH
             if (shouldApprove) {
               const creditRes = await this.walletService.verifyVoteAndCredit(vote.id);
               if (!creditRes.alreadyVerified) {
-                this.logger.log(`✅ [Auto-Approver] Ovoz #${vote.id} (+${vote.phone}) avtomatik tasdiqlandi! Sabab: ${checkReason}`);
-                
-                const msg = `🎉 Tabriklaymiz! Sizning +${vote.phone} raqam orqali bergan ovozingiz Ochiq Budjet tizimi tomonidan muvaffaqiyatli tasdiqlandi!\n\n` +
-                  `💰 Hisobingizga +${creditRes.rewardAmount.toLocaleString('uz-UZ')} so'm qo'shildi!\n` +
-                  `💳 Hozirgi balansingiz: ${creditRes.user.balance.toLocaleString('uz-UZ')} so'm\n\n` +
+                this.logger.log(`✅ [Auto-Approver] Ovoz #${vote.id} (+${vote.phone}) tasdiqlandi! Sabab: ${checkReason}`);
+
+                const msg = `🎉 <b>Tabriklaymiz!</b> Sizning +${vote.phone} raqam orqali bergan ovozingiz Ochiq Budjet tizimi tomonidan muvaffaqiyatli tasdiqlandi!\n\n` +
+                  `💰 <b>Hisobingizga:</b> +${creditRes.rewardAmount.toLocaleString('uz-UZ')} so'm qo'shildi!\n` +
+                  `💳 <b>Hozirgi balansingiz:</b> ${creditRes.user.balance.toLocaleString('uz-UZ')} so'm\n\n` +
                   `🚀 Do'stlaringizni taklif qiling va har bir do'stingiz uchun +5 000 so'mdan bonus oling!`;
 
                 await sendMessageCallback(vote.botInstanceId, vote.user.telegramId, msg).catch(() => {});
