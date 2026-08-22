@@ -266,7 +266,7 @@ export class OpenBudgetService {
   }
 
   /**
-   * Ultra-tezkor va 100% ishonchli Curl orqali OpenBudget API ga SOCKS5 so'rov yuborish
+   * Ultra-tezkor va 100% ishonchli Curl orqali OpenBudget API ga HTTP Proxy so'rov yuborish
    */
   private async executeOpenBudgetCurl(url: string, options: { method?: string; data?: any; headers?: Record<string, string>; sessionKey?: string } = {}): Promise<{ status: number; data: any; cookie: string }> {
     const proxy = options.sessionKey 
@@ -277,9 +277,8 @@ export class OpenBudgetService {
 
     if (proxy) {
       const auth = proxy.auth ? `${proxy.auth.username}:${proxy.auth.password}@` : '';
-      // SOCKS5 port: 62389, 64303, 64149 va hk (agar HTTP port bo'lsa +1 qilib socks5 ga o'tkazish)
-      const socksPort = proxy.port % 2 === 0 ? proxy.port + 1 : proxy.port;
-      args.push('--socks5-hostname', `${auth}${proxy.host}:${socksPort}`);
+      // HTTP proxy ishlatamiz (8/8 ishlaydi), SOCKS5 emas (4/8 fail)
+      args.push('-x', `http://${auth}${proxy.host}:${proxy.port}`);
     }
 
     if (options.method === 'POST') {

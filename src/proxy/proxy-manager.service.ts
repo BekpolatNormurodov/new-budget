@@ -355,12 +355,11 @@ export class ProxyManagerService implements OnModuleInit {
         const startTime = Date.now();
         try {
           const auth = proxy.auth ? `${proxy.auth.username}:${proxy.auth.password}@` : '';
-          const socksPort = proxy.port % 2 === 0 ? proxy.port + 1 : proxy.port;
           const { stdout } = await execFileAsync('curl', [
             '-sI',
             '--connect-timeout', '3',
             '--max-time', '5',
-            '--socks5-hostname', `${auth}${proxy.host}:${socksPort}`,
+            '-x', `http://${auth}${proxy.host}:${proxy.port}`,
             'https://new.openbudget.uz/api/v2/vote/captcha-2'
           ]);
 
