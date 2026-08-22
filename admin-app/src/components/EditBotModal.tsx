@@ -133,9 +133,13 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
     }
 
     try {
+      const adminToken = localStorage.getItem('token') || localStorage.getItem('adminToken') || '';
+      const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (adminToken) authHeaders['Authorization'] = `Bearer ${adminToken}`;
+
       const res = await fetch('/api/admin/bots/lookup-mahalla', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({ query: q }),
       });
 

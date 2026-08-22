@@ -92,19 +92,53 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
       }
     }
 
-    // 2. Backend Search orqali qidirish
+    // 2. Backend Search / Lookup orqali qidirish
     try {
-      const res = await fetch(`/api/admin/bots/search-initiatives?query=${encodeURIComponent(q)}&page=${pageToFetch}`);
+      const adminToken = localStorage.getItem('token') || localStorage.getItem('adminToken') || '';
+      const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (adminToken) authHeaders['Authorization'] = `Bearer ${adminToken}`;
+
+      // Avval 1-click lookup qilib ko'ramiz
+      const lookupRes = await fetch('/api/admin/bots/lookup-mahalla', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ query: q }),
+      });
+      const lookupData = await lookupRes.json();
+
+      if (lookupData && lookupData.success && lookupData.mahallaName) {
+        const formattedItem = {
+          id: lookupData.initiativeUuid || lookupData.id,
+          publicId: lookupData.mahallaId || q,
+          mahallaName: lookupData.mahallaName,
+          quarterTitle: lookupData.quarterTitle,
+          region: lookupData.regionTitle,
+          district: lookupData.districtTitle,
+          boardId: lookupData.boardId || '55',
+          currentVotes: lookupData.currentVotes || 0,
+          targetVotes: lookupData.targetVotes || 5000,
+          openBudgetUrl: lookupData.openBudgetUrl,
+          description: lookupData.description || '',
+          grantedAmount: lookupData.grantedAmount || 0,
+          stage: lookupData.stage || 'PASSED',
+        };
+        setSearchResults([formattedItem]);
+        setTotalResults(1);
+        setIsSearching(false);
+        return;
+      }
+
+      // Agar lookup topmasa, search-initiatives endpointiga murojaat
+      const res = await fetch(`/api/admin/bots/search-initiatives?query=${encodeURIComponent(q)}&page=${pageToFetch}`, {
+        headers: authHeaders,
+      });
       const data = await res.json();
 
-      if (data.success && data.results) {
+      if (data.success && data.results && data.results.length > 0) {
         setSearchResults(data.results);
         setTotalResults(data.total || data.results.length);
-        if (data.results.length === 0) {
-          setSearchError(`"${q}" bo'yicha hech qanday mahalla yoki loyiha topilmadi.`);
-        }
       } else {
-        setSearchError(data.error || 'Qidiruvda xatolik yuz berdi');
+        setSearchError(lookupData.error || data.error || `"${q}" bo'yicha OpenBudgetda faol mahalla yoki tashabbus topilmadi. Iltimos 12 xonali Mahalla ID yoki to'liq havolani kiriting.`);
         setSearchResults([]);
       }
     } catch (e: any) {
