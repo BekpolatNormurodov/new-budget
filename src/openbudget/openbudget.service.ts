@@ -115,15 +115,67 @@ export class OpenBudgetService {
    * o'zgarishsiz qoldiramiz (chunki OpenBudget ko'pincha o'zbek/rus tilida to'g'ri
    * xabar qaytaradi).
    */
+  /**
+   * OpenBudget API xatoliklarini tushunarli, chiroyli va rasmiy o'zbek tiliga (Lotin) o'girish
+   */
   private translateOpenBudgetError(rawMessage: string): string {
     if (!rawMessage) return rawMessage;
     const known: Array<[RegExp, string]> = [
-      [/account\s+is\s+inactive/i, 'Ushbu hisob faol emas (OpenBudget tomonidan bloklangan/faolsizlantirilgan). Iltimos, boshqa telefon raqam bilan urinib ko\'ring yoki OpenBudget qo\'llab-quvvatlash xizmatiga murojaat qiling.'],
-      [/user\s+not\s+found/i, 'Bunday foydalanuvchi topilmadi.'],
-      [/invalid\s+otp|wrong\s+otp|invalid\s+code/i, 'SMS kod noto\'g\'ri kiritildi.'],
-      [/otp\s+expired|code\s+expired/i, 'SMS kodning muddati tugagan. Yangi kod so\'rang.'],
-      [/too\s+many\s+requests|rate\s+limit/i, 'Juda ko\'p urinish qilindi. Birozdan so\'ng qaytadan urinib ko\'ring.'],
+      // 1. Allaqachon ovoz berilganlik holatlari (Mavsum, mahalla, pasport bo'yicha)
+      [
+        /мавсумда\s+овоз\s+берган|mavsumda\s+ovoz|avval\s+ovoz|allaqachon\s+ovoz|already\s+voted/i,
+        '⚠️ Ushbu telefon raqam yoki pasport egasi nomidan ushbu mavsumda allaqachon ovoz berilgan!\n\n📌 <b>Ochiq Budjet qoidasi:</b> Bitta fuqaro (pasport) nomiga rasmiylashtirilgan barcha raqamlardan bir mavsumda faqat 1 marta ovoz berish mumkin.\n\nSiz boshqa yaqinlaringiz nomidagi telefon raqamlaridan ovoz berib pul ishlashingiz mumkin!',
+      ],
+      [
+        /ташаббусга\s+овоз|маҳаллага\s+овоз|ushbu\s+tashabbusga|ushbu\s+mahallaga/i,
+        '⚠️ Ushbu tashabbusga / mahallaga allaqachon ovoz berilgan!\n\n📌 Bir mavsumda bitta fuqaro faqat 1 ta loyihaga ovoz bera oladi.',
+      ],
+      [
+        /паспорт|pasport/i,
+        '⚠️ Ushbu pasport ma\'lumotlari bo\'yicha allaqachon ovoz berilgan!\n\n📌 Bitta pasport egasi nomidan bir mavsumda faqat 1 marta ovoz berish mumkin.',
+      ],
+
+      // 2. Akkaunt va ro'yxatdan o'tish holatlari
+      [
+        /account\s+is\s+inactive/i,
+        '⚠️ Ushbu hisob hali faol emas yoki ro\'yxatdan o\'tish yakunlanmagan. Iltimos, qaytadan "🗳 Ovoz berish" tugmasini bosib yangi SMS kod oling.',
+      ],
+      [
+        /user\s+not\s+found|топилмади|topilmadi/i,
+        'Ushbu raqam OpenBudget tizimida ro\'yxatdan o\'tmagan (tizim avtomatik ro\'yxatdan o\'tkazmoqda).',
+      ],
+
+      // 3. SMS va kod holatlari
+      [
+        /смс\s+кодини\s+текширишда\s+хатолик|invalid\s+otp|wrong\s+otp|invalid\s+code|kod\s+noto/i,
+        '❌ Kiritilgan SMS kod noto\'g\'ri yoki eskirgan. Iltimos, telefoningizga kelgan so\'nggi 6 xonali SMS kodni tekshirib qaytadan kiriting.',
+      ],
+      [
+        /otp\s+expired|code\s+expired|муддати\s+туга/i,
+        '⏳ SMS kodning amal qilish muddati tugagan. Iltimos, "🗳 Ovoz berish" tugmasi orqali yangi SMS kod oling.',
+      ],
+      [
+        /лимит|limit|too\s+many\s+requests|rate\s+limit/i,
+        '⏳ Ushbu raqamga SMS yuborish limiti vaqtincha to\'lgan. Iltimos, 2-3 daqiqa kutib qaytadan urinib ko\'ring.',
+      ],
+
+      // 4. Kaptcha holatlari
+      [
+        /нотўғри\s+каптча|noto.*kaptcha|wrong_captcha/i,
+        '❌ Kaptcha javobi noto\'g\'ri kiritilgan. Iltimos, yangi chiqqan misol javobini diqqat bilan kiriting.',
+      ],
+
+      // 5. Server va tizim holatlari
+      [
+        /internal\s+server\s+error|серверда\s+хатолик|type.*internal/i,
+        '⚠️ Ochiq Budjet davlat portali serverida vaqtinchalik yuklama yuqori. Iltimos, birozdan so\'ng qaytadan urinib ko\'ring.',
+      ],
+      [
+        /тўхтатилган|to'xtatilgan|closed|finished/i,
+        '🏁 Ushbu tashabbus bo\'yicha ovoz yig\'ish yakunlangan yoki to\'xtatilgan.',
+      ],
     ];
+
     for (const [pattern, translation] of known) {
       if (pattern.test(rawMessage)) return translation;
     }
@@ -704,7 +756,7 @@ export class OpenBudgetService {
               this.logger.warn(`🛑 [OpenBudget Foydalanuvchi Xatosi] +${clean12}: ${lastError} (${errCode})`);
               return {
                 success: false,
-                error: lastError,
+                error: this.translateOpenBudgetError(lastError || ''),
                 initiative,
               };
             }
@@ -734,7 +786,7 @@ export class OpenBudgetService {
       this.logger.warn(`❌ [OpenBudget OTP Fail] +${clean12}: ${finalErrMsg}`);
       return {
         success: false,
-        error: finalErrMsg,
+        error: this.translateOpenBudgetError(finalErrMsg),
         initiative,
       };
     } catch (err: any) {
@@ -869,15 +921,15 @@ export class OpenBudgetService {
               message: 'Ovoz muvaffaqiyatli qabul qilindi!',
             };
           } else {
-            const errMsg = verifyRes.data?.message || 'SMS kod noto\'g\'ri kiritildi yoki muddati tugagan.';
-            const isSessionDead = /session|muddati|expired|topilmadi|invalid|not found|key/i.test(errMsg);
+            const rawErrMsg = verifyRes.data?.message || 'SMS kod noto\'g\'ri kiritildi yoki muddati tugagan.';
+            const isSessionDead = /session|muddati|expired|topilmadi|invalid|not found|key/i.test(rawErrMsg);
             if (isSessionDead) {
               this.proxyManager.releaseSession(clean12);
             }
             return {
               success: false,
               sessionExpired: isSessionDead,
-              error: errMsg,
+              error: this.translateOpenBudgetError(rawErrMsg),
             };
           }
         } catch (apiErr: any) {

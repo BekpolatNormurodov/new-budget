@@ -688,7 +688,8 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
               if (sender) {
                 await sender.sendMessage(
                   vote.user.telegramId,
-                  BOT_MESSAGES.VOTE_VERIFIED_ALERT(vote.phone, res.rewardAmount, res.user.balance)
+                  BOT_MESSAGES.VOTE_VERIFIED_ALERT(vote.phone, res.rewardAmount, res.user.balance),
+                  { parse_mode: 'HTML' }
                 ).catch(() => {});
               }
             }
@@ -1571,7 +1572,10 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
           }
         } catch (e) {}
 
-        return ctx.reply(`❌ ${errMsg}`);
+        return ctx.reply(
+          errMsg.startsWith('⚠️') || errMsg.startsWith('❌') || errMsg.startsWith('⏳') || errMsg.startsWith('🏁') ? errMsg : `❌ ${errMsg}`,
+          { parse_mode: 'HTML', ...BotKeyboards.mainMenu(user.role === 'ADMIN') }
+        );
       }
 
       const smsSentAt = Date.now();
@@ -1822,7 +1826,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
       await ctx.reply(
         BOT_MESSAGES.VOTE_SUBMITTED_PENDING(phone, voteReward),
-        BotKeyboards.mainMenu(user.role === 'ADMIN')
+        { parse_mode: 'HTML', ...BotKeyboards.mainMenu(user.role === 'ADMIN') }
       );
     } catch (err) {
       await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
