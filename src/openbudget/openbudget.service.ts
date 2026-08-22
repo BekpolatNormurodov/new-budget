@@ -428,14 +428,22 @@ export class OpenBudgetService {
           }
 
           const rawBuffer = Buffer.from(capRes.data.image, 'base64');
-          let solved = await this.captchaSolver.solve(rawBuffer);
+
+          // Avtomatik OCR vaqtincha O'CHIRILGAN - kaptcha faqat foydalanuvchining o'zi
+          // tomonidan yechiladi (pastdagi manualCaptchaResolver orqali). Kerak bo'lsa qayta
+          // yoqish uchun quyidagi qatorni izohdan chiqarish kifoya:
+          // let solved = await this.captchaSolver.solve(rawBuffer);
+          let solved: { success: boolean; answer?: number; expression?: string; error?: string } = {
+            success: false,
+            error: 'Avtomatik OCR o\'chirilgan - faqat foydalanuvchi javobi kutilmoqda',
+          };
           let usedManualAnswer = false;
 
           // HAR BIR yangi captchada foydalanuvchining o'ziga ko'rsatib, tasdiqlashini kutamiz
           // (foydalanuvchi OpenBudgetda topilgan yoki topilmagan bo'lishidan qat'iy nazar, va
           // necha marta urinish bo'lishidan qat'iy nazar - faqat 1 marta emas). Agar 45 soniyada
-          // javob kelmasa, shu urinish uchun avtomatik OCR zaxira sifatida ishlatiladi, lekin
-          // KEYINGI captchada foydalanuvchidan yana so'raladi.
+          // javob kelmasa, shu captcha "yechilmagan" deb hisoblanadi va pastda yangi kaptcha
+          // bilan qayta urinish boshlanadi (avtomatik OCR zaxirasi endi ishlatilmaydi).
           if (manualCaptchaResolver) {
             const isRetry = manualCaptchaRetryReason === 'wrong';
             manualCaptchaRetryReason = null;
@@ -556,7 +564,14 @@ export class OpenBudgetService {
                   }
 
                   const regBuffer = Buffer.from(regCapRes.data.image, 'base64');
-                  let regSolved = await this.captchaSolver.solve(regBuffer);
+
+                  // Avtomatik OCR vaqtincha O'CHIRILGAN - qayta yoqish uchun quyidagi qatorni
+                  // izohdan chiqarish kifoya:
+                  // let regSolved = await this.captchaSolver.solve(regBuffer);
+                  let regSolved: { success: boolean; answer?: number; expression?: string; error?: string } = {
+                    success: false,
+                    error: 'Avtomatik OCR o\'chirilgan - faqat foydalanuvchi javobi kutilmoqda',
+                  };
                   let usedManualRegAnswer = false;
 
                   // Ro'yxatdan o'tish uchun kaptchani ham HAR SAFAR foydalanuvchining o'ziga

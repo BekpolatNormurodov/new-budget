@@ -41,8 +41,9 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   /**
-   * Avtomatik OCR kaptchani yechayotganda ham, foydalanuvchining o'ziga rasmni yuborib,
-   * javobini kutadi (belgilangan vaqt ichida javob kelmasa, avtomatik urinish davom etadi).
+   * Kaptchani foydalanuvchining o'ziga rasm sifatida yuborib, javobini kutadi
+   * (avtomatik OCR o'chirilgan - yagona yechim manbai shu). Belgilangan vaqt ichida
+   * javob kelmasa, foydalanuvchiga xabar berilib, yangi kaptcha bilan qayta so'raladi.
    */
   private askUserToSolveCaptcha(ctx: Context, botId: number, imageBuffer: Buffer, isRetry: boolean): Promise<number | null> {
     const key = `${botId}_${ctx.from.id}`;
@@ -50,9 +51,10 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       const timeout = setTimeout(() => {
         if (this.pendingCaptchaResolvers.get(key)) {
           this.pendingCaptchaResolvers.delete(key);
+          ctx.reply('⏳ Vaqt tugadi (90 soniya)! Yangi kaptcha yuborilmoqda...').catch(() => {});
           resolve(null);
         }
-      }, 45000);
+      }, 90000);
 
       this.pendingCaptchaResolvers.set(key, { resolve, timeout });
 
@@ -1199,14 +1201,18 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         if (pendingCaptcha) {
           const match = text.replace(/\s/g, '').match(/-?\d+/);
           const num = match ? parseInt(match[0], 10) : NaN;
+
+          if (Number.isNaN(num)) {
+            // Raqam topilmadi - hozirgi kaptchani bekor qilmasdan, faqat qaytadan so'raymiz
+            // (avtomatik OCR o'chirilgani uchun yangi rasmni behuda yubormaymiz).
+            await ctx.reply('⚠️ Raqam aniqlanmadi. Iltimos, rasmdagi javobni faqat son ko\'rinishida yuboring (masalan: 12):');
+            return;
+          }
+
           clearTimeout(pendingCaptcha.timeout);
           this.pendingCaptchaResolvers.delete(pendingCaptchaKey);
-          pendingCaptcha.resolve(Number.isNaN(num) ? null : num);
-          if (!Number.isNaN(num)) {
-            await ctx.reply('✅ Rahmat! Javobingiz qabul qilindi, davom etilmoqda...');
-          } else {
-            await ctx.reply('⚠️ Raqam aniqlanmadi, avtomatik urinish davom etmoqda...');
-          }
+          pendingCaptcha.resolve(num);
+          await ctx.reply('✅ Rahmat! Javobingiz qabul qilindi, davom etilmoqda...');
           return;
         }
 
