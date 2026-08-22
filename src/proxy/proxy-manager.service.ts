@@ -416,10 +416,10 @@ export class ProxyManagerService implements OnModuleInit {
           const auth = proxy.auth ? `${proxy.auth.username}:${proxy.auth.password}@` : '';
           const { stdout } = await execFileAsync('curl', [
             '-sI',
-            '--connect-timeout', '3',
-            '--max-time', '5',
+            '--connect-timeout', '5',
+            '--max-time', '10',
             '-x', `http://${auth}${proxy.host}:${proxy.port}`,
-            'https://new.openbudget.uz/api/v2/vote/captcha-2'
+            'https://openbudget.uz/api/v2/vote/captcha-2'
           ]);
 
           if (stdout.includes('200') || stdout.includes('HTTP/')) {
