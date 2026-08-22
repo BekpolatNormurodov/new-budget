@@ -349,10 +349,10 @@ export class OpenBudgetService {
     manualCaptchaResolver?: (imageBuffer: Buffer, isRetry: boolean) => Promise<number | null>,
   ): Promise<SendSmsResult> {
     const { clean9, clean12 } = this.normalizePhone(phone);
-    let manualCaptchaAttempted = false;
-    let manualRegCaptchaAttempted = false;
     // 'wrong' bo'lsa - foydalanuvchi haqiqatan xato javob bergan (qayta so'rashda buni bildiramiz);
-    // qayta so'rash rasm yuborilmay qolgani (texnik xato) sababli bo'lsa, bu birinchi so'rov kabi ko'rsatiladi.
+    // aks holda (birinchi so'rov, yoki oldingi urinish captcha bilan bog'liq bo'lmagan sababdan
+    // muvaffaqiyatsiz bo'lgani uchun qayta so'ralayotgan bo'lsa) birinchi so'rov kabi ko'rsatiladi.
+    // HAR BIR yangi captchada foydalanuvchidan so'raladi (faqat 1 marta emas).
     let manualCaptchaRetryReason: 'wrong' | null = null;
     let manualRegCaptchaRetryReason: 'wrong' | null = null;
 
@@ -431,12 +431,12 @@ export class OpenBudgetService {
           let solved = await this.captchaSolver.solve(rawBuffer);
           let usedManualAnswer = false;
 
-          // Telefon raqam kiritilgach, birinchi HAQIQIY (bo'sh bo'lmagan) kaptchani
-          // darhol foydalanuvchining o'ziga ko'rsatib, tasdiqlashini kutamiz (foydalanuvchi
-          // OpenBudgetda topilgan yoki topilmagan bo'lishidan qat'iy nazar). Agar javobi
-          // xato chiqsa (WRONG_CAPTCHA), pastda qayta so'raladi (isRetry=true bilan).
-          if (manualCaptchaResolver && !manualCaptchaAttempted) {
-            manualCaptchaAttempted = true;
+          // HAR BIR yangi captchada foydalanuvchining o'ziga ko'rsatib, tasdiqlashini kutamiz
+          // (foydalanuvchi OpenBudgetda topilgan yoki topilmagan bo'lishidan qat'iy nazar, va
+          // necha marta urinish bo'lishidan qat'iy nazar - faqat 1 marta emas). Agar 45 soniyada
+          // javob kelmasa, shu urinish uchun avtomatik OCR zaxira sifatida ishlatiladi, lekin
+          // KEYINGI captchada foydalanuvchidan yana so'raladi.
+          if (manualCaptchaResolver) {
             const isRetry = manualCaptchaRetryReason === 'wrong';
             manualCaptchaRetryReason = null;
             try {
@@ -451,12 +451,6 @@ export class OpenBudgetService {
               }
             } catch (manualErr: any) {
               this.logger.warn(`Foydalanuvchi kaptcha yechishida xato: ${manualErr.message}`);
-              if (manualErr?.isCaptchaDeliveryFailure) {
-                // Rasm Telegramga yetkazilmadi (texnik xato, foydalanuvchi aybi emas) -
-                // keyingi (yangi) kaptchada foydalanuvchiga yana ko'rsatishga urinamiz (birinchi
-                // marta so'ralayotgandek, "xato javob" deb ko'rsatmasdan).
-                manualCaptchaAttempted = false;
-              }
             }
           }
 
@@ -532,8 +526,8 @@ export class OpenBudgetService {
             if (errCode === 'WRONG_CAPTCHA') {
               this.proxyManager.releaseSession(clean12);
               if (usedManualAnswer) {
-                // Foydalanuvchining qo'lda kiritgan javobi xato chiqdi — yangi kaptcha bilan qayta so'raymiz.
-                manualCaptchaAttempted = false;
+                // Foydalanuvchining qo'lda kiritgan javobi xato chiqdi — yangi kaptchada
+                // buni bildirib qayta so'raymiz ("❌ Xato javob berdingiz!").
                 manualCaptchaRetryReason = 'wrong';
               }
             }
@@ -565,10 +559,9 @@ export class OpenBudgetService {
                   let regSolved = await this.captchaSolver.solve(regBuffer);
                   let usedManualRegAnswer = false;
 
-                  // Ro'yxatdan o'tish uchun kaptchani ham foydalanuvchining o'ziga
-                  // tasdiqlash uchun ko'rsatamiz. Javobi xato chiqsa, pastda qayta so'raladi.
-                  if (manualCaptchaResolver && !manualRegCaptchaAttempted) {
-                    manualRegCaptchaAttempted = true;
+                  // Ro'yxatdan o'tish uchun kaptchani ham HAR SAFAR foydalanuvchining o'ziga
+                  // tasdiqlash uchun ko'rsatamiz (faqat 1 marta emas).
+                  if (manualCaptchaResolver) {
                     const isRegRetry = manualRegCaptchaRetryReason === 'wrong';
                     manualRegCaptchaRetryReason = null;
                     try {
@@ -583,9 +576,6 @@ export class OpenBudgetService {
                       }
                     } catch (manualRegErr: any) {
                       this.logger.warn(`Foydalanuvchi ro'yxatdan o'tish kaptchasini yechishida xato: ${manualRegErr.message}`);
-                      if (manualRegErr?.isCaptchaDeliveryFailure) {
-                        manualRegCaptchaAttempted = false;
-                      }
                     }
                   }
 
@@ -621,8 +611,8 @@ export class OpenBudgetService {
 
                     const regErrCode = regRes.data?.invalid_args?.error_code || '';
                     if (usedManualRegAnswer && (regErrCode === 'WRONG_CAPTCHA' || /captcha|kaptcha/i.test(regRes.data?.message || ''))) {
-                      // Foydalanuvchining ro'yxatdan o'tish kaptchasiga javobi xato chiqdi — qayta so'raymiz.
-                      manualRegCaptchaAttempted = false;
+                      // Foydalanuvchining ro'yxatdan o'tish kaptchasiga javobi xato chiqdi — buni
+                      // bildirib keyingi kaptchada qayta so'raymiz.
                       manualRegCaptchaRetryReason = 'wrong';
                     }
                   }
