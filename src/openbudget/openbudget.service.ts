@@ -412,7 +412,13 @@ export class OpenBudgetService {
 
           const key = capRes.data?.captchaKey;
           const cookie = capRes.cookie;
-          const rawBuffer = Buffer.from(capRes.data?.image || '', 'base64');
+
+          if (!capRes.data?.image || !key) {
+            this.logger.warn(`⚠️ [Kaptcha Urinish #${attempt}] Rasm/kalit kelmadi (proxy/tarmoq xatosi), yangi urinishga o'tilmoqda...`);
+            continue;
+          }
+
+          const rawBuffer = Buffer.from(capRes.data.image, 'base64');
           let solved = await this.captchaSolver.solve(rawBuffer);
 
           // Avtomatik OCR bir necha marta muvaffaqiyatsiz bo'lsa, foydalanuvchining
@@ -528,7 +534,13 @@ export class OpenBudgetService {
                   });
 
                   const regKey = regCapRes.data?.captchaKey;
-                  const regBuffer = Buffer.from(regCapRes.data?.image || '', 'base64');
+
+                  if (!regCapRes.data?.image || !regKey) {
+                    this.logger.warn(`⚠️ [Auto-Reg Urinish #${regAttempt}] Rasm/kalit kelmadi, yangi urinishga o'tilmoqda...`);
+                    continue;
+                  }
+
+                  const regBuffer = Buffer.from(regCapRes.data.image, 'base64');
                   const regSolved = await this.captchaSolver.solve(regBuffer);
 
                   if (regSolved.success && regSolved.answer !== undefined) {
