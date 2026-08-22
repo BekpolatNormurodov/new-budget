@@ -68,8 +68,18 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Quick Actions on Mobile (Theme + Add Bot) */}
+        {/* Quick Actions on Mobile (Theme + Captcha + Add Bot) */}
         <div className="flex items-center gap-2 sm:hidden">
+          <a
+            href="/captcha"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30 flex-shrink-0"
+            title="Captchani Ochish"
+          >
+            <ExternalLink className="w-5 h-5" />
+          </a>
+
           {onToggleTheme && (
             <button
               onClick={onToggleTheme}
@@ -142,16 +152,16 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="hidden md:inline">Yangilash</span>
         </button>
 
-        {/* Captcha Mini App Link Button */}
+        {/* Captcha Ochish Link Button */}
         <a
           href="/captcha"
           target="_blank"
           rel="noopener noreferrer"
-          className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 transition-all active:scale-95 flex-shrink-0 cursor-pointer"
-          title="Ovoz Berish Captcha Mini App"
+          className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 transition-all active:scale-95 flex-shrink-0 cursor-pointer"
+          title="Captchani Ochish"
         >
           <ExternalLink className="w-4 h-4" />
-          <span className="whitespace-nowrap">Captcha Mini App</span>
+          <span className="whitespace-nowrap">Captchani Ochish</span>
         </a>
 
         {/* Add Bot Action Button (Tablet & Desktop) */}
