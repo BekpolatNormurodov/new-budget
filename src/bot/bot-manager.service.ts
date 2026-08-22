@@ -31,6 +31,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
   private votingSessionTimeouts: Map<string, NodeJS.Timeout> = new Map(); // key: "botId_userId"
   private pendingCaptchaResolvers: Map<string, { resolve: (v: number | null) => void; timeout: any }> = new Map(); // key: "botId_userId"
   private activeCaptchaMessages: Map<string, number> = new Map(); // key: "botId_userId" -> captcha xabarining message_id'si (eski xabarlar to'planib qolmasligi uchun shu xabar tahrirlanadi)
+  private activeNoteMessages: Map<string, number> = new Map(); // key: "botId_userId" -> oxirgi "note" (masalan "ro'yxatdan o'tish kerak") xabarining message_id'si - yangisi kelsa eskisi o'chiriladi
 
   constructor(
     private readonly configService: ConfigService,
@@ -66,9 +67,10 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       // `note` orqali qo'ng'iroq qiluvchi (openbudget.service.ts) kontekstga oid aniqlashtiruvchi
       // xabar berishi mumkin (masalan "ro'yxatdan o'tish ~10 soniya vaqt oladi") - foydalanuvchi
       // "nega yana captcha so'ralyapti?" deb chalkashib qolmasligi uchun. Buni captcha rasmidan
-      // ALOHIDA, mustaqil xabar sifatida yuboramiz (ikkita aniq xabar - birlashtirilgan uzun
-      // matn emas).
-      (note ? ctx.reply(note).catch(() => {}) : Promise.resolve())
+      // ALOHIDA, mustaqil xabar sifatida yuboramiz. Agar avvalgi "note" xabari hali ekranda
+      // bo'lsa, uni o'chirib keyin yangisini yuboramiz - shunda bir necha ketma-ket note
+      // xabarlari to'planib qolmaydi (masalan bir necha marta server xatosi bo'lsa).
+      (note ? this.showNoteMessage(ctx, key, note) : Promise.resolve())
         .then(() => this.showCaptchaImage(ctx, key, imageBuffer, caption))
         .catch((err) => {
           // Rasm Telegramga yetkazilmadi (masalan IMAGE_PROCESS_FAILED) - bu foydalanuvchi
@@ -82,6 +84,26 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
           reject(deliveryError);
         });
     });
+  }
+
+  /**
+   * Aniqlashtiruvchi "note" xabarini ko'rsatadi. Agar shu foydalanuvchi uchun oldingi
+   * note xabari hali ekranda bo'lsa, avval o'shani o'chirib, keyin yangisini yuboradi -
+   * shunda ketma-ket bir necha note (masalan bir necha marta server xatosi bo'lsa)
+   * chatga to'planib qolmaydi, faqat ENG SO'NGGISI ko'rinadi.
+   */
+  private async showNoteMessage(ctx: Context, key: string, note: string): Promise<void> {
+    const oldNoteId = this.activeNoteMessages.get(key);
+    if (oldNoteId) {
+      await ctx.telegram.deleteMessage(ctx.chat.id, oldNoteId).catch(() => {});
+      this.activeNoteMessages.delete(key);
+    }
+    try {
+      const sent = await ctx.reply(note);
+      this.activeNoteMessages.set(key, sent.message_id);
+    } catch {
+      // Note xabari yuborilmasa ham captcha rasmi baribir yuboriladi - kritik emas.
+    }
   }
 
   /**
@@ -128,7 +150,9 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
    * berish urinishi eski xabarni emas, yangi captcha xabarini boshlaydi.
    */
   private clearActiveCaptchaMessage(botId: number, userId: number): void {
-    this.activeCaptchaMessages.delete(`${botId}_${userId}`);
+    const key = `${botId}_${userId}`;
+    this.activeCaptchaMessages.delete(key);
+    this.activeNoteMessages.delete(key);
   }
 
   /**
@@ -1238,6 +1262,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
                 }
               );
             } catch (err: any) {
+              this.clearActiveCaptchaMessage(botRecord.id, user.id);
               await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
               await ctx.reply('❌ Qayta SMS so\'rashda xatolik yuz berdi.');
             }
@@ -1612,6 +1637,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         }
       );
     } catch (err) {
+      this.clearActiveCaptchaMessage(botRecord.id, user.id);
       await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
       await ctx.reply('❌ Tizimda xatolik yuz berdi. Iltimos keyinroq urinib ko\'ring.');
     }
@@ -1711,6 +1737,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
               );
             }
           } catch (e) {
+            this.clearActiveCaptchaMessage(botRecord.id, user.id);
             await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
           }
         }
