@@ -47,6 +47,8 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async initWorkerPool() {
+    // 💤 Tesseract OCR Multi-Worker Pool vaqtincha o'chirilgan (RAM tejash uchun)
+    /*
     if (this.isInitializing || this.isInitialized) return;
     this.isInitializing = true;
 
@@ -74,27 +76,16 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
     } finally {
       this.isInitializing = false;
     }
+    */
   }
 
-  async acquireWorker(): Promise<Worker> {
-    if (!this.isInitialized || this.workers.length === 0) {
-      await this.initWorkerPool();
-    }
-    if (this.availableWorkers.length > 0) {
-      return this.availableWorkers.pop()!;
-    }
-    return new Promise<Worker>((resolve) => {
-      this.waitQueue.push(resolve);
-    });
+  async acquireWorker(): Promise<Worker | null> {
+    // OCR vaqtincha nofaol
+    return null;
   }
 
-  releaseWorker(worker: Worker) {
-    if (this.waitQueue.length > 0) {
-      const nextResolver = this.waitQueue.shift()!;
-      nextResolver(worker);
-    } else {
-      this.availableWorkers.push(worker);
-    }
+  releaseWorker(worker: Worker | null) {
+    // no-op
   }
 
   /**
@@ -330,6 +321,9 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
     }
 
     const worker = await this.acquireWorker();
+    if (!worker) {
+      return { success: false, error: 'OCR vaqtincha to\'xtatilgan (Qo\'lda kiritish rejimi faol)' };
+    }
     try {
       // Multi-pass: turli threshold qiymatlar bilan
       let parsed = await this.solveFullCaptchaWithWorker(buffer, worker, 135);

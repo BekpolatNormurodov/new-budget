@@ -111,19 +111,10 @@ export class SystemHealthService implements OnModuleInit, OnModuleDestroy {
     }
     const obLatency = Date.now() - obStart;
 
-    // 2. Captcha Solver sinovi
+    // 2. Captcha Solver sinovi (Foydalanuvchi orqali qo'lda yechish rejimi faol)
     const capStart = Date.now();
-    let capResolved = false;
-    try {
-      const worker = await this.captchaSolver.acquireWorker().catch(() => null);
-      capResolved = !!worker;
-      if (worker) {
-        this.captchaSolver.releaseWorker(worker);
-      }
-    } catch (e: any) {
-      issues.push(`Captcha solver xatoligi: ${e.message}`);
-    }
-    const capLatency = Date.now() - capStart;
+    let capResolved = true;
+    const capLatency = 0;
 
     // 3. Proxylarni tekshirish
     let proxyStats = { total: 0, alive: 0, dead: 0 };
