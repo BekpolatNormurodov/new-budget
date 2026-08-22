@@ -225,7 +225,13 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         record: botRecord,
       });
 
-      bot.launch().catch((err) => {
+      // Avval eski eskirgan webhook va to'planib qolgan so'rovlarni tozalash
+      await bot.telegram.deleteWebhook({ drop_pending_updates: true }).catch(() => {});
+
+      bot.launch({
+        dropPendingUpdates: true,
+        allowedUpdates: ['message', 'callback_query'],
+      }).catch((err) => {
         this.logger.error(`Bot @${botInfo.username} launch error:`, err);
         this.prisma.botInstance.update({
           where: { id: botRecord.id },
