@@ -114,58 +114,80 @@ export class OpenBudgetService {
   private translateOpenBudgetError(rawMessage: string): string {
     if (!rawMessage) return rawMessage;
     const known: Array<[RegExp, string]> = [
-      // 1. Allaqachon ovoz berilganlik holatlari (Mavsum, mahalla, pasport bo'yicha)
+      // 1. Mavsumda allaqachon ovoz berilganlik holati
       [
-        /мавсумда\s+овоз\s+берган|mavsumda\s+ovoz|avval\s+ovoz|allaqachon\s+ovoz|already\s+voted/i,
-        '⚠️ Ushbu telefon raqam yoki pasport egasi nomidan ushbu mavsumda allaqachon ovoz berilgan!\n\n📌 <b>Ochiq Budjet qoidasi:</b> Bitta fuqaro (pasport) nomiga rasmiylashtirilgan barcha raqamlardan bir mavsumda faqat 1 marta ovoz berish mumkin.\n\nSiz boshqa yaqinlaringiz nomidagi telefon raqamlaridan ovoz berib pul ishlashingiz mumkin!',
-      ],
-      [
-        /ташаббусга\s+овоз|маҳаллага\s+овоз|ushbu\s+tashabbusga|ushbu\s+mahallaga/i,
-        '⚠️ Ushbu tashabbusga / mahallaga allaqachon ovoz berilgan!\n\n📌 Bir mavsumda bitta fuqaro faqat 1 ta loyihaga ovoz bera oladi.',
-      ],
-      [
-        /паспорт|pasport/i,
-        '⚠️ Ushbu pasport ma\'lumotlari bo\'yicha allaqachon ovoz berilgan!\n\n📌 Bitta pasport egasi nomidan bir mavsumda faqat 1 marta ovoz berish mumkin.',
+        /мавсумда\s+овоз\s+берган|mavsumda\s+ovoz|avval\s+ovoz|allaqachon\s+ovoz|already\s+voted|уже\s+голосовали\s+в\s+этом\s+сезоне|голос\s+уже\s+принят/i,
+        '⚠️ <b>Ushbu telefon raqam yoki pasport egasi nomidan ushbu mavsumda allaqachon ovoz berilgan!</b>\n\n' +
+        '📌 <b>Ochiq Budjet qoidasi:</b> Bitta fuqaro (pasport) nomiga rasmiylashtirilgan barcha raqamlardan bir mavsumda faqat 1 marta ovoz berish mumkin.\n\n' +
+        '💡 <i>Siz boshqa yaqinlaringiz (oila a\'zolaringiz) nomidagi telefon raqamlaridan ovoz berib pul ishlashingiz mumkin!</i>',
       ],
 
-      // 2. Akkaunt va ro'yxatdan o'tish holatlari
+      // 2. Boshqa tashabbus / mahallaga ovoz berilganlik holati
       [
-        /account\s+is\s+inactive/i,
-        '⚠️ Ushbu hisob hali faol emas yoki ro\'yxatdan o\'tish yakunlanmagan. Iltimos, qaytadan "🗳 Ovoz berish" tugmasini bosib yangi SMS kod oling.',
-      ],
-      [
-        /user\s+not\s+found|топилмади|topilmadi/i,
-        'Ushbu raqam OpenBudget tizimida ro\'yxatdan o\'tmagan (tizim avtomatik ro\'yxatdan o\'tkazmoqda).',
+        /ташаббусга\s+овоз|маҳаллага\s+овоз|ushbu\s+tashabbusga|ushbu\s+mahallaga|boshqa\s+loyihaga|голосовали\s+за\s+другую\s+инициативу|за\s+эту\s+инициативу/i,
+        '⚠️ <b>Ushbu telefon raqam orqali boshqa mahallaga (tashabbusga) allaqachon ovoz berilgan!</b>\n\n' +
+        '📌 <b>Ochiq Budjet qoidasi:</b> Bir mavsumda bitta fuqaro faqat 1 ta loyihaga ovoz bera oladi.\n\n' +
+        '💡 <i>Iltimos, boshqa yaqinlaringiz telefon raqamini kiritib ovoz bering.</i>',
       ],
 
-      // 3. SMS va kod holatlari
+      // 3. Pasport bo'yicha limit to'lganlik holati
       [
-        /смс\s+кодини\s+текширишда\s+хатолик|invalid\s+otp|wrong\s+otp|invalid\s+code|kod\s+noto/i,
-        '❌ Kiritilgan SMS kod noto\'g\'ri yoki eskirgan. Iltimos, telefoningizga kelgan so\'nggi 6 xonali SMS kodni tekshirib qaytadan kiriting.',
-      ],
-      [
-        /otp\s+expired|code\s+expired|муддати\s+туга/i,
-        '⏳ SMS kodning amal qilish muddati tugagan. Iltimos, "🗳 Ovoz berish" tugmasi orqali yangi SMS kod oling.',
-      ],
-      [
-        /лимит|limit|too\s+many\s+requests|rate\s+limit/i,
-        '⏳ Ushbu raqamga SMS yuborish limiti vaqtincha to\'lgan. Iltimos, 2-3 daqiqa kutib qaytadan urinib ko\'ring.',
+        /паспорт|pasport|passport|по\s+данным\s+паспорта/i,
+        '⚠️ <b>Ushbu pasport egasi nomidan bir mavsumda allaqachon ovoz berilgan!</b>\n\n' +
+        '📌 <b>Ochiq Budjet qoidasi:</b> Bitta fuqaroning pasportiga ulangan barcha SIM-kartalardan faqat 1 marta ovoz berish mumkin.\n\n' +
+        '💡 <i>Iltimos, boshqa fuqaro nomiga rasmiylashtirilgan telefon raqam kiriting.</i>',
       ],
 
-      // 4. Kaptcha holatlari
+      // 4. SMS kodi noto'g'ri kiritilganlik holati
       [
-        /нотўғри\s+каптча|noto.*kaptcha|wrong_captcha/i,
-        '❌ Kaptcha javobi noto\'g\'ri kiritilgan. Iltimos, yangi chiqqan misol javobini diqqat bilan kiriting.',
+        /смс\s+кодини\s+текширишда\s+хатолик|invalid\s+otp|wrong\s+otp|invalid\s+code|kod\s+noto|неверный\s+код|код\s+ошибоч/i,
+        '❌ <b>Kiritilgan SMS kod noto\'g\'ri!</b>\n\n' +
+        'Iltimos, telefoningizga kelgan so\'nggi 6 xonali SMS kodni tekshirib qaytadan kiriting:',
       ],
 
-      // 5. Server va tizim holatlari
+      // 5. SMS muddati tugaganlik holati
       [
-        /internal\s+server\s+error|серверда\s+хатолик|type.*internal/i,
-        '⚠️ Ochiq Budjet davlat portali serverida vaqtinchalik yuklama yuqori. Iltimos, birozdan so\'ng qaytadan urinib ko\'ring.',
+        /otp\s+expired|code\s+expired|муддати\s+туга|истек|muddati\s+tug/i,
+        '⏳ <b>SMS kodning amal qilish muddati (2 daqiqa) tugagan!</b>\n\n' +
+        'Iltimos, qaytadan "🗳 Ovoz berish" tugmasini bosib yangi SMS kod oling.',
+      ],
+
+      // 6. SMS yuborish limiti oshganlik holati
+      [
+        /лимит|limit|too\s+many\s+requests|rate\s+limit|превышен\s+лимит/i,
+        '⏳ <b>Ushbu raqamga SMS yuborish limiti vaqtincha to\'lgan!</b>\n\n' +
+        '📌 OpenBudget portali xavfsizlik cheklovi tufayli 2-3 daqiqa kutib, so\'ng qaytadan urinib ko\'ring.',
+      ],
+
+      // 7. Akkaunt va ro'yxatdan o'tish holatlari
+      [
+        /account\s+is\s+inactive|аккаунт\s+не\s+активен|nofaol/i,
+        '⚠️ <b>Ushbu hisob hali to\'liq faollashtirilmagan!</b>\n\n' +
+        'Iltimos, "🗳 Ovoz berish" tugmasini bosib, yangi SMS kod orqali tasdiqlang.',
       ],
       [
-        /тўхтатилган|to'xtatilgan|closed|finished/i,
-        '🏁 Ushbu tashabbus bo\'yicha ovoz yig\'ish yakunlangan yoki to\'xtatilgan.',
+        /user\s+not\s+found|топилмади|topilmadi|не\s+найден/i,
+        'Ushbu raqam OpenBudget tizimida ro\'yxatdan o\'tmagan (tizim avtomatik ro\'yxatdan o\'tkazmoqda...).',
+      ],
+
+      // 8. Kaptcha javobi xatoligi
+      [
+        /нотўғри\s+каптча|noto.*kaptcha|wrong_captcha|неверная\s+капча/i,
+        '❌ <b>Kaptcha javobi noto\'g\'ri kiritilgan!</b>\n\n' +
+        'Iltimos, rasmda ko\'rsatilgan matematik misol javobini diqqat bilan kiriting.',
+      ],
+
+      // 9. Tashabbus yopilganligi yoki ovoz to'xtatilganligi
+      [
+        /тўхтатилган|to'xtatilgan|closed|finished|завершен|остановлен/i,
+        '🏁 <b>Ushbu tashabbus bo\'yicha ovoz yig\'ish yakunlangan yoki to\'xtatilgan!</b>',
+      ],
+
+      // 10. Davlat portali serveridagi yuklama va xatoliklar
+      [
+        /internal\s+server\s+error|серверда\s+хатолик|type.*internal|ошибка\s+сервера|500\s+internal|502|503/i,
+        '⚠️ <b>Ochiq Budjet davlat portali serverida yuklama yuqori!</b>\n\n' +
+        'Iltimos, 1-2 daqiqadan so\'ng qaytadan urinib ko\'ring.',
       ],
     ];
 
