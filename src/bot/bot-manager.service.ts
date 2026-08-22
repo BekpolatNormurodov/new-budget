@@ -1204,7 +1204,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
               await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
 
               if (!res.success) {
-                await ctx.reply(`❌ ${res.error || 'Qayta SMS yuborishda xatolik yuz berdi. Iltimos qaytadan urinib ko\'ring.'}`);
+                await ctx.reply(`❌ ${res.error || 'Qayta SMS yuborishda xatolik yuz berdi. Iltimos qaytadan urinib ko\'ring.'}`, { parse_mode: 'HTML' });
                 return;
               }
 

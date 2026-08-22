@@ -109,13 +109,6 @@ export class OpenBudgetService {
   }
 
   /**
-   * OpenBudget API ba'zan xom (ingliz tilida yoki texnik) xabar qaytaradi (masalan
-   * "account is inactive"), bu esa foydalanuvchiga to'g'ridan-to'g'ri ko'rsatilsa
-   * tushunarsiz bo'ladi. Ma'lum xabarlarni o'zbekchaga tarjima qilamiz, qolganlarini
-   * o'zgarishsiz qoldiramiz (chunki OpenBudget ko'pincha o'zbek/rus tilida to'g'ri
-   * xabar qaytaradi).
-   */
-  /**
    * OpenBudget API xatoliklarini tushunarli, chiroyli va rasmiy o'zbek tiliga (Lotin) o'girish
    */
   private translateOpenBudgetError(rawMessage: string): string {
