@@ -45,7 +45,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
    * (avtomatik OCR o'chirilgan - yagona yechim manbai shu). Belgilangan vaqt ichida
    * javob kelmasa, foydalanuvchiga xabar berilib, yangi kaptcha bilan qayta so'raladi.
    */
-  private askUserToSolveCaptcha(ctx: Context, botId: number, imageBuffer: Buffer, isRetry: boolean): Promise<number | null> {
+  private askUserToSolveCaptcha(ctx: Context, botId: number, imageBuffer: Buffer, isRetry: boolean, note?: string): Promise<number | null> {
     const key = `${botId}_${ctx.from.id}`;
     return new Promise<number | null>((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -58,9 +58,14 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
       this.pendingCaptchaResolvers.set(key, { resolve, timeout });
 
-      const caption = isRetry
-        ? '❌ Xato javob berdingiz!\n\n🧮 Yangi kaptcha keldi, qaytadan hisoblab javobini (faqat son) yozib yuboring:'
-        : '🧮 Kaptchani tasdiqlang!\n\nRasmdagi misolni hisoblab, javobini (faqat son) yozib yuboring:';
+      // `note` orqali qo'ng'iroq qiluvchi (openbudget.service.ts) kontekstga oid aniqlashtiruvchi
+      // xabar berishi mumkin (masalan "oldingi javobingiz to'g'ri edi, endi yana bitta captcha
+      // kerak") - foydalanuvchi "nega yana captcha so'ralyapti?" deb chalkashib qolmasligi uchun.
+      const caption = note
+        ? `${note}\n\nJavobini (faqat son) yozib yuboring:`
+        : isRetry
+          ? '❌ Xato javob berdingiz!\n\n🧮 Yangi kaptcha keldi, qaytadan hisoblab javobini (faqat son) yozib yuboring:'
+          : '🧮 Kaptchani tasdiqlang!\n\nRasmdagi misolni hisoblab, javobini (faqat son) yozib yuboring:';
 
       ctx
         .replyWithPhoto({ source: imageBuffer }, { caption })
@@ -1108,7 +1113,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
               const res = await this.openBudgetService.requestSmsForVote(
                 phone,
                 undefined,
-                (imageBuffer, isRetry) => this.askUserToSolveCaptcha(ctx, botRecord.id, imageBuffer, isRetry),
+                (imageBuffer, isRetry, note) => this.askUserToSolveCaptcha(ctx, botRecord.id, imageBuffer, isRetry, note),
               );
               await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
 
@@ -1457,7 +1462,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       const res = await this.openBudgetService.requestSmsForVote(
         clean12,
         undefined,
-        (imageBuffer, isRetry) => this.askUserToSolveCaptcha(ctx, botRecord.id, imageBuffer, isRetry),
+        (imageBuffer, isRetry, note) => this.askUserToSolveCaptcha(ctx, botRecord.id, imageBuffer, isRetry, note),
       );
 
       if (!res.success) {
@@ -1578,7 +1583,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
             const newSms = await this.openBudgetService.requestSmsForVote(
               phone,
               undefined,
-              (imageBuffer, isRetry) => this.askUserToSolveCaptcha(ctx, botRecord.id, imageBuffer, isRetry),
+              (imageBuffer, isRetry, note) => this.askUserToSolveCaptcha(ctx, botRecord.id, imageBuffer, isRetry, note),
             );
             await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
 

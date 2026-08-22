@@ -346,7 +346,7 @@ export class OpenBudgetService {
   async requestSmsForVote(
     phone: string,
     initiativeId?: number,
-    manualCaptchaResolver?: (imageBuffer: Buffer, isRetry: boolean) => Promise<number | null>,
+    manualCaptchaResolver?: (imageBuffer: Buffer, isRetry: boolean, note?: string) => Promise<number | null>,
   ): Promise<SendSmsResult> {
     const { clean9, clean12 } = this.normalizePhone(phone);
     // 'wrong' bo'lsa - foydalanuvchi haqiqatan xato javob bergan (qayta so'rashda buni bildiramiz);
@@ -405,6 +405,12 @@ export class OpenBudgetService {
     try {
       let otpKey: string | null = null;
       let lastError: string | null = null;
+      // Ro'yxatdan o'tish (register/send-otp) ketma-ket "Internal server error" (500) qaytarsa,
+      // bu captcha bilan bog'liq emas - OpenBudget serverining o'z muammosi. Shuni bir necha
+      // marta qayta urinib, baribir davom etsa, foydalanuvchini captcha bilan cheksiz
+      // band qilmasdan, tezda aniq xato bilan to'xtaymiz.
+      let consecutiveRegServerErrors = 0;
+      const MAX_CONSECUTIVE_REG_SERVER_ERRORS = 3;
 
       for (let attempt = 1; attempt <= 25; attempt++) {
         try {
@@ -579,8 +585,17 @@ export class OpenBudgetService {
                   if (manualCaptchaResolver) {
                     const isRegRetry = manualRegCaptchaRetryReason === 'wrong';
                     manualRegCaptchaRetryReason = null;
+                    // Foydalanuvchi chalkashib qolmasligi uchun ("nega yana captcha?!"):
+                    // birinchi ro'yxatdan o'tish captchasida oldingi javobi to'g'ri qabul
+                    // qilinganini aniq aytamiz; keyingi urinishlarda esa (agar sabab xato
+                    // captcha bo'lmasa) bu server tomonidagi vaqtinchalik xato ekanini bildiramiz.
+                    const regNote = !isRegRetry
+                      ? (regAttempt === 1
+                          ? '✅ Captcha javobingiz qabul qilindi! Endi tizimda ro\'yxatdan o\'tish uchun yana bitta captcha kerak bo\'ladi:'
+                          : '⚠️ Tizimda vaqtinchalik texnik nosozlik yuz berdi (captcha javobingiz xato emas edi). Iltimos, quyidagi yangi captchani yeching:')
+                      : undefined;
                     try {
-                      const manualRegAnswer = await manualCaptchaResolver(regBuffer, isRegRetry);
+                      const manualRegAnswer = await manualCaptchaResolver(regBuffer, isRegRetry, regNote);
                       if (manualRegAnswer !== null && manualRegAnswer !== undefined && !Number.isNaN(manualRegAnswer)) {
                         regSolved = {
                           success: true,
@@ -629,6 +644,20 @@ export class OpenBudgetService {
                       // Foydalanuvchining ro'yxatdan o'tish kaptchasiga javobi xato chiqdi — buni
                       // bildirib keyingi kaptchada qayta so'raymiz.
                       manualRegCaptchaRetryReason = 'wrong';
+                    }
+
+                    if (regRes.status === 500 || regRes.data?.type === 'INTERNAL') {
+                      consecutiveRegServerErrors++;
+                      if (consecutiveRegServerErrors >= MAX_CONSECUTIVE_REG_SERVER_ERRORS) {
+                        this.logger.error(`🛑 [OpenBudget Server Xatosi] +${clean12}: registratsiya ketma-ket ${consecutiveRegServerErrors} marta "Internal server error" qaytardi (captcha bilan bog'liq emas) - to'xtatilmoqda.`);
+                        return {
+                          success: false,
+                          error: 'OpenBudget tizimida vaqtinchalik texnik nosozlik bor (ro\'yxatdan o\'tish xizmati javob bermayapti). Iltimos, keyinroq qaytadan urinib ko\'ring.',
+                          initiative,
+                        };
+                      }
+                    } else {
+                      consecutiveRegServerErrors = 0;
                     }
                   }
                 } catch (regErr: any) {
