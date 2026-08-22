@@ -463,10 +463,27 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
               />
             </div>
             <div>
-              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 flex items-center gap-1">
-                <Gift className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                <span>Referal Bonusi</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1">
+                  <Gift className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                  <span>Referal Bonusi</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsRefActive(!isRefActive)}
+                  aria-pressed={isRefActive}
+                  title={isRefActive ? 'Referal tizimi yoqilgan' : 'Referal tizimi o\'chirilgan'}
+                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
+                    isRefActive ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                      isRefActive ? 'translate-x-4' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
               <input
                 type="number"
                 value={refBonus}
@@ -474,34 +491,10 @@ export const EditBotModal: React.FC<EditBotModalProps> = ({
                 required
                 className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-bold text-purple-600 dark:text-purple-400"
               />
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+                {isRefActive ? 'Yoqilgan - yangi referallar bonus oladi' : 'O\'chirilgan - referal bonusi berilmaydi'}
+              </p>
             </div>
-          </div>
-
-          {/* Referal tizimini yoqish/o'chirish */}
-          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800">
-            <div className="flex items-center gap-1.5">
-              <Gift className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-              <div>
-                <p className="text-slate-700 dark:text-slate-300 font-semibold text-xs">Referal tizimi</p>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500">
-                  {isRefActive ? 'Yoqilgan - yangi referallar bonus oladi' : 'O\'chirilgan - referal bonusi berilmaydi'}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsRefActive(!isRefActive)}
-              aria-pressed={isRefActive}
-              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
-                isRefActive ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-700'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                  isRefActive ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
           </div>
 
           <div className="flex justify-end space-x-2 pt-3 border-t border-slate-200 dark:border-slate-800">
