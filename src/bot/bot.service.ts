@@ -659,7 +659,7 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
       ctx
         .replyWithPhoto(
           { source: imageBuffer },
-          { caption: '🧮 Robot kaptchani avtomatik o\'qiy olmadi.\n\nIltimos, rasmdagi misolni hisoblab, javobini (faqat son) yozib yuboring:' },
+          { caption: '🧮 Kaptchani tasdiqlang!\n\nRasmdagi misolni hisoblab, javobini (faqat son) yozib yuboring:' },
         )
         .catch((err) => {
           this.logger.warn(`Kaptcha rasmini yuborishda xato: ${err.message}`);

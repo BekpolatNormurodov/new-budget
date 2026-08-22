@@ -421,14 +421,10 @@ export class OpenBudgetService {
           const rawBuffer = Buffer.from(capRes.data.image, 'base64');
           let solved = await this.captchaSolver.solve(rawBuffer);
 
-          // Avtomatik OCR bir necha marta muvaffaqiyatsiz bo'lsa, foydalanuvchining
-          // o'ziga kaptchani yechishni bir marta taklif qilamiz (spam bo'lmasligi uchun faqat 1 marta).
-          if (
-            (!solved.success || solved.answer === undefined) &&
-            manualCaptchaResolver &&
-            !manualCaptchaAttempted &&
-            attempt >= 3
-          ) {
+          // Telefon raqam kiritilgach, birinchi kaptchani darhol foydalanuvchining
+          // o'ziga ko'rsatib, uning tasdiqlashini (javobini) kutamiz. Faqat 1 marta
+          // so'raladi (spam bo'lmasligi uchun); javob kelmasa avtomatik OCR/urinishlar davom etadi.
+          if (manualCaptchaResolver && !manualCaptchaAttempted && attempt === 1) {
             manualCaptchaAttempted = true;
             try {
               const manualAnswer = await manualCaptchaResolver(rawBuffer);
