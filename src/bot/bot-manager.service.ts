@@ -916,7 +916,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
         await ctx.reply(
           BOT_MESSAGES.REFERRAL(refLink, refCount, refBonus),
-          BotKeyboards.referralInline(botUsername, user.referralCode)
+          { parse_mode: 'HTML', ...BotKeyboards.referralInline(botUsername, user.referralCode) }
         );
       } catch (err) {
         this.logger.error(`[Bot #${botRecord.id}] Referal xatoligi:`, err);
@@ -1153,7 +1153,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
           await ctx.reply(
             BOT_MESSAGES.WITHDRAW_ENTER_AMOUNT(method === 'PAYNET' ? 'Paynet' : 'Uzcard/Humo', user.balance, minWithdrawal),
-            BotKeyboards.mainMenu(user.role === 'ADMIN')
+            { parse_mode: 'HTML', ...BotKeyboards.mainMenu(user.role === 'ADMIN') }
           );
         } else if (data === 'refresh_balance') {
           const updatedUser = await this.prisma.user.findUnique({ where: { id: user.id } });
@@ -1675,7 +1675,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       return ctx.reply('⏳ SMS kod kiritish vaqti (2 daqiqa) tugagan! Iltimos, "🗳 Ovoz berish" tugmasini bosib qaytadan boshlang.');
     }
 
-    const waitMsg = await ctx.reply(BOT_MESSAGES.WAITING);
+    const waitMsg = await ctx.reply(BOT_MESSAGES.WAITING, { parse_mode: 'HTML' });
 
     try {
       const verifyRes = await this.openBudgetService.verifySmsCode(phone, smsCode, sessionId);
@@ -1685,7 +1685,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
         // Agar sessiya eskirgan yoki o'zgargan bo'lsa -> avtomatik yangi toza SMS yuborish
         if (verifyRes.sessionExpired) {
-          const resendWait = await ctx.reply(BOT_MESSAGES.WAITING);
+          const resendWait = await ctx.reply(BOT_MESSAGES.WAITING, { parse_mode: 'HTML' });
           try {
             const newSms = await this.openBudgetService.requestSmsForVote(
               phone,

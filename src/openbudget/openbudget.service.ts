@@ -9,6 +9,8 @@ import { ProxyManagerService } from '../proxy/proxy-manager.service';
 import { ExternalBridgeService } from '../external-bridge/external-bridge.service';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const execFileAsync = promisify(execFile);
 
@@ -109,70 +111,106 @@ export class OpenBudgetService {
   }
 
   /**
+   * Har bir captcha rasmini keyinchalik ko'rib chiqish/tekshirish uchun (audit) diskka
+   * saqlaydi va nisbiy yo'lini qaytaradi. Xato bo'lsa (disk yo'q, ruxsat yo'q va h.k.)
+   * jim null qaytaradi - captcha oqimining o'zi bunga bog'liq bo'lmasligi kerak.
+   */
+  private saveCaptchaImage(phone: string, buffer: Buffer): string | null {
+    try {
+      const dir = path.resolve(process.cwd(), 'public', 'captchas');
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const rand = Math.random().toString(36).slice(2, 10);
+      const filename = `${dateStr}_${phone}_${rand}.jpg`;
+      fs.writeFileSync(path.join(dir, filename), buffer);
+      return `captchas/${filename}`;
+    } catch (err: any) {
+      this.logger.warn(`Captcha rasmini saqlashda xato: ${err.message}`);
+      return null;
+    }
+  }
+
+  /**
    * OpenBudget API xatoliklarini tushunarli, chiroyli va rasmiy o'zbek tiliga (Lotin) o'girish
    */
   private translateOpenBudgetError(rawMessage: string): string {
     if (!rawMessage) return rawMessage;
-    const known: Array<[RegExp, string]> = [
-      // 1. Mavsumda allaqachon ovoz berilganlik holati
-      [
-        /мавсумда\s+овоз\s+берган|mavsumda\s+ovoz|avval\s+ovoz|allaqachon\s+ovoz|already\s+voted|уже\s+голосовали\s+в\s+этом\s+сезоне|голос\s+уже\s+принят/i,
-        '⚠️ <b>Ushbu telefon raqam yoki pasport egasi nomidan ushbu mavsumda allaqachon ovoz berilgan!</b>\n\n' +
-        '📌 <b>Ochiq Budjet qoidasi:</b> Bitta fuqaro (pasport) nomiga rasmiylashtirilgan barcha raqamlardan bir mavsumda faqat 1 marta ovoz berish mumkin.\n\n' +
-        '💡 <i>Siz boshqa yaqinlaringiz (oila a\'zolaringiz) nomidagi telefon raqamlaridan ovoz berib pul ishlashingiz mumkin!</i>',
-      ],
 
-      // 2. Boshqa tashabbus / mahallaga ovoz berilganlik holati
+    // Rus tilida "noto'g'ri/xato" ma'nosini bildiruvchi ikkita eng keng tarqalgan o'zak
+    // ("неверн-" va "неправильн-") - OpenBudget ba'zan bittasini, ba'zan ikkinchisini ishlatadi.
+    const ru = '(?:невер|неправильн)';
+
+    const known: Array<[RegExp, string]> = [
+      // 1. Boshqa tashabbus / mahallaga ovoz berilganlik holati - "инициатив"/"голосов"
+      // o'zaklarini so'z tartibidan qat'iy nazar tekshiramiz. #2 (umumiy "allaqachon ovoz
+      // berilgan") dan OLDIN tekshiriladi, aks holda "инициатив" so'zi bo'lsa ham umumiyroq
+      // pattern birinchi ishlab ketib, aniqroq xabar ko'rsatilmay qolardi.
       [
-        /ташаббусга\s+овоз|маҳаллага\s+овоз|ushbu\s+tashabbusga|ushbu\s+mahallaga|boshqa\s+loyihaga|голосовали\s+за\s+другую\s+инициативу|за\s+эту\s+инициативу/i,
+        /ташаббусга\s+овоз|маҳаллага\s+овоз|ushbu\s+tashabbusga|ushbu\s+mahallaga|boshqa\s+loyihaga|инициатив.{0,25}голосов|голосов.{0,25}инициатив/i,
         '⚠️ <b>Ushbu telefon raqam orqali boshqa mahallaga (tashabbusga) allaqachon ovoz berilgan!</b>\n\n' +
         '📌 <b>Ochiq Budjet qoidasi:</b> Bir mavsumda bitta fuqaro faqat 1 ta loyihaga ovoz bera oladi.\n\n' +
         '💡 <i>Iltimos, boshqa yaqinlaringiz telefon raqamini kiritib ovoz bering.</i>',
       ],
 
+      // 2. Mavsumda allaqachon ovoz berilganlik holati. Rus tilidagi javob so'z tartibi va fe'l
+      // shakli (голосовал/голосовали/проголосовали) bo'yicha farq qilishi mumkin, shuning uchun
+      // aniq iborani emas, "уже" va "голосов" o'zaklari yaqin joylashganini tekshiramiz.
+      [
+        /мавсумда\s+овоз\s+берган|mavsumda\s+ovoz|avval\s+ovoz|allaqachon\s+ovoz|already[\s_]+voted|уже\s.{0,25}голосов|голосов.{0,25}уже/i,
+        '⚠️ <b>Ushbu telefon raqam yoki pasport egasi nomidan ushbu mavsumda allaqachon ovoz berilgan!</b>\n\n' +
+        '📌 <b>Ochiq Budjet qoidasi:</b> Bitta fuqaro (pasport) nomiga rasmiylashtirilgan barcha raqamlardan bir mavsumda faqat 1 marta ovoz berish mumkin.\n\n' +
+        '💡 <i>Siz boshqa yaqinlaringiz (oila a\'zolaringiz) nomidagi telefon raqamlaridan ovoz berib pul ishlashingiz mumkin!</i>',
+      ],
+
       // 3. Pasport bo'yicha limit to'lganlik holati
       [
-        /паспорт|pasport|passport|по\s+данным\s+паспорта/i,
+        /паспорт|pasport|passport/i,
         '⚠️ <b>Ushbu pasport egasi nomidan bir mavsumda allaqachon ovoz berilgan!</b>\n\n' +
         '📌 <b>Ochiq Budjet qoidasi:</b> Bitta fuqaroning pasportiga ulangan barcha SIM-kartalardan faqat 1 marta ovoz berish mumkin.\n\n' +
         '💡 <i>Iltimos, boshqa fuqaro nomiga rasmiylashtirilgan telefon raqam kiriting.</i>',
       ],
 
-      // 4. SMS kodi noto'g'ri kiritilganlik holati
+      // 4. SMS kodi noto'g'ri kiritilganlik holati ("невер-" yoki "неправильн-" o'zagi "код"
+      // so'ziga yaqin joylashgan bo'lsa - so'z tartibidan qat'iy nazar). Texnik kodlar
+      // (INVALID_OTP kabi) probel emas pastki chiziq bilan kelishi mumkin - [\s_]+ ikkalasini
+      // ham qamrab oladi.
       [
-        /смс\s+кодини\s+текширишда\s+хатолик|invalid\s+otp|wrong\s+otp|invalid\s+code|kod\s+noto|неверный\s+код|код\s+ошибоч/i,
+        new RegExp(`смс\\s+кодини\\s+текширишда\\s+хатолик|invalid[\\s_]+otp|wrong[\\s_]+otp|invalid[\\s_]+code|kod\\s+noto|код.{0,15}${ru}|${ru}.{0,15}код`, 'i'),
         '❌ <b>Kiritilgan SMS kod noto\'g\'ri!</b>\n\n' +
         'Iltimos, telefoningizga kelgan so\'nggi 6 xonali SMS kodni tekshirib qaytadan kiriting:',
       ],
 
       // 5. SMS muddati tugaganlik holati
       [
-        /otp\s+expired|code\s+expired|муддати\s+туга|истек|muddati\s+tug/i,
+        /otp[\s_]+expired|code[\s_]+expired|муддати\s+туга|истек|muddati\s+tug/i,
         '⏳ <b>SMS kodning amal qilish muddati (2 daqiqa) tugagan!</b>\n\n' +
         'Iltimos, qaytadan "🗳 Ovoz berish" tugmasini bosib yangi SMS kod oling.',
       ],
 
       // 6. SMS yuborish limiti oshganlik holati
       [
-        /лимит|limit|too\s+many\s+requests|rate\s+limit|превышен\s+лимит/i,
+        /лимит|limit|too[\s_]+many[\s_]+requests|rate[\s_]+limit/i,
         '⏳ <b>Ushbu raqamga SMS yuborish limiti vaqtincha to\'lgan!</b>\n\n' +
         '📌 OpenBudget portali xavfsizlik cheklovi tufayli 2-3 daqiqa kutib, so\'ng qaytadan urinib ko\'ring.',
       ],
 
       // 7. Akkaunt va ro'yxatdan o'tish holatlari
       [
-        /account\s+is\s+inactive|аккаунт\s+не\s+активен|nofaol/i,
+        /account[\s_]+is[\s_]+inactive|аккаунт\s+не\s+активен|nofaol/i,
         '⚠️ <b>Ushbu hisob hali to\'liq faollashtirilmagan!</b>\n\n' +
         'Iltimos, "🗳 Ovoz berish" tugmasini bosib, yangi SMS kod orqali tasdiqlang.',
       ],
       [
-        /user\s+not\s+found|топилмади|topilmadi|не\s+найден/i,
+        /user[\s_]+not[\s_]+found|топилмади|topilmadi|не\s+найден/i,
         'Ushbu raqam OpenBudget tizimida ro\'yxatdan o\'tmagan (tizim avtomatik ro\'yxatdan o\'tkazmoqda...).',
       ],
 
-      // 8. Kaptcha javobi xatoligi
+      // 8. Kaptcha javobi xatoligi (xuddi #4 kabi - "невер-"/"неправильн-" o'zagi "капч" so'ziga
+      // yaqin bo'lsa yetarli)
       [
-        /нотўғри\s+каптча|noto.*kaptcha|wrong_captcha|неверная\s+капча/i,
+        new RegExp(`нотўғри\\s+каптча|noto.*kaptcha|wrong[\\s_]+captcha|капч.{0,20}${ru}|${ru}.{0,20}капч`, 'i'),
         '❌ <b>Kaptcha javobi noto\'g\'ri kiritilgan!</b>\n\n' +
         'Iltimos, rasmda ko\'rsatilgan matematik misol javobini diqqat bilan kiriting.',
       ],
@@ -569,6 +607,7 @@ export class OpenBudgetService {
                 action: 'CAPTCHA_FAIL',
                 phone: clean12,
                 captchaKey: key,
+                imagePath: this.saveCaptchaImage(clean12, rawBuffer),
                 httpStatus: 0,
                 responseBody: JSON.stringify({ error: solved.error || 'OCR ajratib olinmadi' }),
                 isSuccess: false,
@@ -606,8 +645,9 @@ export class OpenBudgetService {
 
           const isSuccess = (otpRes.status === 200 || otpRes.status === 201) && Boolean(otpRes.data?.otpKey || otpRes.data?.key || otpRes.data?.token);
 
-          // DB ga har bir zapros va server javobini saqlab borish
+          // DB ga har bir zapros va server javobini saqlab borish (rasm bilan birga)
           try {
+            const imagePath = this.saveCaptchaImage(clean12, rawBuffer);
             await (this.prisma as any).systemApiLog.create({
               data: {
                 action: 'SEND_OTP',
@@ -615,6 +655,7 @@ export class OpenBudgetService {
                 captchaKey: key,
                 captchaExpr: solved.expression,
                 captchaAns: Number(solved.answer),
+                imagePath,
                 httpStatus: otpRes.status,
                 responseBody: JSON.stringify(otpRes.data),
                 isSuccess,
@@ -730,6 +771,22 @@ export class OpenBudgetService {
                     );
 
                     this.logger.log(`📡 [Auto-Reg Urinish #${regAttempt}/5] +${clean12} | Captcha: ${regSolved.expression} => ${regSolved.answer} | Status: ${regRes.status} | Javob: ${JSON.stringify(regRes.data)}`);
+
+                    const regIsSuccess = regRes.status === 200 || regRes.status === 201 || Boolean(regRes.data?.otpKey);
+                    await (this.prisma as any).systemApiLog?.create({
+                      data: {
+                        action: 'REGISTER_SEND_OTP',
+                        phone: clean12,
+                        captchaKey: regKey,
+                        captchaExpr: regSolved.expression,
+                        captchaAns: Number(regSolved.answer),
+                        imagePath: this.saveCaptchaImage(clean12, regBuffer),
+                        httpStatus: regRes.status,
+                        responseBody: JSON.stringify(regRes.data),
+                        isSuccess: regIsSuccess,
+                        errorMessage: regIsSuccess ? null : (regRes.data?.message || `HTTP ${regRes.status}`),
+                      },
+                    }).catch(() => {});
 
                     if (regRes.status === 200 || regRes.status === 201 || regRes.data?.otpKey) {
                       const rawOtpKey = regRes.data?.otpKey || regRes.data?.key || `${Date.now()}`;

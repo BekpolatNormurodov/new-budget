@@ -231,6 +231,7 @@ model SystemApiLog {
   captchaKey   String?
   captchaExpr  String?
   captchaAns   Int?
+  imagePath    String?  // captcha rasmining /app/public/ ga nisbatan yo'li (masalan "captchas/2026-08-22_998901234567_a1b2c3.png")
   httpStatus   Int?
   responseBody String?  @db.Text
   isSuccess    Boolean  @default(false)
