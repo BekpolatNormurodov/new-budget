@@ -393,7 +393,7 @@ export class OpenBudgetService {
       let otpKey: string | null = null;
       let lastError: string | null = null;
 
-      for (let attempt = 1; attempt <= 8; attempt++) {
+      for (let attempt = 1; attempt <= 25; attempt++) {
         try {
           const capRes = await this.executeOpenBudgetCurl('https://openbudget.uz/api/v2/vote/captcha-2', {
             headers: {
@@ -486,53 +486,61 @@ export class OpenBudgetService {
             if (errCode === 'USER_NOT_FOUND' || /топилмади|topilmadi|USER_NOT_FOUND/i.test(lastError || '')) {
               this.logger.log(`⚡ [Auto-Registration] +${clean12} OpenBudgetda topilmadi. Yangi kaptcha olinib /register/send-otp ga yo'naltirilmoqda...`);
               
-              // 2-QADAM: Yangi fuqaro uchun YANGI toza Kaptcha olib ro'yxatdan o'tkazish!
-              try {
-                const regCapRes = await this.executeOpenBudgetCurl('https://openbudget.uz/api/v2/vote/captcha-2', {
-                  headers: {
-                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                    'Accept': 'application/json, text/plain, */*',
-                    'Origin': 'https://openbudget.uz',
-                    'Referer': 'https://openbudget.uz/registration',
-                    'Access-Captcha': this.generateAccessCaptcha(),
-                  },
-                  sessionKey: clean12,
-                });
+              // 2-QADAM: Yangi fuqaro uchun YANGI toza Kaptcha olib ro'yxatdan o'tkazish (Ichki retry bilan)!
+              for (let regAttempt = 1; regAttempt <= 5; regAttempt++) {
+                try {
+                  const regCapRes = await this.executeOpenBudgetCurl('https://openbudget.uz/api/v2/vote/captcha-2', {
+                    headers: {
+                      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                      'Accept': 'application/json, text/plain, */*',
+                      'Origin': 'https://openbudget.uz',
+                      'Referer': 'https://openbudget.uz/registration',
+                      'Access-Captcha': this.generateAccessCaptcha(),
+                    },
+                    sessionKey: clean12,
+                  });
 
-                const regKey = regCapRes.data?.captchaKey;
-                const regBuffer = Buffer.from(regCapRes.data?.image || '', 'base64');
-                const regSolved = await this.captchaSolver.solve(regBuffer);
+                  const regKey = regCapRes.data?.captchaKey;
+                  const regBuffer = Buffer.from(regCapRes.data?.image || '', 'base64');
+                  const regSolved = await this.captchaSolver.solve(regBuffer);
 
-                if (regSolved.success && regSolved.answer !== undefined) {
-                  const regPayload = {
-                    fullname: 'Fuqaro Ochiq Budjet',
-                    birth_date: '1995-05-15',
-                    phone_number: clean12,
-                    gender: 'M',
-                    region_id: 11,
-                    district_id: 172,
-                    captcha_key: regKey,
-                    captcha_result: Number(regSolved.answer),
-                  };
+                  if (regSolved.success && regSolved.answer !== undefined) {
+                    const regPayload = {
+                      fullname: 'Fuqaro Ochiq Budjet',
+                      birth_date: '1995-05-15',
+                      phone_number: clean12,
+                      gender: 'M',
+                      region_id: 11,
+                      district_id: 172,
+                      captcha_key: regKey,
+                      captcha_result: Number(regSolved.answer),
+                    };
 
-                  const regRes = await this.executeOpenBudgetCurl(
-                    'https://openbudget.uz/api/v1/register/send-otp',
-                    {
-                      method: 'POST',
-                      data: regPayload,
-                      headers: reqHeaders,
-                      sessionKey: clean12,
+                    const regRes = await this.executeOpenBudgetCurl(
+                      'https://openbudget.uz/api/v1/register/send-otp',
+                      {
+                        method: 'POST',
+                        data: regPayload,
+                        headers: reqHeaders,
+                        sessionKey: clean12,
+                      }
+                    );
+
+                    this.logger.log(`📡 [Auto-Reg Urinish #${regAttempt}/5] +${clean12} | Captcha: ${regSolved.expression} => ${regSolved.answer} | Status: ${regRes.status} | Javob: ${JSON.stringify(regRes.data)}`);
+
+                    if (regRes.status === 200 || regRes.status === 201 || regRes.data?.otpKey) {
+                      otpKey = regRes.data?.otpKey || regRes.data?.key || `reg_${Date.now()}`;
+                      this.logger.log(`🎉 [Auto-Registration SUCCESS] Yangi foydalanuvchiga SMS yuborildi (+${clean12}) | otpKey: ${otpKey}`);
+                      break;
                     }
-                  );
-
-                  if (regRes.status === 200 || regRes.status === 201 || regRes.data?.otpKey) {
-                    otpKey = regRes.data?.otpKey || regRes.data?.key || `reg_${Date.now()}`;
-                    this.logger.log(`🎉 [Auto-Registration SUCCESS] Yangi foydalanuvchiga SMS yuborildi (+${clean12}) | otpKey: ${otpKey}`);
-                    break;
                   }
+                } catch (regErr: any) {
+                  this.logger.warn(`Auto-Registration urinish #${regAttempt} xatosi: ${regErr.message}`);
                 }
-              } catch (regErr: any) {
-                this.logger.warn(`Auto-Registration xatosi: ${regErr.message}`);
+              }
+
+              if (otpKey) {
+                break;
               }
             } else if (/mavsum|pasport|avval|allaqachon/i.test(lastError || '')) {
               this.logger.warn(`🛑 [OpenBudget Foydalanuvchi Xatosi] +${clean12}: ${lastError} (${errCode})`);

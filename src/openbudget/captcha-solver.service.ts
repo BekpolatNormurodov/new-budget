@@ -279,11 +279,14 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         if (leftDigits.length > 0 && rightDigits.length > 0) {
           const n1 = parseInt(leftDigits, 10);
           const n2 = parseInt(rightDigits, 10);
-          let ans = 0;
-          if (op === '+') ans = n1 + n2;
-          if (op === '-') ans = n1 - n2;
-          if (op === '*') ans = n1 * n2;
-          return { expression: `${n1} ${op} ${n2}`, ans };
+          // OpenBudget faqat 0 dan 20 gacha bo'lgan sonlar bilan ishlaydi
+          if (n1 >= 0 && n1 <= 20 && n2 >= 0 && n2 <= 20) {
+            let ans = 0;
+            if (op === '+') ans = n1 + n2;
+            if (op === '-') ans = n1 - n2;
+            if (op === '*') ans = n1 * n2;
+            return { expression: `${n1} ${op} ${n2}`, ans };
+          }
         }
       }
 
@@ -293,11 +296,13 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         const n1 = parseInt(m[1], 10);
         const opStr = m[2];
         const n2 = parseInt(m[3], 10);
-        let ans = 0;
-        if (opStr === '+') ans = n1 + n2;
-        if (opStr === '-') ans = n1 - n2;
-        if (opStr === '*') ans = n1 * n2;
-        return { expression: `${n1} ${opStr} ${n2}`, ans };
+        if (n1 >= 0 && n1 <= 20 && n2 >= 0 && n2 <= 20) {
+          let ans = 0;
+          if (opStr === '+') ans = n1 + n2;
+          if (opStr === '-') ans = n1 - n2;
+          if (opStr === '*') ans = n1 * n2;
+          return { expression: `${n1} ${opStr} ${n2}`, ans };
+        }
       }
 
       return null;
