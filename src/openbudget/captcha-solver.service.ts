@@ -26,7 +26,6 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     const cpuCount = os.cpus()?.length || 2;
-    // 6 ta CPU Core va 16GB RAM imkoniyatidan 100% to'liq foydalanish uchun poolSize ni 6 tagacha chiqaramiz
     this.poolSize = Math.max(4, Math.min(8, cpuCount));
     this.logger.log(`⚡ Initializing Tesseract OCR Multi-Worker Pool (${this.poolSize} parallel workers across ${cpuCount} CPU cores)...`);
 
@@ -39,13 +38,11 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
 
   private async createSingleWorker(): Promise<Worker> {
     const worker = await createWorker('eng');
-
     await worker.setParameters({
-      tessedit_char_whitelist: '0123456789+-*lI|OQo',
-      tessedit_pageseg_mode: '10' as any,
+      tessedit_char_whitelist: '0123456789+-*',
+      tessedit_pageseg_mode: '7' as any, // PSM 7: single text line
       user_defined_dpi: '300' as any,
     });
-
     return worker;
   }
 
@@ -94,10 +91,6 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  async getWorker(): Promise<Worker> {
-    return this.acquireWorker();
-  }
-
   releaseWorker(worker: Worker) {
     if (this.waitQueue.length > 0) {
       const nextResolver = this.waitQueue.shift()!;
@@ -108,7 +101,68 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * 100% Aniq Doiraviy Island & Belgilar Segmentatsiyasi (300 DPI)
+   * Kaptcha rasmdan matematik ifodani ajratib olish.
+   * OpenBudget qoidalari:
+   *  - Operandlar doimo 0..20 oralig'ida
+   *  - Natija hech qachon manfiy bo'lmaydi (ya'ni a - b faqat a >= b bo'lganda)
+   */
+  private parseExpression(raw: string): { expression: string; ans: number } | null {
+    // Faqat raqamlar va operatorlar
+    const cleaned = raw.replace(/[^0-9+\-*]/g, '').trim();
+
+    // Regex: raqam + operator + raqam
+    const m = cleaned.match(/^(\d{1,2})([\+\-\*])(\d{1,2})$/);
+    if (!m) return null;
+
+    const n1 = parseInt(m[1], 10);
+    const op = m[2];
+    const n2 = parseInt(m[3], 10);
+
+    // Operandlar chegarasi
+    if (n1 < 0 || n1 > 20 || n2 < 0 || n2 > 20) return null;
+
+    // Manfiy natijani rad etish
+    if (op === '-' && n2 > n1) return null;
+
+    let ans = 0;
+    if (op === '+') ans = n1 + n2;
+    if (op === '-') ans = n1 - n2;
+    if (op === '*') ans = n1 * n2;
+
+    return { expression: `${n1} ${op} ${n2}`, ans };
+  }
+
+  /**
+   * ASOSIY STRATEGIYA: Butun rasmni bitta satr sifatida o'qish (PSM 7).
+   * Kaptcha fonini oqlash, kontrastni oshirish, keskinlashtirish.
+   */
+  private async solveFullImage(rawBuffer: Buffer, worker: Worker, threshold: number): Promise<{ expression: string; ans: number } | null> {
+    try {
+      const processed = await sharp(rawBuffer, { failOn: 'none' })
+        .grayscale()
+        // Kontrastni kuchli oshirish
+        .linear(2.5, -(128 * 2.5 - 128))
+        // Ikkiliklashtirish (threshold)
+        .threshold(threshold)
+        // Kattalashtirish (OCR aniqroq ishlaydi)
+        .resize(400, 120, { fit: 'contain', background: { r: 255, g: 255, b: 255 } })
+        // Qo'shimcha oq chegara
+        .extend({ top: 20, bottom: 20, left: 20, right: 20, background: { r: 255, g: 255, b: 255 } })
+        .withMetadata({ density: 300 })
+        .png()
+        .toBuffer();
+
+      const result = await worker.recognize(processed);
+      const raw = result.data.text.trim();
+
+      return this.parseExpression(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * ZAXIRA STRATEGIYA: Doira segmentatsiyasi bilan per-belgi OCR.
    */
   async solveFullCaptchaWithWorker(rawBuffer: Buffer, worker: Worker, innerTh: number = 135): Promise<{ expression: string; ans: number } | null> {
     try {
@@ -119,7 +173,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
 
       const { width, height } = info;
 
-      // 1. Tashqi oq fonni flood fill bilan belgilash (Threshold: 150)
+      // Tashqi oq fonni flood fill bilan belgilash
       const bg = Array.from({ length: height }, () => Array(width).fill(false));
       const q: [number, number][] = [];
       for (let x = 0; x < width; x++) {
@@ -143,7 +197,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      // 2. Faqat qora doiralar (bloblar)
+      // Faqat qora doiralar (bloblar)
       const isBlack = Array.from({ length: height }, () => Array(width).fill(false));
       for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
@@ -193,7 +247,6 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         const c = circles[i];
         const bw = c.maxX - c.minX + 1, bh = c.maxY - c.minY + 1;
         if (bw > bh * 1.5 || bh <= 12) {
-          // Faqat o'rtada va yetarlicha keng chiziq bo'lsa minus deb olamiz
           if (bw >= 14 && bh >= 3 && i > 0 && i < circles.length - 1) {
             results.push('-');
           }
@@ -247,12 +300,8 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         let txt = ret.data.text.trim().replace(/[^0-9\+\-\*lI|OQo=]/g, '');
         txt = txt.replace(/[lI|]/g, '1').replace(/[OQo]/g, '0');
 
-        // Boshida kelgan noto'g'ri minusni tozalash
-        if (results.length === 0 && txt === '-') {
-          continue;
-        }
+        if (results.length === 0 && txt === '-') continue;
 
-        // Oxirgi tenglik (=) yoki oxirgi ortiqcha belgini tashlab yuborish
         const hasExistingOp = results.some(r => r === '+' || r === '-' || r === '*');
         if (i === circles.length - 1 && hasExistingOp && (txt === '-' || txt === '1' || txt === '=')) {
           continue;
@@ -263,58 +312,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      let op = null;
-      let opIdx = -1;
-      for (let i = 0; i < results.length; i++) {
-        if (results[i] === '+' || results[i] === '-' || results[i] === '*') {
-          op = results[i];
-          opIdx = i;
-          break;
-        }
-      }
-
-      if (op && opIdx > 0 && opIdx < results.length) {
-        const leftDigits = results.slice(0, opIdx).join('').replace(/\D/g, '');
-        const rightDigits = results.slice(opIdx + 1).join('').replace(/\D/g, '');
-        if (leftDigits.length > 0 && rightDigits.length > 0) {
-          const n1 = parseInt(leftDigits, 10);
-          const n2 = parseInt(rightDigits, 10);
-          // OpenBudget faqat 0 dan 20 gacha bo'lgan sonlar bilan ishlaydi
-          if (n1 >= 0 && n1 <= 20 && n2 >= 0 && n2 <= 20) {
-            // OpenBudget hech qachon manfiy natija bermaydi.
-            // Agar OCR "-" deb o'qigan bo'lsa, lekin n2 > n1 bo'lsa → bu xato o'qish, rad et.
-            if (op === '-' && n2 > n1) {
-              return null;
-            }
-            let ans = 0;
-            if (op === '+') ans = n1 + n2;
-            if (op === '-') ans = n1 - n2;
-            if (op === '*') ans = n1 * n2;
-            return { expression: `${n1} ${op} ${n2}`, ans };
-          }
-        }
-      }
-
-      const cleanExpr = results.join('');
-      const m = cleanExpr.match(/^(\d+)([\+\-\*])(\d+)$/);
-      if (m) {
-        const n1 = parseInt(m[1], 10);
-        const opStr = m[2];
-        const n2 = parseInt(m[3], 10);
-        if (n1 >= 0 && n1 <= 20 && n2 >= 0 && n2 <= 20) {
-          // Xuddi shu qoida: manfiy natija bo'lsa → rad et
-          if (opStr === '-' && n2 > n1) {
-            return null;
-          }
-          let ans = 0;
-          if (opStr === '+') ans = n1 + n2;
-          if (opStr === '-') ans = n1 - n2;
-          if (opStr === '*') ans = n1 * n2;
-          return { expression: `${n1} ${opStr} ${n2}`, ans };
-        }
-      }
-
-      return null;
+      return this.parseExpression(results.join(''));
     } catch (err: any) {
       this.logger.error('solveFullCaptchaWithWorker error:', err);
       return null;
@@ -334,21 +332,20 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
     } else if (Buffer.isBuffer(imageInput)) {
       buffer = imageInput;
     } else {
-      return { success: false, error: 'Noto\'g\'ri rasm formati.' };
+      return { success: false, error: "Noto'g'ri rasm formati." };
     }
 
     const worker = await this.acquireWorker();
     try {
-      // 1-Pass: Standart 135 threshold
-      let parsed = await this.solveFullCaptchaWithWorker(buffer, worker, 135);
-      // 2-Pass: Qoraroq rasmlar uchun 110 threshold
-      if (!parsed) {
-        parsed = await this.solveFullCaptchaWithWorker(buffer, worker, 110);
-      }
-      // 3-Pass: Och pastel rasmlar uchun 150 threshold
-      if (!parsed) {
-        parsed = await this.solveFullCaptchaWithWorker(buffer, worker, 150);
-      }
+      // === ASOSIY: Butun rasm OCR (PSM 7) — eng ishonchli ===
+      let parsed = await this.solveFullImage(buffer, worker, 128);
+      if (!parsed) parsed = await this.solveFullImage(buffer, worker, 100);
+      if (!parsed) parsed = await this.solveFullImage(buffer, worker, 150);
+
+      // === ZAXIRA: Doira segmentatsiyasi ===
+      if (!parsed) parsed = await this.solveFullCaptchaWithWorker(buffer, worker, 135);
+      if (!parsed) parsed = await this.solveFullCaptchaWithWorker(buffer, worker, 110);
+      if (!parsed) parsed = await this.solveFullCaptchaWithWorker(buffer, worker, 155);
 
       if (parsed) {
         return {
