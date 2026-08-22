@@ -339,8 +339,13 @@ export class OpenBudgetService {
   /**
    * Ochiq Budjet tizimiga SMS yuborish so'rovi (Anti-Bot, Auto-Failover & Bridge Safe Fallback)
    */
-  async requestSmsForVote(phone: string, initiativeId?: number): Promise<SendSmsResult> {
+  async requestSmsForVote(
+    phone: string,
+    initiativeId?: number,
+    manualCaptchaResolver?: (imageBuffer: Buffer) => Promise<number | null>,
+  ): Promise<SendSmsResult> {
     const { clean9, clean12 } = this.normalizePhone(phone);
+    let manualCaptchaAttempted = false;
 
     // 1. Telefon raqam oldin ovoz berganligini tekshirish
     const existingVote = await this.prisma.vote.findFirst({
@@ -408,7 +413,30 @@ export class OpenBudgetService {
           const key = capRes.data?.captchaKey;
           const cookie = capRes.cookie;
           const rawBuffer = Buffer.from(capRes.data?.image || '', 'base64');
-          const solved = await this.captchaSolver.solve(rawBuffer);
+          let solved = await this.captchaSolver.solve(rawBuffer);
+
+          // Avtomatik OCR bir necha marta muvaffaqiyatsiz bo'lsa, foydalanuvchining
+          // o'ziga kaptchani yechishni bir marta taklif qilamiz (spam bo'lmasligi uchun faqat 1 marta).
+          if (
+            (!solved.success || solved.answer === undefined) &&
+            manualCaptchaResolver &&
+            !manualCaptchaAttempted &&
+            attempt >= 3
+          ) {
+            manualCaptchaAttempted = true;
+            try {
+              const manualAnswer = await manualCaptchaResolver(rawBuffer);
+              if (manualAnswer !== null && manualAnswer !== undefined && !Number.isNaN(manualAnswer)) {
+                solved = {
+                  success: true,
+                  answer: manualAnswer,
+                  expression: 'manual',
+                } as any;
+              }
+            } catch (manualErr: any) {
+              this.logger.warn(`Foydalanuvchi kaptcha yechishida xato: ${manualErr.message}`);
+            }
+          }
 
           if (!solved.success || solved.answer === undefined) {
             await (this.prisma as any).systemApiLog?.create({

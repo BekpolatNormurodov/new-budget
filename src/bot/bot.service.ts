@@ -13,6 +13,7 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
   private bot: Telegraf;
   private botInfo: any;
   private autoApproveInterval: any = null;
+  private pendingCaptchaResolvers = new Map<number, { resolve: (v: number | null) => void; timeout: any }>();
 
   constructor(
     private readonly configService: ConfigService,
@@ -536,6 +537,23 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
     this.bot.on('text', async (ctx) => {
       try {
         const text = ctx.message.text.trim();
+
+        // Foydalanuvchi kaptcha rasmiga javob kutilayotgan bo'lsa, avval shu javobni ushlaymiz
+        const pendingCaptcha = this.pendingCaptchaResolvers.get(ctx.from.id);
+        if (pendingCaptcha) {
+          const match = text.replace(/\s/g, '').match(/-?\d+/);
+          const num = match ? parseInt(match[0], 10) : NaN;
+          clearTimeout(pendingCaptcha.timeout);
+          this.pendingCaptchaResolvers.delete(ctx.from.id);
+          pendingCaptcha.resolve(Number.isNaN(num) ? null : num);
+          if (!Number.isNaN(num)) {
+            await ctx.reply('✅ Rahmat! Javobingiz qabul qilindi, davom etilmoqda...');
+          } else {
+            await ctx.reply('⚠️ Raqam aniqlanmadi, avtomatik urinish davom etmoqda...');
+          }
+          return;
+        }
+
         const user = await this.getOrCreateUser(ctx);
         if (!user || user.isBanned) return;
 
@@ -623,6 +641,36 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Avtomatik OCR kaptchani yecha olmaganda, foydalanuvchining o'ziga rasmni yuborib,
+   * javobini kutadi (belgilangan vaqt ichida javob kelmasa, avtomatik urinish davom etadi).
+   */
+  private askUserToSolveCaptcha(ctx: Context, imageBuffer: Buffer): Promise<number | null> {
+    const userId = ctx.from.id;
+    return new Promise<number | null>((resolve) => {
+      const timeout = setTimeout(() => {
+        if (this.pendingCaptchaResolvers.get(userId)) {
+          this.pendingCaptchaResolvers.delete(userId);
+          resolve(null);
+        }
+      }, 45000);
+
+      this.pendingCaptchaResolvers.set(userId, { resolve, timeout });
+
+      ctx
+        .replyWithPhoto(
+          { source: imageBuffer },
+          { caption: '🧮 Robot kaptchani avtomatik o\'qiy olmadi.\n\nIltimos, rasmdagi misolni hisoblab, javobini (faqat son) yozib yuboring:' },
+        )
+        .catch((err) => {
+          this.logger.warn(`Kaptcha rasmini yuborishda xato: ${err.message}`);
+          clearTimeout(timeout);
+          this.pendingCaptchaResolvers.delete(userId);
+          resolve(null);
+        });
+    });
+  }
+
+  /**
    * Telefon raqam kiritilganda Open Budget SMS so'rash
    */
   private async handlePhoneNumberInput(ctx: Context, user: any, rawPhone: string) {
@@ -651,7 +699,11 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
 
     try {
       const initiative = await this.openBudgetService.getDefaultInitiative();
-      const res = await this.openBudgetService.requestSmsForVote(clean12, initiative.id);
+      const res = await this.openBudgetService.requestSmsForVote(
+        clean12,
+        initiative.id,
+        (imageBuffer) => this.askUserToSolveCaptcha(ctx, imageBuffer),
+      );
 
       if (!res.success) {
         await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
