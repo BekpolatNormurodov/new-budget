@@ -1570,7 +1570,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
 
         // ⚡ Administratorga (Xurshid) zudlik bilan nosozlik xabarnomasini yuborish
-        const errMsg = res.error || 'OpenBudget tizimi SMS kod yubormadi';
+        const errMsg = res.error || 'SMS kod yuborilmadi';
         const adminAlertText = `⚠️ <b>[BOT XATOLIK SIGNALI]</b>\n\n👤 <b>Foydalanuvchi:</b> ${user.firstName || 'Noma\'lum'} (@${user.username || 'yo\'q'})\n📱 <b>Telefon:</b> +${clean12}\n🤖 <b>Bot:</b> @${botRecord.botUsername || botRecord.id}\n❌ <b>Xatolik:</b> <code>${errMsg}</code>\n⏰ <b>Vaqt:</b> ${new Date().toLocaleTimeString('uz-UZ')}`;
         
         // 2053690211 - Xurshid Ismoilov Telegram ID
@@ -1639,7 +1639,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     } catch (err) {
       this.clearActiveCaptchaMessage(botRecord.id, user.id);
       await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
-      await ctx.reply('❌ Tizimda xatolik yuz berdi. Iltimos keyinroq urinib ko\'ring.');
+      await ctx.reply('❌ Nimadir xato ketdi. Iltimos, birozdan so\'ng qaytadan urinib ko\'ring.');
     }
   }
 

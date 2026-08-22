@@ -78,19 +78,23 @@ export class ProxyManagerService implements OnModuleInit {
     const rawList = proxyListStr.split(',').map((p) => p.trim()).filter(Boolean);
     const parsed = rawList.map((p) => this.parseProxyUrl(p)).filter((item): item is ProxyItem => item !== null);
 
-    // .env dagi proxylarni DB bilan sinxronlash (yo'q bo'lganlarini qo'shish)
+    // .env dagi proxylarni DB bilan sinxronlash (eski o'chirilganlarini tozalash va yangilarini saqlash)
     let blockedUrls = new Set<string>();
     try {
+      const activeUrls = parsed.map((p) => p.url);
+      await this.prisma.proxyServer.deleteMany({
+        where: { url: { notIn: activeUrls } }
+      });
       for (const item of parsed) {
         await this.prisma.proxyServer.upsert({
           where: { url: item.url },
-          update: {},
-          create: { url: item.url, host: item.host, port: item.port, protocol: item.protocol },
+          update: { host: item.host, port: item.port, protocol: item.protocol },
+          create: { url: item.url, host: item.host, port: item.port, protocol: item.protocol, note: 'Active Rotating Pool' },
         });
       }
       const blocked = await this.prisma.proxyServer.findMany({ where: { isBlocked: true }, select: { url: true } });
       blockedUrls = new Set(blocked.map((b) => b.url));
-    } catch (e) {
+    } catch (e: any) {
       this.logger.warn(`⚠️ Proxy holatini DB bilan sinxronlashda xatolik: ${e.message}`);
     }
 

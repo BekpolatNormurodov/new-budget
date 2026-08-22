@@ -591,8 +591,8 @@ export class OpenBudgetService {
                     // captcha bo'lmasa) bu server tomonidagi vaqtinchalik xato ekanini bildiramiz.
                     const regNote = !isRegRetry
                       ? (regAttempt === 1
-                          ? '🎉 Ajoyib! Siz Ochiq Budjet tizimida hali ro\'yxatdan o\'tmagansiz - tashvishlanmang, bu atigi ~10 soniya vaqt oladi.\n\n✅ Captcha javobingiz qabul qilindi. Ro\'yxatdan o\'tishni yakunlash uchun yana bitta captchani yeching:'
-                          : '⚠️ Tizimda vaqtinchalik texnik nosozlik yuz berdi (captcha javobingiz xato emas edi, xavotir olmang). Iltimos, quyidagi yangi captchani yeching, biroz kutib davom etamiz:')
+                          ? '🎉 Ajoyib! Bu sizning birinchi ovozingiz - tashvishlanmang, bu atigi ~10 soniya vaqt oladi.\n\n✅ Captcha javobingiz qabul qilindi. Yakunlash uchun yana bitta captchani yeching:'
+                          : '🔄 Bir zumda tayyor bo\'ladi! (Captcha javobingiz xato emas edi, xavotir olmang.)\n\nQuyidagi yangi captchani yeching, davom etamiz:')
                       : undefined;
                     try {
                       const manualRegAnswer = await manualCaptchaResolver(regBuffer, isRegRetry, regNote);
@@ -652,7 +652,7 @@ export class OpenBudgetService {
                         this.logger.error(`🛑 [OpenBudget Server Xatosi] +${clean12}: registratsiya ketma-ket ${consecutiveRegServerErrors} marta "Internal server error" qaytardi (captcha bilan bog'liq emas) - to'xtatilmoqda.`);
                         return {
                           success: false,
-                          error: 'OpenBudget tizimida vaqtinchalik texnik nosozlik bor (ro\'yxatdan o\'tish xizmati javob bermayapti). Iltimos, keyinroq qaytadan urinib ko\'ring.',
+                          error: 'Hozircha ovoz berish ishlamayapti. Iltimos, birozdan so\'ng qaytadan urinib ko\'ring.',
                           initiative,
                         };
                       }
@@ -698,7 +698,7 @@ export class OpenBudgetService {
         };
       }
 
-      const finalErrMsg = lastError || 'OpenBudget tizimi SMS kod yubormadi (Kaptcha xatosi yoki vaqtinchalik cheklov). Iltimos, qaytadan urinib ko\'ring.';
+      const finalErrMsg = lastError || 'SMS kod yuborilmadi. Iltimos, qaytadan urinib ko\'ring.';
       this.logger.warn(`❌ [OpenBudget OTP Fail] +${clean12}: ${finalErrMsg}`);
       return {
         success: false,
