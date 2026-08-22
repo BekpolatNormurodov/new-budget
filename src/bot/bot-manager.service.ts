@@ -1009,7 +1009,12 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         if (!user || user.isBanned) return;
         const contact = ctx.message.contact;
         if (contact && contact.phone_number) {
-          await this.handlePhoneInput(ctx, botRecord, user, contact.phone_number);
+          // Telegraf navbatdagi yangilanishlarni ushbu handler tugagunicha olib kelmaydi
+          // (long-polling ketma-ket ishlaydi). Kaptcha javobini kutish ichkarida uzoq
+          // davom etishi mumkin bo'lgani uchun, bloklab qo'ymaslik uchun await qilinmaydi.
+          this.handlePhoneInput(ctx, botRecord, user, contact.phone_number).catch((err) => {
+            this.logger.error(`[Bot #${botRecord.id}] handlePhoneInput (kontakt) xatosi:`, err);
+          });
         }
       } catch (err) {}
     });
@@ -1083,68 +1088,79 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
           }
 
           await ctx.answerCbQuery('🔄 Yangi SMS kod so\'ralmoqda...', { show_alert: false });
-          const resendWait = await ctx.reply('⏳ Yangi SMS kod so\'ralmoqda, iltimos kuting...');
 
-          try {
-            const res = await this.openBudgetService.requestSmsForVote(
-              phone,
-              undefined,
-              (imageBuffer, isRetry) => this.askUserToSolveCaptcha(ctx, botRecord.id, imageBuffer, isRetry),
-            );
-            await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
+          // Kaptcha javobini kutish uzoq davom etishi mumkin (foydalanuvchi javobi ham shu
+          // callback_query handler orqali emas, keyingi 'text' update orqali keladi). Telegraf
+          // navbatdagi update'larni shu handler tugagunicha olib kelmagani uchun (long-polling
+          // ketma-ket ishlaydi), bloklab qo'ymaslik uchun bu qismni await qilmasdan orqa fonda
+          // ishga tushiramiz.
+          (async () => {
+            const resendWait = await ctx.reply('⏳ Yangi SMS kod so\'ralmoqda, iltimos kuting...');
 
-            if (!res.success) {
-              return ctx.reply(`❌ ${res.error || 'Qayta SMS yuborishda xatolik yuz berdi. Iltimos qaytadan urinib ko\'ring.'}`);
-            }
+            try {
+              const res = await this.openBudgetService.requestSmsForVote(
+                phone,
+                undefined,
+                (imageBuffer, isRetry) => this.askUserToSolveCaptcha(ctx, botRecord.id, imageBuffer, isRetry),
+              );
+              await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
 
-            const newSmsSentAt = Date.now();
-            await this.prisma.user.update({
-              where: { id: user.id },
-              data: {
-                tempData: JSON.stringify({
-                  phone,
-                  sessionId: res.sessionId,
-                  smsSentAt: newSmsSentAt,
-                  sessionStartedAt,
-                  botId: botRecord.id,
-                }),
-              },
-            });
-
-            // Reset 2-minute timer
-            const timeoutKey = `${botRecord.id}_${user.id}`;
-            if (this.smsTimeouts.has(timeoutKey)) {
-              clearTimeout(this.smsTimeouts.get(timeoutKey));
-            }
-            const timeoutHandle = setTimeout(async () => {
-              try {
-                const u = await this.prisma.user.findUnique({ where: { id: user.id } });
-                if (u && u.step === 'AWAITING_SMS_CODE') {
-                  await this.prisma.user.update({ where: { id: user.id }, data: { step: null, tempData: null } });
-                  const activeBot = this.activeBots.get(botRecord.id);
-                  if (activeBot) {
-                    await activeBot.bot.telegram.sendMessage(
-                      user.telegramId,
-                      `⏳ SMS kod kiritish vaqti (2 daqiqa) tugadi!\n\nIltimos, qaytadan "🗳 Ovoz berish" tugmasini bosing:`,
-                      BotKeyboards.mainMenu(user.role === 'ADMIN')
-                    ).catch(() => {});
-                  }
-                }
-              } catch (e) {}
-            }, 120000);
-            this.smsTimeouts.set(timeoutKey, timeoutHandle);
-
-            await ctx.reply(
-              `✅ <b>Yangi SMS kod (+${phone}) raqamiga yuborildi!</b>\n\n⚠️ SMS kodni kiritish uchun sizda 2 daqiqa vaqt bor.\n\nKelgan 6 xonali SMS kodni yozib yuboring:`,
-              {
-                parse_mode: 'HTML',
-                ...BotKeyboards.smsWaitingInline(),
+              if (!res.success) {
+                await ctx.reply(`❌ ${res.error || 'Qayta SMS yuborishda xatolik yuz berdi. Iltimos qaytadan urinib ko\'ring.'}`);
+                return;
               }
-            );
-          } catch (err: any) {
-            await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
-            await ctx.reply('❌ Qayta SMS so\'rashda xatolik yuz berdi.');
-          }
+
+              const newSmsSentAt = Date.now();
+              await this.prisma.user.update({
+                where: { id: user.id },
+                data: {
+                  tempData: JSON.stringify({
+                    phone,
+                    sessionId: res.sessionId,
+                    smsSentAt: newSmsSentAt,
+                    sessionStartedAt,
+                    botId: botRecord.id,
+                  }),
+                },
+              });
+
+              // Reset 2-minute timer
+              const timeoutKey = `${botRecord.id}_${user.id}`;
+              if (this.smsTimeouts.has(timeoutKey)) {
+                clearTimeout(this.smsTimeouts.get(timeoutKey));
+              }
+              const timeoutHandle = setTimeout(async () => {
+                try {
+                  const u = await this.prisma.user.findUnique({ where: { id: user.id } });
+                  if (u && u.step === 'AWAITING_SMS_CODE') {
+                    await this.prisma.user.update({ where: { id: user.id }, data: { step: null, tempData: null } });
+                    const activeBot = this.activeBots.get(botRecord.id);
+                    if (activeBot) {
+                      await activeBot.bot.telegram.sendMessage(
+                        user.telegramId,
+                        `⏳ SMS kod kiritish vaqti (2 daqiqa) tugadi!\n\nIltimos, qaytadan "🗳 Ovoz berish" tugmasini bosing:`,
+                        BotKeyboards.mainMenu(user.role === 'ADMIN')
+                      ).catch(() => {});
+                    }
+                  }
+                } catch (e) {}
+              }, 120000);
+              this.smsTimeouts.set(timeoutKey, timeoutHandle);
+
+              await ctx.reply(
+                `✅ <b>Yangi SMS kod (+${phone}) raqamiga yuborildi!</b>\n\n⚠️ SMS kodni kiritish uchun sizda 2 daqiqa vaqt bor.\n\nKelgan 6 xonali SMS kodni yozib yuboring:`,
+                {
+                  parse_mode: 'HTML',
+                  ...BotKeyboards.smsWaitingInline(),
+                }
+              );
+            } catch (err: any) {
+              await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
+              await ctx.reply('❌ Qayta SMS so\'rashda xatolik yuz berdi.');
+            }
+          })().catch((err) => {
+            this.logger.error(`[Bot #${botRecord.id}] resend_sms xatosi:`, err);
+          });
         } else if (data === 'start_vote') {
           await handleVoteTrigger(ctx);
         } else if (data === 'withdraw_menu') {
@@ -1195,12 +1211,20 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         if (Object.values(BOT_BUTTONS).includes(text)) return;
 
         if (user.step === 'AWAITING_PHONE') {
-          await this.handlePhoneInput(ctx, botRecord, user, text);
+          // Telegraf navbatdagi update'larni bu handler tugagunicha olib kelmaydi (long-polling
+          // ketma-ket ishlaydi). Kaptcha javobini kutish shu ichida sodir bo'lgani uchun,
+          // shu javobning o'zi keyingi update sifatida kelishi mumkin - shuning uchun await
+          // qilinmaydi (aks holda o'zaro bloklanib qoladi / deadlock).
+          this.handlePhoneInput(ctx, botRecord, user, text).catch((err) => {
+            this.logger.error(`[Bot #${botRecord.id}] handlePhoneInput xatosi:`, err);
+          });
           return;
         }
 
         if (user.step === 'AWAITING_SMS_CODE') {
-          await this.handleSmsCodeInput(ctx, botRecord, user, text);
+          this.handleSmsCodeInput(ctx, botRecord, user, text).catch((err) => {
+            this.logger.error(`[Bot #${botRecord.id}] handleSmsCodeInput xatosi:`, err);
+          });
           return;
         }
 
@@ -1220,7 +1244,9 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         }
 
         if (/^(\+?998)?[0-9]{9}$/.test(text.replace(/[\s\-\(\)]/g, ''))) {
-          await this.handlePhoneInput(ctx, botRecord, user, text);
+          this.handlePhoneInput(ctx, botRecord, user, text).catch((err) => {
+            this.logger.error(`[Bot #${botRecord.id}] handlePhoneInput xatosi:`, err);
+          });
           return;
         }
       } catch (err) {}
