@@ -27,13 +27,12 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     const cpuCount = os.cpus()?.length || 2;
     this.poolSize = Math.max(4, Math.min(8, cpuCount));
-    this.logger.log(`⚡ Initializing Tesseract OCR Multi-Worker Pool (${this.poolSize} parallel workers across ${cpuCount} CPU cores)...`);
 
-    setTimeout(() => {
-      this.initWorkerPool().catch((err) => {
-        this.logger.warn(`Tesseract OCR worker pool background init warning: ${err.message}`);
-      });
-    }, 1000);
+    // Avtomatik OCR captcha oqimida o'chirilgan (foydalanuvchi o'zi yechadi), shuning
+    // uchun bu yerda worker pool'ni oldindan (eager) ishga tushirmaymiz - bu har bir
+    // deploy/restartda bir necha soniya vaqt va CPU/RAM sarflardi, hech qachon
+    // ishlatilmasdan. acquireWorker() barribir kerak bo'lganda pool'ni o'zi lazy
+    // tarzda ishga tushiradi (agar kimdir kelajakda solve() ni qayta yoqsa).
   }
 
   private async createSingleWorker(): Promise<Worker> {
@@ -357,6 +356,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy() {
+    if (this.workers.length === 0) return;
     this.logger.log('🛑 Terminating Tesseract OCR Multi-Worker Pool...');
     await Promise.all(this.workers.map((w) => w.terminate().catch(() => {})));
     this.workers = [];
