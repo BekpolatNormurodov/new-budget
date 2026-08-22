@@ -721,7 +721,7 @@ export class OpenBudgetService {
       const fullMahallaName = mahallaTitle ? `${mahallaTitle} (${districtTitle})` : (data.title || 'Ochiq Budjet Loyihasi');
       const finalBoardId = String(data.board_id || boardId || '55');
       const finalPublicId = data.public_id || publicId || (initiativeUuid.length === 12 ? initiativeUuid : '');
-      const openBudgetUrl = `https://new.openbudget.uz/uz/initiative-budget/active-initiatives/${finalBoardId}/${initiativeUuid}`;
+      const openBudgetUrl = `https://openbudget.uz/boards/initiatives/initiative/${finalBoardId}/${initiativeUuid}`;
 
       return {
         success: true,
