@@ -469,6 +469,10 @@ export class OpenBudgetService {
           } else if (otpRes.data?.message) {
             lastError = otpRes.data.message;
             const errCode = otpRes.data?.invalid_args?.error_code || '';
+            if (errCode === 'WRONG_CAPTCHA') {
+              // Kaptcha xato desa sessiyani tozalab, keyingi toza Proxy IP ga o'tib ketish!
+              this.proxyManager.releaseSession(clean12);
+            }
             if (errCode === 'USER_NOT_FOUND' || /топилмади|topilmadi|USER_NOT_FOUND|mavsum|pasport|avval|allaqachon/i.test(lastError || '')) {
               this.logger.warn(`🛑 [OpenBudget Foydalanuvchi Xatosi] +${clean12}: ${lastError} (${errCode})`);
               return {
@@ -479,6 +483,7 @@ export class OpenBudgetService {
             }
           }
         } catch (err: any) {
+          this.proxyManager.releaseSession(clean12);
           if (err.message && /топилмади|topilmadi|USER_NOT_FOUND|mavsum|pasport|avval|allaqachon/i.test(err.message)) {
             return {
               success: false,
