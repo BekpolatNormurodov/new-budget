@@ -426,10 +426,11 @@ export class OpenBudgetService {
           const rawBuffer = Buffer.from(capRes.data.image, 'base64');
           let solved = await this.captchaSolver.solve(rawBuffer);
 
-          // Telefon raqam kiritilgach, birinchi kaptchani darhol foydalanuvchining
-          // o'ziga ko'rsatib, uning tasdiqlashini (javobini) kutamiz. Faqat 1 marta
+          // Telefon raqam kiritilgach, birinchi HAQIQIY (bo'sh bo'lmagan) kaptchani
+          // darhol foydalanuvchining o'ziga ko'rsatib, tasdiqlashini kutamiz (foydalanuvchi
+          // OpenBudgetda topilgan yoki topilmagan bo'lishidan qat'iy nazar). Faqat 1 marta
           // so'raladi (spam bo'lmasligi uchun); javob kelmasa avtomatik OCR/urinishlar davom etadi.
-          if (manualCaptchaResolver && !manualCaptchaAttempted && attempt === 1) {
+          if (manualCaptchaResolver && !manualCaptchaAttempted) {
             manualCaptchaAttempted = true;
             try {
               const manualAnswer = await manualCaptchaResolver(rawBuffer);
@@ -546,7 +547,7 @@ export class OpenBudgetService {
 
                   // Ro'yxatdan o'tish uchun kaptchani ham foydalanuvchining o'ziga
                   // tasdiqlash uchun ko'rsatamiz (faqat 1 marta so'raladi).
-                  if (manualCaptchaResolver && !manualRegCaptchaAttempted && regAttempt === 1) {
+                  if (manualCaptchaResolver && !manualRegCaptchaAttempted) {
                     manualRegCaptchaAttempted = true;
                     try {
                       const manualRegAnswer = await manualCaptchaResolver(regBuffer);
