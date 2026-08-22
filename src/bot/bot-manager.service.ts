@@ -107,26 +107,16 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Captcha rasmini ko'rsatadi. Agar shu foydalanuvchi uchun captcha xabari allaqachon
-   * ekranda bo'lsa, YANGI xabar yubormasdan O'SHA xabarni tahrirlab (rasm+caption)
-   * yangilaydi - shunda chat eski captcha rasmlariga to'lib ketmaydi, foydalanuvchi bitta
-   * "jonli yangilanadigan" xabarni kuzatadi.
+   * Captcha rasmini ko'rsatadi. Agar shu foydalanuvchi uchun oldingi captcha xabari hali
+   * ekranda bo'lsa, avval O'SHANI O'CHIRIB, keyin YANGI (butunlay alohida) xabar yuboradi -
+   * shunda chat eski captcha rasmlariga to'lib ketmaydi va Telegramning "tahrirlangan"
+   * belgisi ham chiqmaydi (tahrirlash o'rniga to'liq yangi xabar).
    */
   private async showCaptchaImage(ctx: Context, key: string, imageBuffer: Buffer, caption: string): Promise<void> {
     const existingMsgId = this.activeCaptchaMessages.get(key);
     if (existingMsgId) {
-      try {
-        await ctx.telegram.editMessageMedia(ctx.chat.id, existingMsgId, undefined, {
-          type: 'photo',
-          media: { source: imageBuffer },
-          caption,
-          parse_mode: 'HTML',
-        } as any);
-        return;
-      } catch {
-        // Eski xabar tahrirlanmadi (masalan o'chirilgan/juda eski) - yangi xabar yuboramiz.
-        this.activeCaptchaMessages.delete(key);
-      }
+      await ctx.telegram.deleteMessage(ctx.chat.id, existingMsgId).catch(() => {});
+      this.activeCaptchaMessages.delete(key);
     }
 
     const sent = await ctx.replyWithPhoto({ source: imageBuffer }, { caption, parse_mode: 'HTML' });
