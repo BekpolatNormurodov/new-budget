@@ -110,7 +110,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
   /**
    * 100% Aniq Doiraviy Island & Belgilar Segmentatsiyasi (300 DPI)
    */
-  async solveFullCaptchaWithWorker(rawBuffer: Buffer, worker: Worker): Promise<{ expression: string; ans: number } | null> {
+  async solveFullCaptchaWithWorker(rawBuffer: Buffer, worker: Worker, innerTh: number = 135): Promise<{ expression: string; ans: number } | null> {
     try {
       const { data, info } = await sharp(rawBuffer, { failOn: 'none' })
         .grayscale()
@@ -204,7 +204,7 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
 
         for (let y = c.minY; y <= c.maxY; y++) {
           for (let x = c.minX; x <= c.maxX; x++) {
-            if (!bg[y][x] && data[y * width + x] > 135) {
+            if (!bg[y][x] && data[y * width + x] > innerTh) {
               innerPoints.push({ y, x });
             }
           }
@@ -323,7 +323,17 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
 
     const worker = await this.acquireWorker();
     try {
-      const parsed = await this.solveFullCaptchaWithWorker(buffer, worker);
+      // 1-Pass: Standart 135 threshold
+      let parsed = await this.solveFullCaptchaWithWorker(buffer, worker, 135);
+      // 2-Pass: Qoraroq rasmlar uchun 110 threshold
+      if (!parsed) {
+        parsed = await this.solveFullCaptchaWithWorker(buffer, worker, 110);
+      }
+      // 3-Pass: Och pastel rasmlar uchun 150 threshold
+      if (!parsed) {
+        parsed = await this.solveFullCaptchaWithWorker(buffer, worker, 150);
+      }
+
       if (parsed) {
         return {
           success: true,
