@@ -3,7 +3,7 @@ import { BOT_BUTTONS } from './bot.constants';
 
 export class BotKeyboards {
   /**
-   * Asosiy menyu klaviaturasi (Admin panel faqat web saytda boshqariladi)
+   * Asosiy menyu klaviaturasi (Mobil Telegram uchun ideal simmetrik joylashuv)
    */
   static mainMenu(_isAdmin: boolean = false, isAgent: boolean = false) {
     const buttons = [

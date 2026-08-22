@@ -5,97 +5,84 @@ export const formatSum = (amount: number | string): string => {
 };
 
 export const BOT_MESSAGES = {
-  START: (reward: number = 30000, refBonus: number = 5000) => `📢 Aziz foydalanuvchi!
+  START: (reward: number = 30000, refBonus: number = 5000) => 
+    `🇺🇿 <b>OCHIQ BUDJET 2026 | RASMIY BOT</b>\n\n` +
+    `⚡️ <b>O'z ovozingizni bering va kafolatlangan mukofotga ega bo'ling!</b>\n\n` +
+    `💰 <b>Har bir ovoz uchun:</b> <code>+${formatSum(reward)} so'm</code>\n` +
+    `👥 <b>Har bir taklif qilingan do'st uchun:</b> <code>+${formatSum(refBonus)} so'm</code>\n\n` +
+    `📌 <b>Asosiy qoidalar:</b>\n` +
+    `• Bitta pasport nomiga rasmiylashtirilgan barcha raqamlardan faqat <b>1 marta</b> ovoz berish mumkin.\n` +
+    `• To'lovlar ovoz tizimda tasdiqlangach avtomatik hisobingizga o'tkaziladi.\n\n` +
+    `👇 <b>Ovoz berish uchun pastdagi tugmani bosing:</b>`,
 
-VAQT JUDA OZ QOLDI⭕️
+  VOTE_PROMPT: 
+    `📱 <b>OVOZ BERISH UCHUN RAQAMNI KIRITING:</b>\n\n` +
+    `Telefon raqamingizni quyidagi ko'rinishda yuboring:\n` +
+    `👉 <code>901234567</code> yoki <code>+998901234567</code>\n\n` +
+    `<i>Yoki pastdagi «📱 Kontaktni yuborish» tugmasini bosing.</i>`,
 
-Siz har bir bergan OVOZINGIZ uchun
-${formatSum(reward)} so'm mukofot olish imkoniyatiga egasiz! 💸
+  WAITING: `⏳ <b>Iltimos kuting, so'rovingiz qayta ishlanmoqda...</b>`,
 
-🔥 Bu imkoniyat orqali oddiygina ovoz berib tez va oson pul ishlashingiz mumkin.
+  SMS_SENT: (phone: string) => 
+    `📩 <b>SMS KOD YUBORILDI!</b>\n\n` +
+    `<b>+${phone}</b> raqamingizga 6 xonali tasdiqlash kodi yuborildi.\n\n` +
+    `Kodni quyida yozib yuboring (Masalan: <code>123456</code>) 👇`,
 
-👥 Do'stlaringizni taklif qilib har bir do'stingiz uchun +${formatSum(refBonus)} so'mdan oling!
+  VOTE_SUBMITTED_PENDING: (phone: string, reward: number = 30000) => 
+    `✅ <b>OVOZINGIZ MUVAFFAQIYATLI QABUL QILINDI!</b>\n\n` +
+    `📱 <b>Telefon:</b> +${phone}\n` +
+    `⏳ <b>Holati:</b> Tekshiruvda\n` +
+    `💰 <b>Mukofot:</b> <code>+${formatSum(reward)} so'm</code>\n\n` +
+    `⏰ Ovoz tizim tomonidan tasdiqlanishi bilan balansingizga mablag' qo'shiladi va bildirishnoma yuboriladi! 🚀`,
 
-‼️ MUHIM QOIDA: Ochiq Budjet qoidalariga ko'ra bitta pasport (shaxs) nomiga olingan barcha telefon raqamlardan faqat 1 marta ovoz berish mumkin.
+  VOTE_VERIFIED_ALERT: (phone: string, reward: number, balance: number) => 
+    `🎉 <b>TABRIKLAYMIZ! OVOZINGIZ TASDIQLANDI!</b>\n\n` +
+    `📱 <b>Raqam:</b> +${phone}\n` +
+    `💰 <b>Qo'shildi:</b> <code>+${formatSum(reward)} so'm</code>\n` +
+    `💳 <b>Joriy balansingiz:</b> <code>${formatSum(balance)} so'm</code>\n\n` +
+    `Do'stlaringizni taklif qiling va har bir do'stingiz uchun <b>+5 000 so'm</b> bonus oling! 🚀`,
 
-💰 Ko'plab foydalanuvchilar allaqachon ovoz berib pul ishlashni boshlashdi. Siz ham ularga qo'shiling!
+  BALANCE: (balance: number, referralsCount: number, votesCount: number, pendingVotesCount: number, totalWithdrawn: number, pendingReward: number = 30000) => 
+    `💰 <b>SIZNING SHAXSIY HISOBINGIZ:</b>\n\n` +
+    `💳 <b>Mavjud asosiy balans:</b> <code>${formatSum(balance)} so'm</code>\n` +
+    `🗳 <b>Tasdiqlangan ovozlar:</b> <code>${formatSum(votesCount)} ta</code>\n` +
+    `⏳ <b>Kutilayotgan ovozlar:</b> <code>${formatSum(pendingVotesCount)} ta</code> (<code>${formatSum(pendingVotesCount * pendingReward)} so'm</code>)\n` +
+    `👥 <b>Taklif qilingan do'stlar:</b> <code>${formatSum(referralsCount)} ta</code>\n` +
+    `💸 <b>Jami yechib olingan:</b> <code>${formatSum(totalWithdrawn)} so'm</code>\n\n` +
+    `📌 <i>Minimal yechish summasi: 10 000 so'm.</i>`,
 
-🚀 Ishni boshlash uchun botga telefon raqamingizni yuborishingiz kerak.
+  REFERRAL: (refLink: string, count: number, bonus: number = 5000) => 
+    `🔗 <b>SIZNING REFERAL HAVOLANGIZ:</b>\n\n` +
+    `<code>${refLink}</code>\n\n` +
+    `👥 <b>Taklif qilinganlar:</b> <code>${formatSum(count)} ta</code>\n` +
+    `🎁 <b>Har bir do'stingiz uchun:</b> <code>+${formatSum(bonus)} so'm</code>\n\n` +
+    `<i>Ushbu havolani do'stlaringizga va guruhlarga yuboring hamda qo'shimcha daromad oling! 🚀</i>`,
 
-📱 Telefon raqamingizni quyidagi formatda yuboring:
-901234567
+  WITHDRAW_CHOOSE_METHOD: (balance: number, min: number) => 
+    `💸 <b>PUL YECHIB OLISH:</b>\n\n` +
+    `💳 <b>Mavjud balansingiz:</b> <code>${formatSum(balance)} so'm</code>\n` +
+    `⚠️ <b>Minimal yechish summasi:</b> <code>${formatSum(min)} so'm</code>\n\n` +
+    `Pulni yechish uchun to'lov turini tanlang 👇`,
 
-⏳ Shoshiling! Ovozlar soni cheklangan.`,
-
-  VOTE_PROMPT: `📞 Ovoz berish uchun telefon raqamni kiriting:
-
-Telefon raqami +998991234567 yoki 991234567 formatida kiritilishi kerak.
-
-📌 DIQQAT: Bitta pasport nomidagi barcha raqamlardan faqat 1 marta ovoz berish mumkin.`,
-
-  WAITING: `⏳ Kuting...`,
-
-  SMS_SENT: (phone: string) => `📩 Telefoningizga (+${phone}) 6 xonali SMS kod yuborildi!
-
-Iltimos, kelgan SMS kodni quyida yozib yuboring:`,
-
-  VOTE_SUBMITTED_PENDING: (phone: string, reward: number = 30000) => `✅ Sizning ovozingiz qabul qilindi va tekshiruvga yuborildi!
-
-📱 Telefon: +${phone}
-⏳ Holat: Tekshirilmoqda
-⏰ Ovozlar o'rtacha 2 soat, uzog'i 24 soat ichida Ochiq Budjet tizimi tomonidan tasdiqlanadi.
-
-💰 Ovoz tasdiqlangach, hisobingizga +${formatSum(reward)} so'm mukofot qo'shiladi va bot orqali bildirishnoma yuboriladi! 🚀`,
-
-  VOTE_VERIFIED_ALERT: (phone: string, reward: number, balance: number) => `🎉 Tabriklaymiz! Sizning +${phone} raqam orqali bergan ovozingiz Ochiq Budjet tizimi tomonidan muvaffaqiyatli tasdiqlandi!
-
-💰 Hisobingizga +${formatSum(reward)} so'm qo'shildi!
-💳 Hozirgi balansingiz: ${formatSum(balance)} so'm
-
-🚀 Do'stlaringizni taklif qiling va har bir do'stingiz uchun +5 000 so'mdan bonus oling!`,
-
-  BALANCE: (balance: number, referralsCount: number, votesCount: number, pendingVotesCount: number, totalWithdrawn: number, pendingReward: number = 30000) => `💰 Sizning hisobingiz:
-
-💳 Asosiy balans: ${formatSum(balance)} so'm
-👥 Taklif qilgan do'stlaringiz: ${formatSum(referralsCount)} ta
-🗳 Tasdiqlangan ovozlar: ${formatSum(votesCount)} ta
-⏳ Tekshirilayotgan ovozlar: ${formatSum(pendingVotesCount)} ta (${formatSum(pendingVotesCount * pendingReward)} so'm kutilmoqda)
-💸 Jami yechib olingan: ${formatSum(totalWithdrawn)} so'm
-
-Minimal yechish summasi: 10 000 so'm.`,
-
-  REFERRAL: (refLink: string, count: number, bonus: number = 5000) => `🔗 Sizning shaxsiy referal havolangiz:
-${refLink}
-
-👥 Taklif qilgan do'stlaringiz: ${formatSum(count)} ta
-💰 Har bir taklif qilingan do'stingiz uchun: ${formatSum(bonus)} so'm bonus beriladi!
-
-Do'stlaringizga ulashing va birgalikda pul ishlang! 🚀`,
-
-  WITHDRAW_CHOOSE_METHOD: (balance: number, min: number) => `💸 <b>PUL YECHIB OLISH BO'LIMI:</b>\n\n` +
-    `💳 <b>Sizning balansingiz:</b> ${formatSum(balance)} so'm\n` +
-    `⚠️ <b>Minimal yechish summasi:</b> ${formatSum(min)} so'm\n\n` +
-    `Pulni yechish uchun quyidagi to'lov usulini tanlang 👇`,
-
-  WITHDRAW_ENTER_AMOUNT: (method: string, balance: number, min: number) => `💳 <b>To'lov usuli:</b> ${method === 'PAYNET' ? 'Paynet' : 'Uzcard / Humo'}\n` +
-    `💰 <b>Mavjud balansingiz:</b> ${formatSum(balance)} so'm\n\n` +
-    `Qancha summa yechmoqchisiz? (Minimal: ${formatSum(min)} so'm)\n` +
-    `Raqam ko'rinishida yozib yuboring (masalan: <code>${formatSum(balance)}</code> yoki <code>${formatSum(min)}</code>):`,
+  WITHDRAW_ENTER_AMOUNT: (method: string, balance: number, min: number) => 
+    `💳 <b>To'lov usuli:</b> ${method === 'PAYNET' ? '📱 Paynet' : '💳 Uzcard / Humo'}\n` +
+    `💰 <b>Mavjud balans:</b> <code>${formatSum(balance)} so'm</code>\n\n` +
+    `Qancha yechmoqchisiz? (Minimal: <code>${formatSum(min)} so'm</code>)\n` +
+    `Summani yozib yuboring (Masalan: <code>${formatSum(balance)}</code>):`,
 
   WITHDRAW_ENTER_ACCOUNT: (method: string) => method === 'PAYNET' 
-    ? `📱 <b>Paynet uchun telefon raqamingizni yuboring:</b>\n(Masalan: <code>901234567</code>):` 
-    : `💳 <b>Uzcard yoki Humo plastik karta raqamingizni kiriting:</b>\n16 ta raqam ko'rinishida yuboring (masalan: <code>8600 1234 5678 9012</code>):`,
+    ? `📱 <b>Paynet uchun telefon raqamingizni yuboring:</b>\n(Masalan: <code>901234567</code>)` 
+    : `💳 <b>Uzcard yoki Humo karta raqamingizni kiriting:</b>\n16 ta raqam ko'rinishida yuboring (Masalan: <code>8600123456789012</code>)`,
 
-  WITHDRAW_CONFIRMATION: (amount: number, method: string, account: string) => `✅ Pul yechish so'rovi qabul qilindi!
+  WITHDRAW_CONFIRMATION: (amount: number, method: string, account: string) => 
+    `✅ <b>PUL YECHISH SO'ROVI QABUL QILINDI!</b>\n\n` +
+    `💸 <b>Summa:</b> <code>${formatSum(amount)} so'm</code>\n` +
+    `💳 <b>To'lov turi:</b> ${method}\n` +
+    `📝 <b>Hisob:</b> <code>${account}</code>\n` +
+    `⏳ <b>Holati:</b> Kutilmoqda (Tez orada o'tkazib beriladi)\n\n` +
+    `<i>So'rovingiz navbat bo'yicha ko'rib chiqiladi!</i>`,
 
-💸 Summa: ${formatSum(amount)} so'm
-💳 Usul: ${method}
-📝 Hisob: ${account}
-⏳ Holat: Kutilmoqda (Admin tasdiqlashi bilan to'lab beriladi)
-
-Tez orada hisobingizga tushadi!`,
-
-  MUST_SUBSCRIBE: `⚠️ Botdan to'liq foydalanish uchun quyidagi homiy kanallarga a'zo bo'ling:`,
+  MUST_SUBSCRIBE: `⚠️ <b>Botdan foydalanish uchun quyidagi kanallarga obuna bo'ling:</b>`,
 };
 
 export const BOT_BUTTONS = {
