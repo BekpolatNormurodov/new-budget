@@ -193,7 +193,10 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         const c = circles[i];
         const bw = c.maxX - c.minX + 1, bh = c.maxY - c.minY + 1;
         if (bw > bh * 1.5 || bh <= 12) {
-          results.push('-');
+          // Faqat o'rtada va yetarlicha keng chiziq bo'lsa minus deb olamiz
+          if (bw >= 14 && bh >= 3 && i > 0 && i < circles.length - 1) {
+            results.push('-');
+          }
           continue;
         }
 
@@ -209,7 +212,6 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         }
 
         if (innerPoints.length < 8) {
-          if (bw > bh * 1.2 || bh <= 14) results.push('-');
           continue;
         }
 
@@ -225,7 +227,9 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
         const ch = maxY - minY + 1;
 
         if (cw > ch * 1.8 && ch <= 12) {
-          results.push('-');
+          if (cw >= 14 && i > 0 && i < circles.length - 1) {
+            results.push('-');
+          }
           continue;
         }
 

@@ -383,7 +383,7 @@ export class OpenBudgetService {
       let otpKey: string | null = null;
       let lastError: string | null = null;
 
-      for (let attempt = 1; attempt <= 6; attempt++) {
+      for (let attempt = 1; attempt <= 8; attempt++) {
         try {
           const capRes = await this.executeOpenBudgetCurl('https://new.openbudget.uz/api/v2/vote/captcha-2', {
             headers: {
@@ -439,7 +439,7 @@ export class OpenBudgetService {
             },
           );
 
-          this.logger.log(`📡 [OTP Urinish #${attempt}/20] +${clean12} | Captcha: ${solved.expression} => ${solved.answer} | HTTP Status: ${otpRes.status} | Javob: ${JSON.stringify(otpRes.data)}`);
+          this.logger.log(`📡 [OTP Urinish #${attempt}/8] +${clean12} | Captcha: ${solved.expression} => ${solved.answer} | HTTP Status: ${otpRes.status} | Javob: ${JSON.stringify(otpRes.data)}`);
 
           const isSuccess = (otpRes.status === 200 || otpRes.status === 201) && Boolean(otpRes.data?.otpKey || otpRes.data?.key || otpRes.data?.token);
 
