@@ -1,15 +1,21 @@
-import { Controller, Get, Post, Body, Query, Headers, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Headers, Res, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { OpenBudgetService } from '../openbudget/openbudget.service';
 import { WalletService } from '../wallet/wallet.service';
+import { ProxyManagerService } from '../proxy/proxy-manager.service';
 import { ConfigService } from '@nestjs/config';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 
-@Controller('api/app')
+const execFileAsync = promisify(execFile);
+
+@Controller()
 export class WebAppController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly openBudgetService: OpenBudgetService,
     private readonly walletService: WalletService,
+    private readonly proxyManager: ProxyManagerService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -139,5 +145,169 @@ export class WebAppController {
       withdrawal: res.withdrawal,
       balance: res.updatedUser.balance,
     };
+  }
+
+  /**
+   * 🗳 Rasmiy OpenBudget Captcha sahifasini to'g'ridan-to'g'ri ko'rsatish (GET /captcha)
+   */
+  @Get('/captcha')
+  async getCaptchaPage(
+    @Query('initiativeUuid') initiativeUuidQuery?: string,
+    @Query('botId') botIdQuery?: string,
+    @Headers('cookie') clientCookies?: string,
+    @Res() res?: any,
+  ) {
+    const defaultUuid = 'b8752aa2-e6da-470c-8a26-52d5b594526a';
+    const initUuid = initiativeUuidQuery || defaultUuid;
+
+    const proxy = this.proxyManager.getNextProxy();
+    const args: string[] = ['-s', '-i', '--connect-timeout', '5', '--max-time', '10'];
+
+    if (proxy) {
+      const auth = proxy.auth ? `${proxy.auth.username}:${proxy.auth.password}@` : '';
+      args.push('-x', `http://${auth}${proxy.host}:${proxy.port}`);
+    }
+
+    if (clientCookies) {
+      args.push('-H', `Cookie: ${clientCookies}`);
+    }
+
+    args.push('-H', 'User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1');
+    args.push('-H', 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+    args.push(`https://openbudget.uz/api/v2/vote/mvc/captcha/${initUuid}`);
+
+    try {
+      const { stdout } = await execFileAsync('curl', args, { maxBuffer: 10 * 1024 * 1024 });
+      const parts = stdout.split(/\r\n\r\n|\n\n/).filter((p) => p.length > 0);
+      let bodyRaw = (parts[parts.length - 1] || '').trim();
+      const headersRaw = parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || '');
+
+      // Set-Cookie headerlarini mijoz brauzeriga uzatish
+      const cookieMatches = headersRaw.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
+      for (const c of cookieMatches) {
+        const val = c.replace(/^set-cookie:\s*/i, '');
+        res.setHeader('Set-Cookie', val);
+      }
+
+      // OpenBudget ichki form action manzillarini bizning proxy endpointga moslash
+      bodyRaw = bodyRaw.replace(/action="\/api\/v2\/vote\/mvc\/captcha"/g, 'action="/api/v2/vote/mvc/captcha"');
+      bodyRaw = bodyRaw.replace(/action="\/api\/v2\/vote\/mvc\/verify"/g, 'action="/api/v2/vote/mvc/verify"');
+
+      // Agar ichki iframeda ishlasa, iframeni bloklamasligi uchun eval tekshiruvini zararsizlantirish
+      bodyRaw = bodyRaw.replace(/window\.location\.href\s*=\s*['"]https:\/\/openbudget\.uz['"]/g, 'console.log("In-app captcha loaded")');
+
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(bodyRaw);
+    } catch (err: any) {
+      return res.status(500).send(`<h3>Captcha yuklashda xatolik: ${err.message}</h3>`);
+    }
+  }
+
+  /**
+   * 📤 Captcha POST so'rovini OpenBudget'ga proxy qilish
+   */
+  @Post('/api/v2/vote/mvc/captcha')
+  async proxyCaptchaPost(
+    @Body() body: any,
+    @Headers('cookie') clientCookies?: string,
+    @Res() res?: any,
+  ) {
+    const proxy = this.proxyManager.getNextProxy();
+    const args: string[] = ['-s', '-i', '--connect-timeout', '5', '--max-time', '12', '-X', 'POST'];
+
+    if (proxy) {
+      const auth = proxy.auth ? `${proxy.auth.username}:${proxy.auth.password}@` : '';
+      args.push('-x', `http://${auth}${proxy.host}:${proxy.port}`);
+    }
+
+    if (clientCookies) {
+      args.push('-H', `Cookie: ${clientCookies}`);
+    }
+
+    args.push('-H', 'User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1');
+    args.push('-H', 'Content-Type: application/x-www-form-urlencoded');
+    args.push('-H', 'Origin: https://openbudget.uz');
+    args.push('-H', 'Referer: https://openbudget.uz/api/v2/vote/mvc/captcha');
+
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(body || {})) {
+      params.append(k, typeof v === 'object' ? JSON.stringify(v) : String(v));
+    }
+    args.push('--data', params.toString());
+    args.push('https://openbudget.uz/api/v2/vote/mvc/captcha');
+
+    try {
+      const { stdout } = await execFileAsync('curl', args, { maxBuffer: 10 * 1024 * 1024 });
+      const parts = stdout.split(/\r\n\r\n|\n\n/).filter((p) => p.length > 0);
+      let bodyRaw = (parts[parts.length - 1] || '').trim();
+      const headersRaw = parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || '');
+
+      const cookieMatches = headersRaw.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
+      for (const c of cookieMatches) {
+        const val = c.replace(/^set-cookie:\s*/i, '');
+        res.setHeader('Set-Cookie', val);
+      }
+
+      bodyRaw = bodyRaw.replace(/action="\/api\/v2\/vote\/mvc\/captcha"/g, 'action="/api/v2/vote/mvc/captcha"');
+      bodyRaw = bodyRaw.replace(/action="\/api\/v2\/vote\/mvc\/verify"/g, 'action="/api/v2/vote/mvc/verify"');
+      bodyRaw = bodyRaw.replace(/window\.location\.href\s*=\s*['"]https:\/\/openbudget\.uz['"]/g, 'console.log("In-app captcha loaded")');
+
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(bodyRaw);
+    } catch (err: any) {
+      return res.status(500).send(`<h3>SMS so'rashda xatolik: ${err.message}</h3>`);
+    }
+  }
+
+  /**
+   * 📤 Verify POST so'rovini OpenBudget'ga proxy qilish
+   */
+  @Post('/api/v2/vote/mvc/verify')
+  async proxyVerifyPost(
+    @Body() body: any,
+    @Headers('cookie') clientCookies?: string,
+    @Res() res?: any,
+  ) {
+    const proxy = this.proxyManager.getNextProxy();
+    const args: string[] = ['-s', '-i', '--connect-timeout', '5', '--max-time', '12', '-X', 'POST'];
+
+    if (proxy) {
+      const auth = proxy.auth ? `${proxy.auth.username}:${proxy.auth.password}@` : '';
+      args.push('-x', `http://${auth}${proxy.host}:${proxy.port}`);
+    }
+
+    if (clientCookies) {
+      args.push('-H', `Cookie: ${clientCookies}`);
+    }
+
+    args.push('-H', 'User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1');
+    args.push('-H', 'Content-Type: application/x-www-form-urlencoded');
+    args.push('-H', 'Origin: https://openbudget.uz');
+    args.push('-H', 'Referer: https://openbudget.uz/api/v2/vote/mvc/captcha');
+
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(body || {})) {
+      params.append(k, typeof v === 'object' ? JSON.stringify(v) : String(v));
+    }
+    args.push('--data', params.toString());
+    args.push('https://openbudget.uz/api/v2/vote/mvc/verify');
+
+    try {
+      const { stdout } = await execFileAsync('curl', args, { maxBuffer: 10 * 1024 * 1024 });
+      const parts = stdout.split(/\r\n\r\n|\n\n/).filter((p) => p.length > 0);
+      let bodyRaw = (parts[parts.length - 1] || '').trim();
+      const headersRaw = parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || '');
+
+      const cookieMatches = headersRaw.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
+      for (const c of cookieMatches) {
+        const val = c.replace(/^set-cookie:\s*/i, '');
+        res.setHeader('Set-Cookie', val);
+      }
+
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(bodyRaw);
+    } catch (err: any) {
+      return res.status(500).send(`<h3>SMS tasdiqlashda xatolik: ${err.message}</h3>`);
+    }
   }
 }

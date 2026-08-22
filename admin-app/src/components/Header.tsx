@@ -7,6 +7,7 @@ import {
   Menu,
   Sun,
   Moon,
+  ExternalLink,
 } from 'lucide-react';
 import { DashboardStats } from '../types';
 
@@ -140,6 +141,18 @@ export const Header: React.FC<HeaderProps> = ({
           <RefreshCw className={`w-4 h-4 text-indigo-600 dark:text-indigo-400 ${loading ? 'animate-spin' : ''}`} />
           <span className="hidden md:inline">Yangilash</span>
         </button>
+
+        {/* Captcha Mini App Link Button */}
+        <a
+          href="/captcha"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 transition-all active:scale-95 flex-shrink-0 cursor-pointer"
+          title="Ovoz Berish Captcha Mini App"
+        >
+          <ExternalLink className="w-4 h-4" />
+          <span className="whitespace-nowrap">Captcha Mini App</span>
+        </a>
 
         {/* Add Bot Action Button (Tablet & Desktop) */}
         <button
