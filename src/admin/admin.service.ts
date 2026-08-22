@@ -579,6 +579,20 @@ export class AdminService {
   }
 
   /**
+   * Barcha proxylar ro'yxati (bloklash holati bilan)
+   */
+  async listProxies() {
+    return this.proxyManagerService.listProxiesForAdmin();
+  }
+
+  /**
+   * Proxyni admin panelidan bloklash / blokdan chiqarish
+   */
+  async setProxyBlocked(id: number, isBlocked: boolean) {
+    return this.proxyManagerService.setProxyBlocked(id, isBlocked);
+  }
+
+  /**
    * Kunlik ertalabki/kechki marketing xabarlarini qo'lda yoki zudlik bilan ishga tushirish
    */
   async triggerMarketingBroadcast(slot: 'MORNING' | 'EVENING' | 'TEST' = 'MORNING', targetBotId?: number) {

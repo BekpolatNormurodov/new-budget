@@ -148,6 +148,22 @@ export class AdminController {
     return this.adminService.triggerSystemHealthCheck();
   }
 
+  // Proxy Management Routes
+  @Get('proxies')
+  async listProxies() {
+    return this.adminService.listProxies();
+  }
+
+  @Patch('proxies/:id/block')
+  async blockProxy(@Param('id') id: string) {
+    return this.adminService.setProxyBlocked(parseInt(id, 10), true);
+  }
+
+  @Patch('proxies/:id/unblock')
+  async unblockProxy(@Param('id') id: string) {
+    return this.adminService.setProxyBlocked(parseInt(id, 10), false);
+  }
+
   // Marketing Broadcast Trigger (Avtomatik Eslatma)
   @Post('broadcast/marketing-trigger')
   async triggerMarketingBroadcast(

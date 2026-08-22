@@ -5,6 +5,7 @@ import * as http from 'http';
 import * as https from 'https';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { PrismaService } from '../prisma/prisma.service';
 const execFileAsync = promisify(execFile);
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const { SocksProxyAgent } = require('socks-proxy-agent');
@@ -19,6 +20,7 @@ export interface ProxyItem {
   lastCheckedAt?: Date;
   latencyMs?: number;
   failCount: number;
+  isBlocked?: boolean;
 }
 
 const httpKeepAliveAgent = new http.Agent({
@@ -46,19 +48,22 @@ export class ProxyManagerService implements OnModuleInit {
   private sessionMap = new Map<string, { proxy: ProxyItem; expiresAt: number }>();
   private readonly DEFAULT_SESSION_TTL_MS = 20 * 60 * 1000; // 20 daqiqa
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {
     // Har 5 daqiqada muddati o'tgan sticky sessiyalarni tozalash
     setInterval(() => this.cleanupExpiredSessions(), 5 * 60 * 1000);
   }
 
-  onModuleInit() {
-    this.loadProxies();
+  async onModuleInit() {
+    await this.loadProxies();
   }
 
   /**
-   * Konfiguratsiyadan proxylarni yuklash
+   * Konfiguratsiyadan proxylarni yuklash va DB'dagi bloklangan holatini qo'llash
    */
-  public loadProxies() {
+  public async loadProxies() {
     this.isEnabled = this.configService.get<boolean>('proxy.enabled') || process.env.PROXY_ENABLED === 'true';
     const proxyListStr = this.configService.get<string>('proxy.list') || process.env.PROXY_LIST || '';
 
@@ -71,9 +76,63 @@ export class ProxyManagerService implements OnModuleInit {
     }
 
     const rawList = proxyListStr.split(',').map((p) => p.trim()).filter(Boolean);
-    this.proxyPool = rawList.map((p) => this.parseProxyUrl(p)).filter((item): item is ProxyItem => item !== null);
+    const parsed = rawList.map((p) => this.parseProxyUrl(p)).filter((item): item is ProxyItem => item !== null);
+
+    // .env dagi proxylarni DB bilan sinxronlash (yo'q bo'lganlarini qo'shish)
+    let blockedUrls = new Set<string>();
+    try {
+      for (const item of parsed) {
+        await this.prisma.proxyServer.upsert({
+          where: { url: item.url },
+          update: {},
+          create: { url: item.url, host: item.host, port: item.port, protocol: item.protocol },
+        });
+      }
+      const blocked = await this.prisma.proxyServer.findMany({ where: { isBlocked: true }, select: { url: true } });
+      blockedUrls = new Set(blocked.map((b) => b.url));
+    } catch (e) {
+      this.logger.warn(`⚠️ Proxy holatini DB bilan sinxronlashda xatolik: ${e.message}`);
+    }
+
+    this.proxyPool = parsed
+      .map((item) => ({ ...item, isBlocked: blockedUrls.has(item.url) }))
+      .filter((item) => !item.isBlocked);
 
     this.logger.log(`🛡 Jami ${this.proxyPool.length} ta proxy muvaffaqiyatli yuklandi (Holati: ${this.isEnabled ? 'FAOL' : 'O\'CHIRILGAN'})`);
+  }
+
+  /**
+   * Admin panel uchun: barcha proxylarni DB holati (bloklanganmi) va joriy hovuzdagi live statistikasi bilan birga qaytarish
+   */
+  public async listProxiesForAdmin() {
+    const dbProxies = await this.prisma.proxyServer.findMany({ orderBy: { id: 'asc' } });
+    const liveByUrl = new Map(this.proxyPool.map((p) => [p.url, p]));
+
+    return dbProxies.map((dbp) => {
+      const live = liveByUrl.get(dbp.url);
+      return {
+        id: dbp.id,
+        url: dbp.url,
+        host: dbp.host,
+        port: dbp.port,
+        protocol: dbp.protocol,
+        isBlocked: dbp.isBlocked,
+        note: dbp.note,
+        isAlive: live?.isAlive ?? null,
+        latencyMs: live?.latencyMs,
+        failCount: live?.failCount ?? 0,
+        lastCheckedAt: live?.lastCheckedAt,
+      };
+    });
+  }
+
+  /**
+   * Proxyni admin panelidan qo'lda bloklash / blokdan chiqarish
+   */
+  public async setProxyBlocked(id: number, isBlocked: boolean) {
+    const updated = await this.prisma.proxyServer.update({ where: { id }, data: { isBlocked } });
+    await this.loadProxies(); // hovuzni darhol yangilash
+    return updated;
   }
 
   /**

@@ -159,6 +159,20 @@ export interface ProxyStats {
   }>;
 }
 
+export interface ProxyServerAdmin {
+  id: number;
+  url: string;
+  host: string;
+  port: number;
+  protocol: string;
+  isBlocked: boolean;
+  note?: string | null;
+  isAlive: boolean | null;
+  latencyMs?: number;
+  failCount: number;
+  lastCheckedAt?: string | Date;
+}
+
 export interface DashboardStats {
   totalUsers: number;
   todayUsers: number;

@@ -8,13 +8,14 @@ import {
   Server,
   Cpu,
   ShieldCheck,
+  ShieldOff,
   Globe,
   Bot,
   Zap,
   Clock,
   ExternalLink,
 } from 'lucide-react';
-import { HealthReport, ProxyStats } from '../types';
+import { HealthReport, ProxyStats, ProxyServerAdmin } from '../types';
 
 interface HealthViewProps {
   token: string;
@@ -24,6 +25,8 @@ interface HealthViewProps {
 export const HealthView: React.FC<HealthViewProps> = ({ token, showToast }) => {
   const [healthData, setHealthData] = useState<{ report: HealthReport; proxyStats: ProxyStats } | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [proxies, setProxies] = useState<ProxyServerAdmin[]>([]);
+  const [proxyActionId, setProxyActionId] = useState<number | null>(null);
 
   const fetchHealth = async () => {
     setLoading(true);
@@ -37,6 +40,40 @@ export const HealthView: React.FC<HealthViewProps> = ({ token, showToast }) => {
       showToast('Salomatlik ma\'lumotlarini yuklashda xatolik', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchProxies = async () => {
+    try {
+      const res = await fetch('/api/admin/proxies', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setProxies(Array.isArray(data) ? data : []);
+    } catch (e: any) {
+      showToast('Proxylar ro\'yxatini yuklashda xatolik', 'error');
+    }
+  };
+
+  const toggleProxyBlock = async (proxy: ProxyServerAdmin) => {
+    setProxyActionId(proxy.id);
+    try {
+      const action = proxy.isBlocked ? 'unblock' : 'block';
+      const res = await fetch(`/api/admin/proxies/${proxy.id}/${action}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Amalni bajarishda xatolik');
+      showToast(
+        proxy.isBlocked ? `${proxy.host} blokdan chiqarildi` : `${proxy.host} bloklandi`,
+        'success',
+      );
+      await fetchProxies();
+      await fetchHealth();
+    } catch (e: any) {
+      showToast(e.message || 'Proxyni bloklashda xatolik', 'error');
+    } finally {
+      setProxyActionId(null);
     }
   };
 
@@ -70,6 +107,7 @@ export const HealthView: React.FC<HealthViewProps> = ({ token, showToast }) => {
 
   useEffect(() => {
     fetchHealth();
+    fetchProxies();
   }, []);
 
   const report = healthData?.report;
@@ -215,7 +253,7 @@ export const HealthView: React.FC<HealthViewProps> = ({ token, showToast }) => {
           </div>
         </div>
 
-        {(!proxyStats?.pool || proxyStats.pool.length === 0) ? (
+        {proxies.length === 0 ? (
           <div className="py-8 text-center text-slate-500 dark:text-slate-400 text-xs bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-200 dark:border-slate-800/80">
             <Globe className="w-8 h-8 mx-auto mb-2 text-slate-400 dark:text-slate-600 opacity-40" />
             Hozircha qo'shimcha proxy kiritilmagan. So'rovlar to'g'ridan-to'g'ri (Direct) rejimda yuborilmoqda.
@@ -231,28 +269,49 @@ export const HealthView: React.FC<HealthViewProps> = ({ token, showToast }) => {
                   <th className="p-3.5">Kechikish (Latency)</th>
                   <th className="p-3.5">Xatolar soni</th>
                   <th className="p-3.5">Oxirgi tekshiruv</th>
+                  <th className="p-3.5">Amal</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                {proxyStats.pool.map((proxy, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                {proxies.map((proxy) => (
+                  <tr key={proxy.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors ${proxy.isBlocked ? 'opacity-60' : ''}`}>
                     <td className="p-3.5 font-mono text-slate-900 dark:text-white font-bold">{proxy.host}:{proxy.port}</td>
                     <td className="p-3.5 uppercase font-semibold text-indigo-600 dark:text-indigo-400">{proxy.protocol}</td>
                     <td className="p-3.5">
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                          proxy.isAlive
-                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                            : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
-                        }`}
-                      >
-                        {proxy.isAlive ? '🟢 Faol' : '🔴 Uzilgan'}
-                      </span>
+                      {proxy.isBlocked ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-slate-500/10 text-slate-500 dark:text-slate-400 border-slate-500/20">
+                          ⛔ Bloklangan
+                        </span>
+                      ) : (
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                            proxy.isAlive
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                              : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
+                          }`}
+                        >
+                          {proxy.isAlive ? '🟢 Faol' : '🔴 Uzilgan'}
+                        </span>
+                      )}
                     </td>
                     <td className="p-3.5 font-mono">{proxy.latencyMs ? `${proxy.latencyMs}ms` : '-'}</td>
                     <td className="p-3.5">{proxy.failCount || 0} marta</td>
                     <td className="p-3.5 text-slate-500 dark:text-slate-400">
                       {proxy.lastCheckedAt ? new Date(proxy.lastCheckedAt).toLocaleTimeString('uz-UZ') : '-'}
+                    </td>
+                    <td className="p-3.5">
+                      <button
+                        onClick={() => toggleProxyBlock(proxy)}
+                        disabled={proxyActionId === proxy.id}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-lg border transition-colors disabled:opacity-50 cursor-pointer ${
+                          proxy.isBlocked
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
+                            : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 hover:bg-rose-500/20'
+                        }`}
+                      >
+                        {proxy.isBlocked ? <ShieldCheck className="w-3 h-3" /> : <ShieldOff className="w-3 h-3" />}
+                        {proxy.isBlocked ? 'Blokdan chiqarish' : 'Bloklash'}
+                      </button>
                     </td>
                   </tr>
                 ))}

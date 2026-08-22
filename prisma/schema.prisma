@@ -212,6 +212,18 @@ model BroadcastMessage {
   createdAt         DateTime @default(now())
 }
 
+model ProxyServer {
+  id        Int      @id @default(autoincrement())
+  url       String   @unique @db.VarChar(512) // to'liq proxy URL (http://user:pass@ip:port)
+  host      String
+  port      Int
+  protocol  String   @default("http")
+  isBlocked Boolean  @default(false) // Admin tomonidan qo'lda bloklanganmi
+  note      String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model SystemApiLog {
   id           Int      @id @default(autoincrement())
   action       String   // "SEND_OTP" | "VERIFY_OTP" | "CAPTCHA_SOLVE" | "VOTE_SYNC"
