@@ -46,7 +46,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
    */
   private askUserToSolveCaptcha(ctx: Context, botId: number, imageBuffer: Buffer, isRetry: boolean): Promise<number | null> {
     const key = `${botId}_${ctx.from.id}`;
-    return new Promise<number | null>((resolve) => {
+    return new Promise<number | null>((resolve, reject) => {
       const timeout = setTimeout(() => {
         if (this.pendingCaptchaResolvers.get(key)) {
           this.pendingCaptchaResolvers.delete(key);
@@ -63,10 +63,15 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       ctx
         .replyWithPhoto({ source: imageBuffer }, { caption })
         .catch((err) => {
+          // Rasm Telegramga yetkazilmadi (masalan IMAGE_PROCESS_FAILED) - bu foydalanuvchi
+          // aybi emas, texnik xato. Chaqiruvchiga buni alohida bildiramiz (reject), shunda u
+          // "so'ralgan hisoblanadi" deb belgilamasdan, YANGI kaptcha bilan qayta so'rashi mumkin.
           this.logger.warn(`Kaptcha rasmini yuborishda xato: ${err.message}`);
           clearTimeout(timeout);
           this.pendingCaptchaResolvers.delete(key);
-          resolve(null);
+          const deliveryError: any = new Error(`Kaptcha rasmini yuborib bo'lmadi: ${err.message}`);
+          deliveryError.isCaptchaDeliveryFailure = true;
+          reject(deliveryError);
         });
     });
   }
