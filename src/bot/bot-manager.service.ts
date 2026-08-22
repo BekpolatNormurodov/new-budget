@@ -136,11 +136,21 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Foydalanuvchi uchun captcha sessiyasi butunlay tugaganda (ovoz/SMS jarayoni
-   * yakunlanganda - muvaffaqiyatli yoki xato bilan) chaqiriladi, shunda KEYINGI ovoz
-   * berish urinishi eski xabarni emas, yangi captcha xabarini boshlaydi.
+   * yakunlanganda - muvaffaqiyatli yoki xato bilan) chaqiriladi. Oxirgi captcha rasmi
+   * va note xabarini ham chatdan butunlay O'CHIRIB tashlaydi (natija - to'g'ri yoki
+   * noto'g'ri bo'lishidan qat'iy nazar), shunda jarayon tugagach chatda hech qanday
+   * captcha izi qolmaydi va KEYINGI ovoz berish urinishi butunlay toza boshlanadi.
    */
-  private clearActiveCaptchaMessage(botId: number, userId: number): void {
+  private clearActiveCaptchaMessage(ctx: Context, botId: number, userId: number): void {
     const key = `${botId}_${userId}`;
+    const captchaMsgId = this.activeCaptchaMessages.get(key);
+    if (captchaMsgId) {
+      ctx.telegram.deleteMessage(ctx.chat.id, captchaMsgId).catch(() => {});
+    }
+    const noteMsgId = this.activeNoteMessages.get(key);
+    if (noteMsgId) {
+      ctx.telegram.deleteMessage(ctx.chat.id, noteMsgId).catch(() => {});
+    }
     this.activeCaptchaMessages.delete(key);
     this.activeNoteMessages.delete(key);
   }
@@ -1200,7 +1210,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
                 undefined,
                 this.wrapCaptchaResolverWithWaitCleanup(ctx, botRecord.id, resendWait.message_id),
               );
-              this.clearActiveCaptchaMessage(botRecord.id, user.id);
+              this.clearActiveCaptchaMessage(ctx, botRecord.id, user.id);
               await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
 
               if (!res.success) {
@@ -1253,7 +1263,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
                 }
               );
             } catch (err: any) {
-              this.clearActiveCaptchaMessage(botRecord.id, user.id);
+              this.clearActiveCaptchaMessage(ctx, botRecord.id, user.id);
               await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
               await ctx.reply('❌ Qayta SMS so\'rashda xatolik yuz berdi.');
             }
@@ -1556,7 +1566,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         undefined,
         this.wrapCaptchaResolverWithWaitCleanup(ctx, botRecord.id, waitMsg.message_id),
       );
-      this.clearActiveCaptchaMessage(botRecord.id, user.id);
+      this.clearActiveCaptchaMessage(ctx, botRecord.id, user.id);
 
       if (!res.success) {
         await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
@@ -1632,7 +1642,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         }
       );
     } catch (err) {
-      this.clearActiveCaptchaMessage(botRecord.id, user.id);
+      this.clearActiveCaptchaMessage(ctx, botRecord.id, user.id);
       await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
       await ctx.reply('❌ Nimadir xato ketdi. Iltimos, birozdan so\'ng qaytadan urinib ko\'ring.');
     }
@@ -1682,7 +1692,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
               undefined,
               this.wrapCaptchaResolverWithWaitCleanup(ctx, botRecord.id, resendWait.message_id),
             );
-            this.clearActiveCaptchaMessage(botRecord.id, user.id);
+            this.clearActiveCaptchaMessage(ctx, botRecord.id, user.id);
             await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
 
             if (newSms.success) {
@@ -1732,7 +1742,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
               );
             }
           } catch (e) {
-            this.clearActiveCaptchaMessage(botRecord.id, user.id);
+            this.clearActiveCaptchaMessage(ctx, botRecord.id, user.id);
             await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
           }
         }
