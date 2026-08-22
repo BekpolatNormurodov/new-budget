@@ -106,13 +106,8 @@ export class VoteAutoApproverService {
               continue;
             }
 
-            // 3. 2-SOATLIK ZAXIRA FORMULASI (Fallback delay)
-            // Agar OpenBudget API'si kechiksa yoki yangilanmasa, haqiqiy SMS tasdiqlangan foydalanuvchini 2 soatdan keyin tasdiqlash
-            const elapsed = Date.now() - new Date(vote.createdAt).getTime();
-            if (!shouldApprove && elapsed >= fallbackDelayMs) {
-              shouldApprove = true;
-              checkReason = `[SMS orqali tasdiqlangan va vaqt muddati (${autoApproveHours} soat) to'ldi]`;
-            }
+            // 3. QAT'IY QOIDA: Faqat OpenBudget API tasdiqlagan ovozlargina qabul qilinadi!
+            // Agar OpenBudget'da ovoz hali ko'rinmasa, ovoz PENDING_VERIFICATION holatida qoladi va tekshirilishda davom etadi.
 
             // 4. TASDIQLASH VA HISOBGA PUL O'TKAZISH
             if (shouldApprove) {
