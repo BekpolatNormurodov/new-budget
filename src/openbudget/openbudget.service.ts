@@ -640,6 +640,8 @@ export class OpenBudgetService {
             },
           );
 
+          this.logger.log(`📡 [/login/verify-otp] +${clean12} Status: ${verifyRes.status} | Javob: ${JSON.stringify(verifyRes.data)}`);
+
           // Agar login/verify-otp xato bersa, register/verify-otp bilan ham tasdiqlab ko'rish
           if (verifyRes.status !== 200 && verifyRes.status !== 201 && !verifyRes.data?.access_token && !verifyRes.data?.token) {
             try {
@@ -656,10 +658,13 @@ export class OpenBudgetService {
                   sessionKey: clean12,
                 },
               );
+              this.logger.log(`📡 [/register/verify-otp] +${clean12} Status: ${regVerifyRes.status} | Javob: ${JSON.stringify(regVerifyRes.data)}`);
               if (regVerifyRes.status === 200 || regVerifyRes.status === 201 || regVerifyRes.data?.access_token || regVerifyRes.data?.token) {
                 verifyRes = regVerifyRes;
               }
-            } catch (e) {}
+            } catch (e: any) {
+              this.logger.warn(`register/verify-otp xatosi: ${e.message}`);
+            }
           }
 
           if (verifyRes.status === 200 || verifyRes.status === 201 || verifyRes.data?.access_token || verifyRes.data?.token || verifyRes.data?.success) {
