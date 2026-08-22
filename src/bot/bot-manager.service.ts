@@ -58,17 +58,17 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
       this.pendingCaptchaResolvers.set(key, { resolve, timeout });
 
-      // `note` orqali qo'ng'iroq qiluvchi (openbudget.service.ts) kontekstga oid aniqlashtiruvchi
-      // xabar berishi mumkin (masalan "oldingi javobingiz to'g'ri edi, endi yana bitta captcha
-      // kerak") - foydalanuvchi "nega yana captcha so'ralyapti?" deb chalkashib qolmasligi uchun.
-      const caption = note
-        ? `${note}\n\nJavobini (faqat son) yozib yuboring:`
-        : isRetry
-          ? '❌ Xato javob berdingiz!\n\n🧮 Yangi kaptcha keldi, qaytadan hisoblab javobini (faqat son) yozib yuboring:'
-          : '🧮 Kaptchani tasdiqlang!\n\nRasmdagi misolni hisoblab, javobini (faqat son) yozib yuboring:';
+      const caption = isRetry
+        ? '❌ Xato javob berdingiz!\n\n🧮 Yangi kaptcha keldi, qaytadan hisoblab javobini (faqat son) yozib yuboring:'
+        : '🧮 Rasmdagi misolni hisoblab, javobini (faqat son) yozib yuboring:';
 
-      ctx
-        .replyWithPhoto({ source: imageBuffer }, { caption })
+      // `note` orqali qo'ng'iroq qiluvchi (openbudget.service.ts) kontekstga oid aniqlashtiruvchi
+      // xabar berishi mumkin (masalan "ro'yxatdan o'tish ~10 soniya vaqt oladi") - foydalanuvchi
+      // "nega yana captcha so'ralyapti?" deb chalkashib qolmasligi uchun. Buni captcha rasmidan
+      // ALOHIDA, mustaqil xabar sifatida yuboramiz (ikkita aniq xabar - birlashtirilgan uzun
+      // matn emas).
+      (note ? ctx.reply(note).catch(() => {}) : Promise.resolve())
+        .then(() => ctx.replyWithPhoto({ source: imageBuffer }, { caption }))
         .catch((err) => {
           // Rasm Telegramga yetkazilmadi (masalan IMAGE_PROCESS_FAILED) - bu foydalanuvchi
           // aybi emas, texnik xato. Chaqiruvchiga buni alohida bildiramiz (reject), shunda u
@@ -81,6 +81,28 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
           reject(deliveryError);
         });
     });
+  }
+
+  /**
+   * "⏳ Iltimos kuting..." xabari captcha bosqichi boshlangunga qadar ko'rsatiladi.
+   * Captcha interaktiv bo'lgani (foydalanuvchi javob kutilishi, ba'zan bir necha
+   * daqiqa davom etishi mumkin) uchun, bu eskirgan "kuting" xabari captcha
+   * suhbati ustida osilib qolmasligi kerak - shuning uchun birinchi captcha
+   * so'ralishi bilanoq uni o'chirib tashlaymiz.
+   */
+  private wrapCaptchaResolverWithWaitCleanup(
+    ctx: Context,
+    botId: number,
+    waitMessageId: number,
+  ): (imageBuffer: Buffer, isRetry: boolean, note?: string) => Promise<number | null> {
+    let waitMsgDeleted = false;
+    return async (imageBuffer, isRetry, note) => {
+      if (!waitMsgDeleted) {
+        waitMsgDeleted = true;
+        await ctx.telegram.deleteMessage(ctx.chat.id, waitMessageId).catch(() => {});
+      }
+      return this.askUserToSolveCaptcha(ctx, botId, imageBuffer, isRetry, note);
+    };
   }
 
   private async clearAllTimeouts(botId: number, userId: number) {
@@ -1113,7 +1135,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
               const res = await this.openBudgetService.requestSmsForVote(
                 phone,
                 undefined,
-                (imageBuffer, isRetry, note) => this.askUserToSolveCaptcha(ctx, botRecord.id, imageBuffer, isRetry, note),
+                this.wrapCaptchaResolverWithWaitCleanup(ctx, botRecord.id, resendWait.message_id),
               );
               await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
 
@@ -1462,7 +1484,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       const res = await this.openBudgetService.requestSmsForVote(
         clean12,
         undefined,
-        (imageBuffer, isRetry, note) => this.askUserToSolveCaptcha(ctx, botRecord.id, imageBuffer, isRetry, note),
+        this.wrapCaptchaResolverWithWaitCleanup(ctx, botRecord.id, waitMsg.message_id),
       );
 
       if (!res.success) {
@@ -1583,7 +1605,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
             const newSms = await this.openBudgetService.requestSmsForVote(
               phone,
               undefined,
-              (imageBuffer, isRetry, note) => this.askUserToSolveCaptcha(ctx, botRecord.id, imageBuffer, isRetry, note),
+              this.wrapCaptchaResolverWithWaitCleanup(ctx, botRecord.id, resendWait.message_id),
             );
             await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
 

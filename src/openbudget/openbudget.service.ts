@@ -591,8 +591,8 @@ export class OpenBudgetService {
                     // captcha bo'lmasa) bu server tomonidagi vaqtinchalik xato ekanini bildiramiz.
                     const regNote = !isRegRetry
                       ? (regAttempt === 1
-                          ? '✅ Captcha javobingiz qabul qilindi! Endi tizimda ro\'yxatdan o\'tish uchun yana bitta captcha kerak bo\'ladi:'
-                          : '⚠️ Tizimda vaqtinchalik texnik nosozlik yuz berdi (captcha javobingiz xato emas edi). Iltimos, quyidagi yangi captchani yeching:')
+                          ? '🎉 Ajoyib! Siz Ochiq Budjet tizimida hali ro\'yxatdan o\'tmagansiz - tashvishlanmang, bu atigi ~10 soniya vaqt oladi.\n\n✅ Captcha javobingiz qabul qilindi. Ro\'yxatdan o\'tishni yakunlash uchun yana bitta captchani yeching:'
+                          : '⚠️ Tizimda vaqtinchalik texnik nosozlik yuz berdi (captcha javobingiz xato emas edi, xavotir olmang). Iltimos, quyidagi yangi captchani yeching, biroz kutib davom etamiz:')
                       : undefined;
                     try {
                       const manualRegAnswer = await manualCaptchaResolver(regBuffer, isRegRetry, regNote);
