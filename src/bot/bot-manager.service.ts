@@ -800,21 +800,16 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
         const mahallaName = botRecord.mahallaName || 'Янги боги сурх MFY';
         const voteReward = botRecord.voteReward || 30000;
-        const initiativeUuid = botRecord.initiativeUuid || 'b8752aa2-e6da-470c-8a26-52d5b594526a';
-        const boardId = botRecord.boardId || 55;
-        const voteUrl = `https://openbudget.uz/boards/initiatives/initiative/${boardId}/${initiativeUuid}`;
 
         await ctx.reply(
-          `🗳 <b>${mahallaName.toUpperCase()} UCHUN OVOZ BERING!</b>\n\n` +
+          `🗳 <b>${mahallaName.toUpperCase()} UCHUN OVOZ BERISH</b>\n\n` +
           `💰 <b>Sizga to'lanadigan mukofot:</b> <code>+${formatSum(voteReward)} so'm</code>\n\n` +
-          `👇 <b>Ovoz berish uchun quyidagi tugmani bosing:</b>\n` +
-          `1️⃣ Telefon raqamingizni yozing.\n` +
-          `2️⃣ Rasmdagi 2 ta harfni belgilang.\n` +
-          `3️⃣ Kelgan SMS kodni kiriting.\n\n` +
-          `⚡️ Ovoz OpenBudget tizimida qabul qilinishi bilan balansingizga avtomatik <b>+${formatSum(voteReward)} so'm</b> o'tkaziladi! 🚀`,
+          `📱 Ovoz berish uchun telefon raqamingizni yuboring:\n` +
+          `👉 <code>901234567</code> yoki <code>+998901234567</code>\n\n` +
+          `<i>Yoki pastdagi «📱 Kontaktni yuborish» tugmasini bosing:</i>`,
           {
             parse_mode: 'HTML',
-            ...BotKeyboards.voteOptionsInline(initiativeUuid, boardId, botRecord.mahallaId || '055497192014'),
+            ...BotKeyboards.phoneRequestKeyboard(),
           }
         );
       } catch (err) {
