@@ -109,6 +109,28 @@ export class OpenBudgetService {
   }
 
   /**
+   * OpenBudget API ba'zan xom (ingliz tilida yoki texnik) xabar qaytaradi (masalan
+   * "account is inactive"), bu esa foydalanuvchiga to'g'ridan-to'g'ri ko'rsatilsa
+   * tushunarsiz bo'ladi. Ma'lum xabarlarni o'zbekchaga tarjima qilamiz, qolganlarini
+   * o'zgarishsiz qoldiramiz (chunki OpenBudget ko'pincha o'zbek/rus tilida to'g'ri
+   * xabar qaytaradi).
+   */
+  private translateOpenBudgetError(rawMessage: string): string {
+    if (!rawMessage) return rawMessage;
+    const known: Array<[RegExp, string]> = [
+      [/account\s+is\s+inactive/i, 'Ushbu hisob faol emas (OpenBudget tomonidan bloklangan/faolsizlantirilgan). Iltimos, boshqa telefon raqam bilan urinib ko\'ring yoki OpenBudget qo\'llab-quvvatlash xizmatiga murojaat qiling.'],
+      [/user\s+not\s+found/i, 'Bunday foydalanuvchi topilmadi.'],
+      [/invalid\s+otp|wrong\s+otp|invalid\s+code/i, 'SMS kod noto\'g\'ri kiritildi.'],
+      [/otp\s+expired|code\s+expired/i, 'SMS kodning muddati tugagan. Yangi kod so\'rang.'],
+      [/too\s+many\s+requests|rate\s+limit/i, 'Juda ko\'p urinish qilindi. Birozdan so\'ng qaytadan urinib ko\'ring.'],
+    ];
+    for (const [pattern, translation] of known) {
+      if (pattern.test(rawMessage)) return translation;
+    }
+    return rawMessage;
+  }
+
+  /**
    * Telefon raqamini normalizatsiya qilish (+998901234567 -> 901234567 yoki 998901234567)
    */
   normalizePhone(phone: string): { clean9: string; clean12: string } {
@@ -643,7 +665,8 @@ export class OpenBudgetService {
                     this.logger.log(`📡 [Auto-Reg Urinish #${regAttempt}/5] +${clean12} | Captcha: ${regSolved.expression} => ${regSolved.answer} | Status: ${regRes.status} | Javob: ${JSON.stringify(regRes.data)}`);
 
                     if (regRes.status === 200 || regRes.status === 201 || regRes.data?.otpKey) {
-                      otpKey = regRes.data?.otpKey || regRes.data?.key || `reg_${Date.now()}`;
+                      const rawOtpKey = regRes.data?.otpKey || regRes.data?.key || `${Date.now()}`;
+                      otpKey = `REG:${rawOtpKey}`;
                       this.logger.log(`🎉 [Auto-Registration SUCCESS] Yangi foydalanuvchiga SMS yuborildi (+${clean12}) | otpKey: ${otpKey}`);
                       break;
                     }
@@ -769,44 +792,68 @@ export class OpenBudgetService {
             'Referer': 'https://openbudget.uz/',
           };
 
-          let verifyRes = await this.executeOpenBudgetCurl(
-            'https://openbudget.uz/api/v1/login/verify-otp',
-            {
-              method: 'POST',
-              data: {
-                phone_number: clean12,
-                otp_key: sessionId,
-                otp_code: code,
-              },
-              headers: reqHeaders,
-              sessionKey: clean12,
-            },
-          );
+          const isRegSession = sessionId.startsWith('REG:');
+          const realSessionId = isRegSession ? sessionId.replace(/^REG:/, '') : sessionId;
 
-          this.logger.log(`📡 [/login/verify-otp] +${clean12} Status: ${verifyRes.status} | Javob: ${JSON.stringify(verifyRes.data)}`);
+          let verifyRes: any;
 
-          // Agar login/verify-otp xato bersa, register/verify-otp bilan ham tasdiqlab ko'rish
-          if (verifyRes.status !== 200 && verifyRes.status !== 201 && !verifyRes.data?.access_token && !verifyRes.data?.token) {
-            try {
-              const regVerifyRes = await this.executeOpenBudgetCurl(
-                'https://openbudget.uz/api/v1/register/verify-otp',
-                {
-                  method: 'POST',
-                  data: {
-                    phone_number: clean12,
-                    otp_key: sessionId,
-                    otp_code: code,
-                  },
-                  headers: reqHeaders,
-                  sessionKey: clean12,
+          if (isRegSession) {
+            // Ro'yxatdan o'tish orqali yuborilgan OTP uchun TO'G'RIDAN-TO'G'RI /register/verify-otp ga yuboramiz!
+            verifyRes = await this.executeOpenBudgetCurl(
+              'https://openbudget.uz/api/v1/register/verify-otp',
+              {
+                method: 'POST',
+                data: {
+                  phone_number: clean12,
+                  otp_key: realSessionId,
+                  otp_code: code,
                 },
-              );
-              this.logger.log(`📡 [/register/verify-otp] +${clean12} Status: ${regVerifyRes.status} | Javob: ${JSON.stringify(regVerifyRes.data)}`);
-              if (regVerifyRes.status === 200 || regVerifyRes.status === 201 || regVerifyRes.data?.access_token || regVerifyRes.data?.token) {
-                verifyRes = regVerifyRes;
+                headers: reqHeaders,
+                sessionKey: clean12,
+              },
+            );
+            this.logger.log(`📡 [/register/verify-otp DIRECT] +${clean12} Status: ${verifyRes.status} | Javob: ${JSON.stringify(verifyRes.data)}`);
+          } else {
+            // Standart login OTP uchun /login/verify-otp chaqiriladi
+            verifyRes = await this.executeOpenBudgetCurl(
+              'https://openbudget.uz/api/v1/login/verify-otp',
+              {
+                method: 'POST',
+                data: {
+                  phone_number: clean12,
+                  otp_key: realSessionId,
+                  otp_code: code,
+                },
+                headers: reqHeaders,
+                sessionKey: clean12,
+              },
+            );
+
+            this.logger.log(`📡 [/login/verify-otp] +${clean12} Status: ${verifyRes.status} | Javob: ${JSON.stringify(verifyRes.data)}`);
+
+            // Agar login/verify-otp "account is inactive" yoki boshqa xato bersa, register/verify-otp bilan ham urinib ko'rish
+            if (verifyRes.status !== 200 && verifyRes.status !== 201 && !verifyRes.data?.access_token && !verifyRes.data?.token) {
+              try {
+                const regVerifyRes = await this.executeOpenBudgetCurl(
+                  'https://openbudget.uz/api/v1/register/verify-otp',
+                  {
+                    method: 'POST',
+                    data: {
+                      phone_number: clean12,
+                      otp_key: realSessionId,
+                      otp_code: code,
+                    },
+                    headers: reqHeaders,
+                    sessionKey: clean12,
+                  },
+                );
+                this.logger.log(`📡 [/register/verify-otp fallback] +${clean12} Status: ${regVerifyRes.status} | Javob: ${JSON.stringify(regVerifyRes.data)}`);
+                if (regVerifyRes.status === 200 || regVerifyRes.status === 201 || regVerifyRes.data?.access_token || regVerifyRes.data?.token) {
+                  verifyRes = regVerifyRes;
+                }
+              } catch (e: any) {
+                this.logger.warn(`register/verify-otp fallback xatosi: ${e.message}`);
               }
-            } catch (e: any) {
-              this.logger.warn(`register/verify-otp xatosi: ${e.message}`);
             }
           }
 
