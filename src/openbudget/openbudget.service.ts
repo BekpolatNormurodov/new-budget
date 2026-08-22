@@ -350,6 +350,7 @@ export class OpenBudgetService {
   ): Promise<SendSmsResult> {
     const { clean9, clean12 } = this.normalizePhone(phone);
     let manualCaptchaAttempted = false;
+    let manualRegCaptchaAttempted = false;
 
     // 1. Telefon raqam oldin ovoz berganligini tekshirish
     const existingVote = await this.prisma.vote.findFirst({
@@ -541,7 +542,25 @@ export class OpenBudgetService {
                   }
 
                   const regBuffer = Buffer.from(regCapRes.data.image, 'base64');
-                  const regSolved = await this.captchaSolver.solve(regBuffer);
+                  let regSolved = await this.captchaSolver.solve(regBuffer);
+
+                  // Ro'yxatdan o'tish uchun kaptchani ham foydalanuvchining o'ziga
+                  // tasdiqlash uchun ko'rsatamiz (faqat 1 marta so'raladi).
+                  if (manualCaptchaResolver && !manualRegCaptchaAttempted && regAttempt === 1) {
+                    manualRegCaptchaAttempted = true;
+                    try {
+                      const manualRegAnswer = await manualCaptchaResolver(regBuffer);
+                      if (manualRegAnswer !== null && manualRegAnswer !== undefined && !Number.isNaN(manualRegAnswer)) {
+                        regSolved = {
+                          success: true,
+                          answer: manualRegAnswer,
+                          expression: 'manual',
+                        } as any;
+                      }
+                    } catch (manualRegErr: any) {
+                      this.logger.warn(`Foydalanuvchi ro'yxatdan o'tish kaptchasini yechishida xato: ${manualRegErr.message}`);
+                    }
+                  }
 
                   if (regSolved.success && regSolved.answer !== undefined) {
                     const regPayload = {
