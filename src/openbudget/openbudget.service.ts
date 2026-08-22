@@ -299,9 +299,13 @@ export class OpenBudgetService {
 
     try {
       const { stdout } = await execFileAsync('curl', args, { maxBuffer: 10 * 1024 * 1024 });
-      const parts = stdout.split(/\r\n\r\n|\n\n/);
-      const headersRaw = parts[0] || '';
-      const bodyRaw = parts.slice(1).join('\n\n').trim();
+      // Proxy orqali HTTPS so'ralganda curl -i avval "HTTP/1.0 200 Connection established"
+      // (CONNECT tunnel) blokini qaytaradi, so'ng asl javob header+body kelidi. Shu sabab
+      // oxirgi blokni body, undan oldingisini asl headerlar deb olamiz (CONNECT preambulasidan
+      // qat'i nazar to'g'ri ishlaydi).
+      const parts = stdout.split(/\r\n\r\n|\n\n/).filter((p) => p.length > 0);
+      const bodyRaw = (parts[parts.length - 1] || '').trim();
+      const headersRaw = parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || '');
 
       const statusMatch = headersRaw.match(/HTTP\/[12\.]+\s+(\d+)/i);
       const status = statusMatch ? parseInt(statusMatch[1], 10) : 200;
