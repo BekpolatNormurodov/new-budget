@@ -156,11 +156,14 @@ export class ProxyManagerService implements OnModuleInit {
         };
       }
 
+      const defaultPort = protocol === 'https' ? 443 : (protocol.startsWith('socks') ? 1080 : 80);
+      const port = parsed.port ? parseInt(parsed.port, 10) : defaultPort;
+
       return {
         url: rawUrl,
         protocol: ['http', 'https', 'socks5', 'socks4'].includes(protocol) ? protocol : 'http',
         host: parsed.hostname,
-        port: parseInt(parsed.port, 10) || 8080,
+        port,
         auth,
         isAlive: true,
         failCount: 0,
