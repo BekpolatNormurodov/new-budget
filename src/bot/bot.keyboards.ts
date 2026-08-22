@@ -20,29 +20,20 @@ export class BotKeyboards {
   }
 
   /**
-   * Telefon raqamni yuborish klaviaturasi (ixtiyoriy kontakt ulashish bilan)
+   * Telefon raqamni yuborish klaviaturasi (kontakt ulashish tugmasi bilan)
    */
   static phoneRequestKeyboard() {
     return Markup.keyboard([
       [Markup.button.contactRequest('📱 Kontaktni yuborish')],
-      [BOT_BUTTONS.CANCEL],
     ]).resize();
   }
 
   /**
-   * Bekor qilish klaviaturasi
-   */
-  static cancelKeyboard() {
-    return Markup.keyboard([[BOT_BUTTONS.CANCEL]]).resize();
-  }
-
-  /**
-   * SMS kutish jarayonidagi inline tugmalar (Qayta SMS so'rash va Bekor qilish)
+   * SMS kutish jarayonidagi inline tugma (Qayta SMS so'rash)
    */
   static smsWaitingInline() {
     return Markup.inlineKeyboard([
-      [Markup.button.callback('📩 SMS kelmadimi? Qaytadan yuborish', 'resend_sms')],
-      [Markup.button.callback('❌ Bekor qilish', 'cancel_vote')],
+      [Markup.button.callback('🔄 SMS kelmadimi? Qaytadan yuborish', 'resend_sms')],
     ]);
   }
 
@@ -53,7 +44,6 @@ export class BotKeyboards {
     return Markup.inlineKeyboard([
       [Markup.button.callback('💳 Uzcard / Humo (Kartaga yechish)', 'withdraw_method_CARD')],
       [Markup.button.callback('📱 Paynet (Telefon raqamga)', 'withdraw_method_PAYNET')],
-      [Markup.button.callback('❌ Bekor qilish', 'cancel_action')],
     ]);
   }
 

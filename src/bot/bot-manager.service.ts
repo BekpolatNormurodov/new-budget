@@ -29,6 +29,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
   private supervisorInterval: any = null;
   private smsTimeouts: Map<string, NodeJS.Timeout> = new Map(); // key: "botId_userId"
   private votingSessionTimeouts: Map<string, NodeJS.Timeout> = new Map(); // key: "botId_userId"
+  private pendingCaptchaResolvers: Map<string, { resolve: (v: number | null) => void; timeout: any }> = new Map(); // key: "botId_userId"
 
   constructor(
     private readonly configService: ConfigService,
@@ -38,6 +39,37 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     private readonly voteAutoApproverService: VoteAutoApproverService,
     private readonly proxyManagerService: ProxyManagerService,
   ) {}
+
+  /**
+   * Avtomatik OCR kaptchani yechayotganda ham, foydalanuvchining o'ziga rasmni yuborib,
+   * javobini kutadi (belgilangan vaqt ichida javob kelmasa, avtomatik urinish davom etadi).
+   */
+  private askUserToSolveCaptcha(ctx: Context, botId: number, imageBuffer: Buffer, isRetry: boolean): Promise<number | null> {
+    const key = `${botId}_${ctx.from.id}`;
+    return new Promise<number | null>((resolve) => {
+      const timeout = setTimeout(() => {
+        if (this.pendingCaptchaResolvers.get(key)) {
+          this.pendingCaptchaResolvers.delete(key);
+          resolve(null);
+        }
+      }, 45000);
+
+      this.pendingCaptchaResolvers.set(key, { resolve, timeout });
+
+      const caption = isRetry
+        ? '❌ Xato javob berdingiz!\n\n🧮 Yangi kaptcha keldi, qaytadan hisoblab javobini (faqat son) yozib yuboring:'
+        : '🧮 Kaptchani tasdiqlang!\n\nRasmdagi misolni hisoblab, javobini (faqat son) yozib yuboring:';
+
+      ctx
+        .replyWithPhoto({ source: imageBuffer }, { caption })
+        .catch((err) => {
+          this.logger.warn(`Kaptcha rasmini yuborishda xato: ${err.message}`);
+          clearTimeout(timeout);
+          this.pendingCaptchaResolvers.delete(key);
+          resolve(null);
+        });
+    });
+  }
 
   private async clearAllTimeouts(botId: number, userId: number) {
     const key = `${botId}_${userId}`;
@@ -185,10 +217,9 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         { command: 'start', description: '🚀 Botni ishga tushirish' },
         { command: 'vote', description: '🗳 Ovoz berish (+30 000 so\'m)' },
         { command: 'balance', description: '💰 Balans va hisob' },
-        { command: 'withdraw', description: '📩 Pulni yechib olish' },
+        { command: 'withdraw', description: '💸 Pulni yechib olish' },
         { command: 'referral', description: '🔗 Referal havola (+5 000 so\'m)' },
         { command: 'help', description: 'ℹ️ Yordam va qoidalar' },
-        { command: 'cancel', description: '❌ Bekor qilish' },
       ]).catch(() => {});
 
       // Bot profili va tavsifini avtomatik sozlash
@@ -740,7 +771,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
           `⚠️ <b>Minimal yechish summasi:</b> ${formatSum(minWithdrawal)} so'm\n\n` +
           `Qancha summa yechmoqchisiz?\n` +
           `Raqam ko'rinishida yozib yuboring (masalan: <code>${formatSum(user.balance)}</code> yoki <code>${formatSum(minWithdrawal)}</code>):`,
-          { parse_mode: 'HTML', ...BotKeyboards.cancelKeyboard() }
+          { parse_mode: 'HTML', ...BotKeyboards.mainMenu(user.role === 'ADMIN') }
         );
       } catch (err) {
         this.logger.error(`[Bot #${botRecord.id}] Pul yechish xatoligi:`, err);
@@ -787,7 +818,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     bot.hears(BOT_BUTTONS.REFERRAL, handleReferralTrigger);
     bot.command('referral', handleReferralTrigger);
 
-    // 6. ❌ Bekor qilish (/cancel va tugma)
+    // 6. /cancel komandasi (joriy amalni bekor qilish)
     const handleCancelTrigger = async (ctx: Context) => {
       try {
         const user = await this.getOrCreateBotUser(ctx, botRecord.id);
@@ -802,7 +833,6 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         await ctx.reply('Amal bekor qilindi.', BotKeyboards.mainMenu(user.role === 'ADMIN'));
       } catch (err) {}
     };
-    bot.hears(BOT_BUTTONS.CANCEL, handleCancelTrigger);
     bot.command('cancel', handleCancelTrigger);
 
     // 7. ℹ️ /help komandasi (Qo'llanma va Qoidalar)
@@ -1011,7 +1041,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
           await ctx.reply(
             BOT_MESSAGES.WITHDRAW_ENTER_AMOUNT(method === 'PAYNET' ? 'Paynet' : 'Uzcard/Humo', user.balance, minWithdrawal),
-            BotKeyboards.cancelKeyboard()
+            BotKeyboards.mainMenu(user.role === 'ADMIN')
           );
         } else if (data === 'refresh_balance') {
           const updatedUser = await this.prisma.user.findUnique({ where: { id: user.id } });
@@ -1056,7 +1086,11 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
           const resendWait = await ctx.reply('⏳ Yangi SMS kod so\'ralmoqda, iltimos kuting...');
 
           try {
-            const res = await this.openBudgetService.requestSmsForVote(phone);
+            const res = await this.openBudgetService.requestSmsForVote(
+              phone,
+              undefined,
+              (imageBuffer, isRetry) => this.askUserToSolveCaptcha(ctx, botRecord.id, imageBuffer, isRetry),
+            );
             await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
 
             if (!res.success) {
@@ -1118,6 +1152,11 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         } else if (data === 'referral_link' || data === 'start_ref') {
           await handleReferralTrigger(ctx);
         } else if (data === 'cancel_vote' || data === 'cancel_action') {
+          // Eski xabardagi tugma bo'lishi mumkin — agar amal (SMS/ovoz) allaqachon
+          // yakunlangan bo'lsa (step bo'sh), hech narsani bekor qilmaymiz.
+          const freshUser = await this.prisma.user.findUnique({ where: { id: user.id } });
+          if (!freshUser?.step) return;
+
           await this.clearAllTimeouts(botRecord.id, user.id);
           await this.prisma.user.update({
             where: { id: user.id },
@@ -1132,6 +1171,24 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     bot.on('text', async (ctx) => {
       try {
         const text = ctx.message.text.trim();
+
+        // Foydalanuvchi kaptcha rasmiga javob kutilayotgan bo'lsa, avval shu javobni ushlaymiz
+        const pendingCaptchaKey = `${botRecord.id}_${ctx.from.id}`;
+        const pendingCaptcha = this.pendingCaptchaResolvers.get(pendingCaptchaKey);
+        if (pendingCaptcha) {
+          const match = text.replace(/\s/g, '').match(/-?\d+/);
+          const num = match ? parseInt(match[0], 10) : NaN;
+          clearTimeout(pendingCaptcha.timeout);
+          this.pendingCaptchaResolvers.delete(pendingCaptchaKey);
+          pendingCaptcha.resolve(Number.isNaN(num) ? null : num);
+          if (!Number.isNaN(num)) {
+            await ctx.reply('✅ Rahmat! Javobingiz qabul qilindi, davom etilmoqda...');
+          } else {
+            await ctx.reply('⚠️ Raqam aniqlanmadi, avtomatik urinish davom etmoqda...');
+          }
+          return;
+        }
+
         const user = await this.getOrCreateBotUser(ctx, botRecord.id);
         if (!user || user.isBanned) return;
 
@@ -1360,11 +1417,15 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     const waitMsg = await ctx.reply(BOT_MESSAGES.WAITING, { parse_mode: 'HTML' });
 
     try {
-      const res = await this.openBudgetService.requestSmsForVote(clean12);
+      const res = await this.openBudgetService.requestSmsForVote(
+        clean12,
+        undefined,
+        (imageBuffer, isRetry) => this.askUserToSolveCaptcha(ctx, botRecord.id, imageBuffer, isRetry),
+      );
 
       if (!res.success) {
         await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
-        
+
         // ⚡ Administratorga (Xurshid) zudlik bilan nosozlik xabarnomasini yuborish
         const errMsg = res.error || 'OpenBudget tizimi SMS kod yubormadi';
         const adminAlertText = `⚠️ <b>[BOT XATOLIK SIGNALI]</b>\n\n👤 <b>Foydalanuvchi:</b> ${user.firstName || 'Noma\'lum'} (@${user.username || 'yo\'q'})\n📱 <b>Telefon:</b> +${clean12}\n🤖 <b>Bot:</b> @${botRecord.botUsername || botRecord.id}\n❌ <b>Xatolik:</b> <code>${errMsg}</code>\n⏰ <b>Vaqt:</b> ${new Date().toLocaleTimeString('uz-UZ')}`;
@@ -1477,7 +1538,11 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         if (verifyRes.sessionExpired) {
           const resendWait = await ctx.reply(BOT_MESSAGES.WAITING);
           try {
-            const newSms = await this.openBudgetService.requestSmsForVote(phone);
+            const newSms = await this.openBudgetService.requestSmsForVote(
+              phone,
+              undefined,
+              (imageBuffer, isRetry) => this.askUserToSolveCaptcha(ctx, botRecord.id, imageBuffer, isRetry),
+            );
             await ctx.telegram.deleteMessage(ctx.chat.id, resendWait.message_id).catch(() => {});
 
             if (newSms.success) {
@@ -1660,7 +1725,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
     const promptText = `💳 <b>Plastik karta (Uzcard / Humo) raqamingizni kiriting:</b>\n\n16 ta raqam ko'rinishida yuboring (masalan: <code>8600 1234 5678 9012</code>):`;
 
-    await ctx.reply(promptText, { parse_mode: 'HTML', ...BotKeyboards.cancelKeyboard() });
+    await ctx.reply(promptText, { parse_mode: 'HTML', ...BotKeyboards.mainMenu(user.role === 'ADMIN') });
   }
 
   private async handleWithdrawAccount(ctx: Context, botRecord: any, user: any, accountText: string) {
@@ -1687,7 +1752,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
       return ctx.reply(
         `👤 <b>Karta egasining Ism va Familiyasini kiriting:</b>\n\n(Kartada yoki ilovada ko'rsatilganidek, masalan: <code>ALIYEV VALI</code>):`,
-        { parse_mode: 'HTML', ...BotKeyboards.cancelKeyboard() }
+        { parse_mode: 'HTML', ...BotKeyboards.mainMenu(user.role === 'ADMIN') }
       );
     } else {
       // PAYNET

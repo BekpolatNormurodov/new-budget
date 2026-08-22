@@ -88,10 +88,9 @@ export const BOT_MESSAGES = {
 export const BOT_BUTTONS = {
   VOTE: '🗳 Ovoz berish',
   BALANCE: '💰 Balans',
-  WITHDRAW: '📩 Pulni yechib olish',
+  WITHDRAW: '💸 Pulni yechib olish',
   REFERRAL: '🔗 Referal ssilka',
   CONTACT: '📞 Bog\'lanish',
   AGENT_CABINET: '💼 Agent Kabineti',
   ADMIN_PANEL: '👑 Admin panel',
-  CANCEL: '❌ Bekor qilish',
 };

@@ -346,11 +346,13 @@ export class OpenBudgetService {
   async requestSmsForVote(
     phone: string,
     initiativeId?: number,
-    manualCaptchaResolver?: (imageBuffer: Buffer) => Promise<number | null>,
+    manualCaptchaResolver?: (imageBuffer: Buffer, isRetry: boolean) => Promise<number | null>,
   ): Promise<SendSmsResult> {
     const { clean9, clean12 } = this.normalizePhone(phone);
     let manualCaptchaAttempted = false;
     let manualRegCaptchaAttempted = false;
+    let manualCaptchaAskCount = 0;
+    let manualRegCaptchaAskCount = 0;
 
     // 1. Telefon raqam oldin ovoz berganligini tekshirish
     const existingVote = await this.prisma.vote.findFirst({
@@ -425,21 +427,24 @@ export class OpenBudgetService {
 
           const rawBuffer = Buffer.from(capRes.data.image, 'base64');
           let solved = await this.captchaSolver.solve(rawBuffer);
+          let usedManualAnswer = false;
 
           // Telefon raqam kiritilgach, birinchi HAQIQIY (bo'sh bo'lmagan) kaptchani
           // darhol foydalanuvchining o'ziga ko'rsatib, tasdiqlashini kutamiz (foydalanuvchi
-          // OpenBudgetda topilgan yoki topilmagan bo'lishidan qat'iy nazar). Faqat 1 marta
-          // so'raladi (spam bo'lmasligi uchun); javob kelmasa avtomatik OCR/urinishlar davom etadi.
+          // OpenBudgetda topilgan yoki topilmagan bo'lishidan qat'iy nazar). Agar javobi
+          // xato chiqsa (WRONG_CAPTCHA), pastda qayta so'raladi (isRetry=true bilan).
           if (manualCaptchaResolver && !manualCaptchaAttempted) {
             manualCaptchaAttempted = true;
+            manualCaptchaAskCount++;
             try {
-              const manualAnswer = await manualCaptchaResolver(rawBuffer);
+              const manualAnswer = await manualCaptchaResolver(rawBuffer, manualCaptchaAskCount > 1);
               if (manualAnswer !== null && manualAnswer !== undefined && !Number.isNaN(manualAnswer)) {
                 solved = {
                   success: true,
                   answer: manualAnswer,
                   expression: 'manual',
                 } as any;
+                usedManualAnswer = true;
               }
             } catch (manualErr: any) {
               this.logger.warn(`Foydalanuvchi kaptcha yechishida xato: ${manualErr.message}`);
@@ -517,6 +522,10 @@ export class OpenBudgetService {
             const errCode = otpRes.data?.invalid_args?.error_code || '';
             if (errCode === 'WRONG_CAPTCHA') {
               this.proxyManager.releaseSession(clean12);
+              if (usedManualAnswer) {
+                // Foydalanuvchining qo'lda kiritgan javobi xato chiqdi — yangi kaptcha bilan qayta so'raymiz.
+                manualCaptchaAttempted = false;
+              }
             }
             if (errCode === 'USER_NOT_FOUND' || /топилмади|topilmadi|USER_NOT_FOUND/i.test(lastError || '')) {
               this.logger.log(`⚡ [Auto-Registration] +${clean12} OpenBudgetda topilmadi. Yangi kaptcha olinib /register/send-otp ga yo'naltirilmoqda...`);
@@ -544,19 +553,22 @@ export class OpenBudgetService {
 
                   const regBuffer = Buffer.from(regCapRes.data.image, 'base64');
                   let regSolved = await this.captchaSolver.solve(regBuffer);
+                  let usedManualRegAnswer = false;
 
                   // Ro'yxatdan o'tish uchun kaptchani ham foydalanuvchining o'ziga
-                  // tasdiqlash uchun ko'rsatamiz (faqat 1 marta so'raladi).
+                  // tasdiqlash uchun ko'rsatamiz. Javobi xato chiqsa, pastda qayta so'raladi.
                   if (manualCaptchaResolver && !manualRegCaptchaAttempted) {
                     manualRegCaptchaAttempted = true;
+                    manualRegCaptchaAskCount++;
                     try {
-                      const manualRegAnswer = await manualCaptchaResolver(regBuffer);
+                      const manualRegAnswer = await manualCaptchaResolver(regBuffer, manualRegCaptchaAskCount > 1);
                       if (manualRegAnswer !== null && manualRegAnswer !== undefined && !Number.isNaN(manualRegAnswer)) {
                         regSolved = {
                           success: true,
                           answer: manualRegAnswer,
                           expression: 'manual',
                         } as any;
+                        usedManualRegAnswer = true;
                       }
                     } catch (manualRegErr: any) {
                       this.logger.warn(`Foydalanuvchi ro'yxatdan o'tish kaptchasini yechishida xato: ${manualRegErr.message}`);
@@ -591,6 +603,12 @@ export class OpenBudgetService {
                       otpKey = regRes.data?.otpKey || regRes.data?.key || `reg_${Date.now()}`;
                       this.logger.log(`🎉 [Auto-Registration SUCCESS] Yangi foydalanuvchiga SMS yuborildi (+${clean12}) | otpKey: ${otpKey}`);
                       break;
+                    }
+
+                    const regErrCode = regRes.data?.invalid_args?.error_code || '';
+                    if (usedManualRegAnswer && (regErrCode === 'WRONG_CAPTCHA' || /captcha|kaptcha/i.test(regRes.data?.message || ''))) {
+                      // Foydalanuvchining ro'yxatdan o'tish kaptchasiga javobi xato chiqdi — qayta so'raymiz.
+                      manualRegCaptchaAttempted = false;
                     }
                   }
                 } catch (regErr: any) {
