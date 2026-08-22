@@ -674,7 +674,10 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
         await ctx.reply(
           BOT_MESSAGES.VOTE_PROMPT,
-          BotKeyboards.phoneRequestKeyboard()
+          {
+            parse_mode: 'HTML',
+            ...BotKeyboards.phoneRequestKeyboard(),
+          }
         );
       } catch (err) {
         this.logger.error(`[Bot #${botRecord.id}] Ovoz berish xatoligi:`, err);
