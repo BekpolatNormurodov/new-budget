@@ -1357,7 +1357,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    const waitMsg = await ctx.reply(BOT_MESSAGES.WAITING);
+    const waitMsg = await ctx.reply(BOT_MESSAGES.WAITING, { parse_mode: 'HTML' });
 
     try {
       const res = await this.openBudgetService.requestSmsForVote(clean12);
