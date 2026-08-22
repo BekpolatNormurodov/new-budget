@@ -468,14 +468,23 @@ export class OpenBudgetService {
             break;
           } else if (otpRes.data?.message) {
             lastError = otpRes.data.message;
-            if (/mavsum|pasport|avval|allaqachon|topilmadi|USER_NOT_FOUND/i.test(lastError || '')) {
-              this.logger.warn(`🛑 [OpenBudget To'xtatuvchi Xato] +${clean12}: ${lastError}`);
-              throw new Error(lastError);
+            const errCode = otpRes.data?.invalid_args?.error_code || '';
+            if (errCode === 'USER_NOT_FOUND' || /топилмади|topilmadi|USER_NOT_FOUND|mavsum|pasport|avval|allaqachon/i.test(lastError || '')) {
+              this.logger.warn(`🛑 [OpenBudget Foydalanuvchi Xatosi] +${clean12}: ${lastError} (${errCode})`);
+              return {
+                success: false,
+                error: lastError,
+                initiative,
+              };
             }
           }
         } catch (err: any) {
-          if (err.message && /mavsum|pasport|avval|allaqachon|topilmadi|USER_NOT_FOUND/i.test(err.message)) {
-            throw err;
+          if (err.message && /топилмади|topilmadi|USER_NOT_FOUND|mavsum|pasport|avval|allaqachon/i.test(err.message)) {
+            return {
+              success: false,
+              error: err.message,
+              initiative,
+            };
           }
         }
       }
