@@ -222,7 +222,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <span>Tizim A'lo</span>
                     <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-mono">1m Live</span>
                   </p>
-                  <p className="text-[9px] text-slate-500 dark:text-slate-400 truncate">20 Proxy & Botlar faol</p>
+                  <p className="text-[9px] text-slate-500 dark:text-slate-400 truncate">400 Proxy & Botlar faol</p>
                 </div>
               )}
             </div>

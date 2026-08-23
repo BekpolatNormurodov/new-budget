@@ -524,7 +524,7 @@ export function App() {
       case 'votes': return 'SMS orqali kutilayotgan va tasdiqlangan barcha ovozlar';
       case 'withdrawals': return 'Foydalanuvchilarning pul yechish arizalari va cheklar';
       case 'users': return 'Barcha mijozlar, ularning balansi va referallari';
-      case 'health': return 'OpenBudget API, Captcha solver va 20 ta proxylar salomatligi';
+      case 'health': return 'OpenBudget API, Captcha solver va 400 ta proxylar salomatligi';
     }
   };
 
