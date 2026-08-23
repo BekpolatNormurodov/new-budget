@@ -797,7 +797,15 @@ export class WebAppController {
 
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(body || {})) {
-      params.append(k, Array.isArray(v) ? String(v[v.length - 1] || v[0] || '') : (typeof v === 'object' ? JSON.stringify(v) : String(v)));
+      let val: string;
+      if (Array.isArray(v)) {
+        val = String(v.filter(Boolean).pop() || '');
+      } else if (typeof v === 'object' && v !== null) {
+        val = JSON.stringify(v);
+      } else {
+        val = String(v ?? '');
+      }
+      params.set(k, val);
     }
     args.push('--data', params.toString());
     args.push('https://new.openbudget.uz/api/v2/vote/mvc/captcha');
@@ -810,9 +818,6 @@ export class WebAppController {
       const captchaStatusCode = statusMatch690 ? parseInt(statusMatch690[statusMatch690.length - 1].match(/\d{3}/)![0], 10) : 0;
       this.logger.log(`📤 [mvc/captcha POST] OpenBudget javobi: ${statusMatch690 ? statusMatch690[statusMatch690.length - 1] : "noma'lum"} | Phone: +${logPhone}`);
 
-      // Javob tanasini audit uchun bazaga saqlash (keyinchalik "nima javob keldi?"
-      // degan savolga aniq javob berish uchun — konsol loglar deploy paytida yo'qolib
-      // qolishi mumkin, lekin bu yozuv bazada qoladi).
       const captchaBodyForLog = stdout.slice(0, 10000);
       this.prisma.openBudgetResponseLog.create({
         data: {
@@ -826,52 +831,27 @@ export class WebAppController {
       }).catch(() => {});
 
       if (captchaStatusCode && captchaStatusCode !== 200) {
-        // Captcha bosqichining o'zi rad etilgan. OpenBudget buning ANIQ sababini
-        // <div class="error-alert" id="error-alert">...</div> ichida yuboradi —
-        // masalan "950642827 ushbu raqamga bugungi urinishlar soni tugadi!" (kunlik
-        // limit) yoki boshqa sabab. Buni chiqarib olib, foydalanuvchiga aynan
-        // O'SHA matnni ko'rsatamiz — umumiy "captcha noto'g'ri" emas, balki haqiqiy
-        // sabab (limit tugagani, raqam bloklangani va h.k.) aniq ko'rinsin.
         const errorAlertMatch = stdout.match(/<div class="error-alert"[^>]*>([\s\S]*?)<\/div>/i);
         let openBudgetErrorText = errorAlertMatch ? errorAlertMatch[1].replace(/<[^>]+>/g, '').trim() : '';
 
-        // MUHIM: OpenBudget ba'zan BUTUNLAY BOSHQA sahifa shablonini qaytaradi —
-        // `error-alert` o'rniga to'liq alohida sahifa: `<div class="card">...
-        // <p>XABAR MATNI</p>...</div>`. Bu holatda yuqoridagi qidiruv hech narsa
-        // topmay, foydalanuvchiga umumiy (asl sababsiz) xabar ko'rsatilar edi.
-        // Endi bu ikkinchi shablon ham tekshiriladi.
         if (!openBudgetErrorText) {
-          const altCardMatch = stdout.match(/<div class="card">[\s\S]*?<p>([\s\S]*?)<\/p>/i);
-          if (altCardMatch) {
-            openBudgetErrorText = altCardMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-          }
+          const cardPMatch = stdout.match(/<div class="card"[^>]*>[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/i);
+          if (cardPMatch) openBudgetErrorText = cardPMatch[1].replace(/<[^>]+>/g, '').trim();
         }
 
         const displayErrorText = openBudgetErrorText || `Captcha tasdiqlanmadi. Iltimos, qaytadan urinib ko'ring.`;
+        const lowerErr = displayErrorText.toLowerCase();
 
-        // Xato turini aniqlab, har biriga mos harakat/xabar berish uchun
-        // klassifikatsiya qilinadi — umumiy "captcha xato" o'rniga aniq sabab.
-        const lowerErr = openBudgetErrorText.toLowerCase();
-        type CaptchaErrorType = 'DAILY_LIMIT' | 'CAPTCHA_EXPIRED' | 'OTHER';
-        let errorType: CaptchaErrorType = 'OTHER';
-        if (lowerErr.includes('урунишлар сони тугади') || lowerErr.includes('urinishlar soni tugadi') || lowerErr.includes('limit')) {
-          errorType = 'DAILY_LIMIT';
-        } else if (lowerErr.includes('топилмади') || lowerErr.includes('ишлатилган') || lowerErr.includes('topilmadi') || lowerErr.includes('ishlatilgan')) {
-          errorType = 'CAPTCHA_EXPIRED';
-        }
+        const isPassportDuplicate = lowerErr.includes('allaqachon') || lowerErr.includes('ovoz berilgan') || lowerErr.includes('mavsum') || lowerErr.includes('bir marta');
+        const isDailyLimit = lowerErr.includes('урунишлар сони') || lowerErr.includes('urinishlar soni') || lowerErr.includes('limit');
+        const advice = isPassportDuplicate
+          ? "\n\n💡 Boshqa yaqinlaringiz (boshqa pasport egasi) nomidagi telefon raqamidan ovoz bering."
+          : isDailyLimit
+            ? "\n\n💡 Bu raqam uchun bugungi urinishlar tugagan — ertaga yoki boshqa raqam bilan urinib ko'ring."
+            : "";
 
-        // Turga qarab foydalanuvchiga qo'shimcha maslahat beriladi:
-        const advice = errorType === 'DAILY_LIMIT'
-          ? "\n\n💡 Bu raqam uchun bugungi urinishlar tugagan — ertaga yoki boshqa raqam bilan urinib ko'ring."
-          : errorType === 'CAPTCHA_EXPIRED'
-            ? "\n\n💡 Captcha eskirgan bo'lishi mumkin — botga qaytib, sahifani qayta oching."
-            : '';
+        this.logger.warn(`⚠️ [mvc/captcha POST] OpenBudget CAPTCHA rad etildi: HTTP ${captchaStatusCode} | Phone: +${logPhone} | Sabab: "${displayErrorText}"`);
 
-        this.logger.warn(`⚠️ [mvc/captcha POST] OpenBudget CAPTCHA'ni RAD ETDI: HTTP ${captchaStatusCode} | Phone: +${logPhone} | Tur: ${errorType} | Sabab: "${openBudgetErrorText || 'matn topilmadi'}"`);
-
-        // Xato Mini App oynasida ko'rinishidan tashqari, BOT orqali ham (Telegram
-        // xabari sifatida) yuboriladi — chunki foydalanuvchi Mini App'ni tez yopib
-        // yuborishi yoki xabarni ko'rmay qolishi mumkin, lekin bot xabari doim qoladi.
         (async () => {
           try {
             const tgId = String(body?.tg_id || body?.telegramId || '').trim();
@@ -881,12 +861,12 @@ export class WebAppController {
               if (bot?.token) {
                 await axios.post(`https://api.telegram.org/bot${bot.token}/sendMessage`, {
                   chat_id: tgId,
-                  text: `⚠️ <b>Ovoz qabul qilinmadi!</b>\n\n📱 Telefon: +998${logPhone.replace(/^998/, '')}\n📌 <b>Sabab:</b> ${displayErrorText}${advice}`,
+                  text: `⚠️ <b>OVOZ QABUL QILINMADI:</b>\n\n📱 Telefon: +998${logPhone.replace(/^998/, '')}\n📌 <b>Sabab:</b> ${displayErrorText}${advice}`,
                   parse_mode: 'HTML',
                 }).catch(() => {});
               }
             }
-          } catch { /* bot xabari yuborilmasa ham, foydalanuvchi Mini App'da xabarni ko'radi */ }
+          } catch {}
         })();
 
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -1277,15 +1257,7 @@ export class WebAppController {
             if (domImgLazy && !document.querySelector('.timer-container')) {
               const timerBox = document.createElement('div');
               timerBox.className = 'timer-container';
-              timerBox.innerHTML = \`
-                <div class="timer-bar-wrap">
-                  <div class="timer-bar-fill" id="timerFill"></div>
-                </div>
-                <div class="timer-label">
-                  <span>Rasm yangilanishi:</span>
-                  <span id="timerSec">30 s</span>
-                </div>
-              \`;
+              timerBox.innerHTML = '<div class="timer-bar-wrap"><div class="timer-bar-fill" id="timerFill"></div></div><div class="timer-label"><span>Rasm yangilanishi:</span><span id="timerSec">30 s</span></div>';
               domImgLazy.parentNode.insertBefore(timerBox, domImgLazy.nextSibling);
 
               let timeLeft = 30;
@@ -1498,7 +1470,15 @@ export class WebAppController {
 
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(body || {})) {
-      params.append(k, Array.isArray(v) ? String(v[v.length - 1] || v[0] || '') : (typeof v === 'object' ? JSON.stringify(v) : String(v)));
+      let val: string;
+      if (Array.isArray(v)) {
+        val = String(v.filter(Boolean).pop() || '');
+      } else if (typeof v === 'object' && v !== null) {
+        val = JSON.stringify(v);
+      } else {
+        val = String(v ?? '');
+      }
+      params.set(k, val);
     }
     args.push('--data', params.toString());
     args.push('https://new.openbudget.uz/api/v2/vote/mvc/verify');
@@ -1534,12 +1514,6 @@ export class WebAppController {
         }
       }
 
-      // MUHIM: agar javobda tana (body) umuman bo'lmasa (content-length: 0), curl -i
-      // chiqishi ba'zan headerlar oxirida bo'sh qatorni chiqarmaydi — shu sabab
-      // yuqoridagi ajratish mantig'i BUTUN HEADER MATNINI "body" deb xato qabul
-      // qilib qolishi mumkin edi (bu esa keyinchalik "muvaffaqiyat" deb noto'g'ri
-      // xulosaga olib kelardi). Shuning uchun bu yerda `content-length: 0` headerini
-      // to'g'ridan-to'g'ri, eng ishonchli belgi sifatida tekshiramiz.
       const hasZeroContentLength = /content-length:\s*0\s*(\r?\n|$)/i.test(stdout);
       if (hasZeroContentLength) {
         bodyRaw = '';
@@ -1567,41 +1541,14 @@ export class WebAppController {
         lowerBody.includes('limit') ||
         lowerBody.includes('превышен');
 
-      const hasSuccessText = 
-        lowerBody.includes('қабул қилинди') ||
-        lowerBody.includes('qabul qilindi') ||
-        lowerBody.includes('овозингиз қабул') ||
-        lowerBody.includes('ovozingiz qabul') ||
-        lowerBody.includes('ташаккур') ||
-        lowerBody.includes('tashakkur') ||
-        lowerBody.includes('муваффақиятли') ||
-        lowerBody.includes('muvaffaqiyatli') ||
-        lowerBody.includes('раҳмат') ||
-        lowerBody.includes('rahmat') ||
-        lowerBody.includes('принят') ||
-        lowerBody.includes('успешно') ||
-        lowerBody.includes('спасибо');
+      const isAlreadyVotedPhone = lowerBody.includes('рақам орқали овоз берилган') || lowerBody.includes('ushbu raqam') || lowerBody.includes('raqam orqali');
+      const isAlreadyVotedCitizen = lowerBody.includes('фуқаро') || lowerBody.includes('паспорт') || lowerBody.includes('nomiga ovoz berilgan') || lowerBody.includes('fuqaro');
+      const isExpiredSms = lowerBody.includes('муддати тугаган') || lowerBody.includes('eskirgan') || lowerBody.includes('vaqti');
+      const isLimitExceeded = lowerBody.includes('уринишлар сони тугади') || lowerBody.includes('limit') || lowerBody.includes('urinishlar soni');
 
-      // MUHIM: OpenBudget ba'zan HTTP 200 va MUTLAQO BO'SH javob tanasi (content-length: 0)
-      // qaytaradi. Avval bunday holat ham "muvaffaqiyat" deb hisoblanardi (bo'sh
-      // matnda xato-so'zlar ham, muvaffaqiyat-so'zlar ham topilmagani uchun,
-      // fallback shart "vacuously true" bo'lib chiqardi). Bu noaniq holat — real
-      // hayotda bunday ovozlar keyinchalik rasmiy reyestrda hech qachon topilmadi.
-      // Endi bo'sh javob alohida "isEmptyAmbiguous" sifatida belgilanadi va
-      // foydalanuvchiga "TASDIQLANDI" emas, balki xolis "tekshirilmoqda" xabari
-      // ko'rsatiladi (baribir keyinroq faqat haqiqiy reyestr-tekshiruv orqali
-      // tasdiqlanadi va pul o'sha payt to'lanadi — bu yerda pul to'lanmaydi).
-      const isEmptyAmbiguous = lastStatusCode === 200 && bodyRaw.trim().length === 0;
-      const isRealSuccess = lastStatusCode === 200 && !isJsonError && !hasErrorText && !isEmptyAmbiguous && (hasSuccessText || (!bodyRaw.includes('action="/api/v2/vote/mvc/verify"') && !bodyRaw.includes('name="code"')));
-      const isAlreadyVoted = bodyRaw.includes('овоз берилган') || bodyRaw.includes('allaqachon') || lastStatusCode === 409;
-      const isWrongCode = !isRealSuccess && !isEmptyAmbiguous && (isJsonError || hasErrorText || lastStatusCode === 400 || lastStatusCode === 500 || bodyRaw.includes('action="/api/v2/vote/mvc/verify"'));
-      this.logger.log(`🔎 [mvc/verify POST] Natija tahlili: isRealSuccess=${isRealSuccess} isAlreadyVoted=${isAlreadyVoted} isWrongCode=${isWrongCode} isEmptyAmbiguous=${isEmptyAmbiguous} | Phone: +${logPhone2}`);
+      const isRealSuccess = (lastStatusCode === 200 || lastStatusCode === 201) && !isJsonError && !hasErrorText && !isAlreadyVotedPhone && !isAlreadyVotedCitizen && !isExpiredSms && !isLimitExceeded;
+      this.logger.log(`🔎 [mvc/verify POST] Natija tahlili: isRealSuccess=${isRealSuccess} lastStatusCode=${lastStatusCode} isAlreadyVoted=${isAlreadyVotedPhone || isAlreadyVotedCitizen} | Phone: +${logPhone2}`);
 
-      // OpenBudget javobini tahlil qilish uchun DB audit logiga saqlash — headerlar
-      // VA tana (body) ikkalasi ham TO'LIQ xom curl chiqishi (stdout) sifatida
-      // saqlanadi, faqat ajratib olingan bodyRaw emas (headerlar yo'qolib qolmasligi
-      // uchun — masalan Set-Cookie, content-length kabi diagnostika uchun muhim
-      // ma'lumotlar shu yerda saqlanadi).
       this.prisma.openBudgetResponseLog.create({
         data: {
           endpoint: 'VERIFY_SMS',
@@ -1620,19 +1567,9 @@ export class WebAppController {
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
 
-      // Agar ovoz haqiqatdan ham muvaffaqiyatli qabul qilingan bo'lsa (yoki OpenBudget
-      // bo'sh-lekin-200 javob bergan noaniq holatda ham) — ikkalasida ham ovoz
-      // PENDING_VERIFICATION sifatida saqlanadi va foydalanuvchiga "qabul qilindi"
-      // deb ko'rsatiladi (pul BU YERDA to'lanmaydi — buni faqat keyingi haqiqiy
-      // reyestr-tekshiruv hal qiladi), lekin loglarda ikkisi ANIQ farqlanadi.
-      if (isRealSuccess || isEmptyAmbiguous) {
-        // Fon rejimida bot orqali foydalanuvchiga xabar berish va balansini yangilash:
+      if (isRealSuccess) {
         try {
-          if (isEmptyAmbiguous) {
-            this.logger.warn(`❓ [OpenBudget Verify EMPTY/AMBIGUOUS] Phone: +${clean12} | HTTP Status: ${lastStatusCode} | Bo'sh javob — reyestr-tekshiruv hal qiladi`);
-          } else {
-            this.logger.log(`🎉 [OpenBudget Verify REAL SUCCESS] Phone: +${clean12} | HTTP Status: ${lastStatusCode}`);
-          }
+          this.logger.log(`🎉 [OpenBudget Verify REAL SUCCESS] Phone: +${clean12} | HTTP Status: ${lastStatusCode}`);
 
           // Foydalanuvchini aniqlash (telegramId, phone yoki cookie orqali):
           const postedTgId = String(body?.telegramId || body?.tg_id || '').trim();
@@ -1674,11 +1611,6 @@ export class WebAppController {
             const voteReward = activeBot?.voteReward || 30000;
             const mahallaName = activeBot?.mahallaName || 'Янги боги сурх MFY';
 
-            // Ovozni bazaga PENDING_VERIFICATION holatida yozish:
-            // Tekshirish + yaratish bir xil telefon uchun ATOMIK bo'lishi kerak —
-            // aks holda ikkita deyarli bir vaqtdagi so'rov ikkalasi ham "mavjud
-            // emas" deb topib, bitta haqiqiy ovoz uchun ikkita PENDING yozuv
-            // (va keyinchalik ikki marta pul) yaratishi mumkin edi.
             const createdVoteId = await withPhoneLock(clean12 || clean9, async () => {
               const existingVote = clean12 ? await this.prisma.vote.findFirst({
                 where: {
@@ -1715,24 +1647,16 @@ export class WebAppController {
             if (wasCreated) {
               this.logger.log(`⏳ [Vote Submitted - Pending Verification] User ID: ${user.id} | Telegram: ${user.telegramId} | Phone: +${clean12}`);
 
-              // MUHIM: bo'sh/noaniq javob holatida ovoz 15-daqiqalik siklni kutmasdan,
-              // DARHOL bir marta reyestr bo'yicha tekshiriladi — chunki ba'zida ovoz
-              // deyarli zudlik bilan reyestrda ko'rinib qoladi, va foydalanuvchi pulni
-              // 15 daqiqagacha emas, bir necha soniyada olishi mumkin. Bu chaqiruv
-              // fon rejimida (kutilmasdan) ishlaydi — foydalanuvchiga javob berishni
-              // sekinlashtirmaydi.
-              if (isEmptyAmbiguous && createdVoteId) {
+              // Darhol reyestr tekshiruvini ishga tushirish
+              if (createdVoteId) {
                 this.voteAutoApproverService.checkVoteNow(createdVoteId).catch(() => {});
               }
 
-              // Telegram Bot orqali kutilayotgan holat xabarini jo'natish (Rasmiy reyestr tekshiruvida):
-              // Bot chatidagi eski (to'g'ridan-to'g'ri SMS kiritish) yo'l bilan BIR XIL
-              // umumiy matn ishlatiladi — foydalanuvchi qaysi yo'l bilan ovoz berishidan
-              // qat'i nazar bir xil xabar ko'rishi kerak.
+              // Telegram Bot orqali to'g'ri o'zbekcha qabul qilindi xabarini jo'natish:
               if (activeBot?.token) {
                 const tgUrl = `https://api.telegram.org/bot${activeBot.token}/sendMessage`;
                 const formattedPhoneForMsg = `998 ${clean9 ? `${clean9.slice(0,2)} ${clean9.slice(2,5)}-${clean9.slice(5,7)}-${clean9.slice(7,9)}` : '***'}`;
-                const text = BOT_MESSAGES.VOTE_SUBMITTED_PENDING(formattedPhoneForMsg, voteReward, mahallaName, isEmptyAmbiguous);
+                const text = BOT_MESSAGES.VOTE_SUBMITTED_PENDING(formattedPhoneForMsg, voteReward, mahallaName);
 
                 await axios.post(tgUrl, {
                   chat_id: user.telegramId,
@@ -1772,11 +1696,9 @@ export class WebAppController {
         </head>
         <body>
           <div class="card">
-            <div class="icon">${isEmptyAmbiguous ? '⏳' : '✅'}</div>
-            <h2>${isEmptyAmbiguous ? "So'rovingiz qabul qilindi" : 'Ovozingiz qabul qilindi!'}</h2>
-            <p>${isEmptyAmbiguous
-              ? "OpenBudget hozircha aniq javob bermadi. Ovozingiz faqat rasmiy reyestrda haqiqatan topilgandagina tasdiqlanadi va shundagina pul o'tkaziladi."
-              : 'Ovozingiz tizim tomonidan qabul qilindi. Botga qaytishingiz mumkin.'}</p>
+            <div class="icon">✅</div>
+            <h2>Ovozingiz qabul qilindi!</h2>
+            <p>Ovozingiz tizim tomonidan qabul qilindi. Botga qaytishingiz mumkin.</p>
             <button onclick="if(window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close(); else window.close();">Botga qaytish (Yopish)</button>
           </div>
           <script>
@@ -1793,141 +1715,133 @@ export class WebAppController {
         `);
       }
 
-      // Har bir aniq xatolik turini aniqlash:
-      const isAlreadyVotedPhone = lowerBody.includes('рақам орқали овоз берилган') || lowerBody.includes('ushbu raqam') || lowerBody.includes('raqam orqali');
-      const isAlreadyVotedCitizen = lowerBody.includes('фуқаро') || lowerBody.includes('паспорт') || lowerBody.includes('nomiga ovoz berilgan') || lowerBody.includes('fuqaro');
-      const isExpiredSms = lowerBody.includes('муддати тугаган') || lowerBody.includes('eskirgan') || lowerBody.includes('vaqti');
-      const isLimitExceeded = lowerBody.includes('уринишлар сони тугади') || lowerBody.includes('limit') || lowerBody.includes('urinishlar soni');
+      // Agar xato bo'lsa (isRealSuccess === false) - bot foydalanuvchisiga va Mini App'ga xabar berish:
       const isWrongSms = !isAlreadyVotedPhone && !isAlreadyVotedCitizen && !isLimitExceeded && (lowerBody.includes('нотўғри') || lowerBody.includes('noto\'g\'ri') || lastStatusCode === 400 || lastStatusCode === 500);
 
-      // Agar xato bo'lsa va bot foydalanuvchisiga xabar berish kerak bo'lsa:
-      if (!isRealSuccess) {
-        try {
-          const postedTgId = String(body?.telegramId || body?.tg_id || '').trim();
-          const cookieTgMatch = (clientCookies || '').match(/VOTE_TG_ID=([0-9]+)/);
-          const finalTgId = postedTgId || (cookieTgMatch ? cookieTgMatch[1] : '');
+      try {
+        const postedTgId = String(body?.telegramId || body?.tg_id || '').trim();
+        const cookieTgMatch = (clientCookies || '').match(/VOTE_TG_ID=([0-9]+)/);
+        const finalTgId = postedTgId || (cookieTgMatch ? cookieTgMatch[1] : '');
 
-          let user = null;
-          if (finalTgId) {
-            user = await this.prisma.user.findUnique({ where: { telegramId: finalTgId } });
-          }
-          if (!user && clean12) {
-            user = await this.prisma.user.findFirst({
-              where: {
-                OR: [
-                  { phone: clean12 },
-                  { phone: clean9 },
-                  { tempData: { contains: clean9 } },
-                  { step: 'AWAITING_SMS_CODE' },
-                ],
-              },
-              orderBy: { updatedAt: 'desc' },
-            });
-          }
-
-          if (user && user.telegramId) {
-            const postedBotId = parseInt(String(body?.botId || body?.bot_id || ''), 10);
-            const cookieBotMatch = (clientCookies || '').match(/VOTE_BOT_ID=([0-9]+)/);
-            const finalBotId = postedBotId || (cookieBotMatch ? parseInt(cookieBotMatch[1], 10) : user.botInstanceId);
-
-            const activeBot = (finalBotId ? await this.prisma.botInstance.findUnique({ where: { id: finalBotId } }) : null) || 
-                              await this.prisma.botInstance.findFirst({ where: { isActive: true } });
-
-            if (activeBot?.token) {
-              let errorMsg = '';
-              if (isAlreadyVotedPhone) {
-                errorMsg = `⚠️ <b>OVOZ BERILMAGAN:</b>\n\n+998 ${clean9} raqami orqali ushbu mavsumda allaqachon ovoz berilgan!`;
-              } else if (isAlreadyVotedCitizen) {
-                errorMsg = `⚠️ <b>OVOZ BERILMAGAN:</b>\n\nUshbu fuqaro (pasport/PINFL) nomiga boshqa raqam orqali ovoz berilgan!`;
-              } else if (isLimitExceeded) {
-                errorMsg = `⚠️ <b>LIMIT TUGADI:</b>\n\n+998 ${clean9} raqamiga bugungi SMS urinishlar soni tugadi. Boshqa raqam orqali urinib ko'ring.`;
-              } else if (isExpiredSms) {
-                errorMsg = `⏳ <b>SMS MUDDATI TUGADI:</b>\n\nKiritilgan SMS kod muddati o'tgan. Qaytadan urinib ko'ring.`;
-              } else if (isWrongSms) {
-                errorMsg = `❌ <b>KOD NOTO'G'RI:</b>\n\nSMS orqali kelgan tasdiqlash kodi noto'g'ri kiritildi!`;
-              }
-
-              if (errorMsg) {
-                await axios.post(`https://api.telegram.org/bot${activeBot.token}/sendMessage`, {
-                  chat_id: user.telegramId,
-                  text: errorMsg,
-                  parse_mode: 'HTML',
-                }).catch(() => {});
-              }
-            }
-          }
-        } catch (e: any) {
-          this.logger.warn(`⚠️ [mvc/verify POST] Xato-holat xabarini yuborishda muammo: ${e.message}`);
+        let user = null;
+        if (finalTgId) {
+          user = await this.prisma.user.findUnique({ where: { telegramId: finalTgId } });
+        }
+        if (!user && clean12) {
+          user = await this.prisma.user.findFirst({
+            where: {
+              OR: [
+                { phone: clean12 },
+                { phone: clean9 },
+                { tempData: { contains: clean9 } },
+                { step: 'AWAITING_SMS_CODE' },
+              ],
+            },
+            orderBy: { updatedAt: 'desc' },
+          });
         }
 
-        // Foydalanuvchiga Mini App ichida aniq va chiroyli tushuntirish berish:
-        let title = "SMS kod noto'g'ri!";
-        let desc = "Iltimos, telefoningizga kelgan 6 xonali SMS kodni to'g'ri kiritganingizga ishonch hosil qiling.";
-        let icon = "❌";
-        let btnText = "Orqaga qaytib to'g'irlash";
-        let btnAction = "window.history.back();";
+        if (user && user.telegramId) {
+          const postedBotId = parseInt(String(body?.botId || body?.bot_id || ''), 10);
+          const cookieBotMatch = (clientCookies || '').match(/VOTE_BOT_ID=([0-9]+)/);
+          const finalBotId = postedBotId || (cookieBotMatch ? parseInt(cookieBotMatch[1], 10) : user.botInstanceId);
 
-        if (isAlreadyVotedPhone) {
-          title = "Ushbu raqamdan ovoz berilgan!";
-          desc = "Bu telefon raqami orqali ushbu mavsumda allaqachon ovoz berilgan. Iltimos, boshqa raqam orqali ovoz bering.";
-          icon = "⚠️";
-          btnText = "Oynani yopish";
-          btnAction = "if(window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close(); else window.close();";
-        } else if (isAlreadyVotedCitizen) {
-          title = "Fuqaro nomiga ovoz berilgan!";
-          desc = "Ushbu pasport/shaxs nomiga boshqa SIM-karta orqali allaqachon ovoz berilgan (1 fuqaro = 1 ovoz).";
-          icon = "⚠️";
-          btnText = "Oynani yopish";
-          btnAction = "if(window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close(); else window.close();";
-        } else if (isExpiredSms) {
-          title = "SMS kodi eskirgan (vaqti tugagan)!";
-          desc = "SMS kodning amal qilish vaqti (2 daqiqa) tugagan. Iltimos, yangi SMS so'rang.";
-          icon = "⏱";
-          btnText = "Qaytadan boshlash";
-          btnAction = "window.location.href = '/captcha';";
-        } else if (isLimitExceeded) {
-          title = "Bugungi urinishlar soni tugadi!";
-          desc = "Ushbu raqamga bugungi bepul SMS yuborish limiti tugagan. Iltimos, boshqa raqam bilan urinib ko'ring.";
-          icon = "🚫";
-          btnText = "Oynani yopish";
-          btnAction = "if(window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close(); else window.close();";
-        }
+          const activeBot = (finalBotId ? await this.prisma.botInstance.findUnique({ where: { id: finalBotId } }) : null) || 
+                            await this.prisma.botInstance.findFirst({ where: { isActive: true } });
 
-        return res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-          <title>${title}</title>
-          <script src="https://telegram.org/js/telegram-web-app.js"></script>
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f8fafc; margin: 0; padding: 20px; display: flex; align-items: center; justify-content: center; min-height: 90vh; }
-            .card { background: #fff; border-radius: 24px; padding: 26px 20px; text-align: center; max-width: 360px; box-shadow: 0 10px 25px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
-            .icon { width: 68px; height: 68px; background: #fef2f2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 34px; }
-            h2 { color: #0f172a; margin: 0 0 10px; font-size: 18px; font-weight: 700; }
-            p { color: #475569; font-size: 14px; line-height: 1.5; margin: 0 0 22px; }
-            button { width: 100%; height: 50px; background: #079455; color: #fff; border: none; border-radius: 14px; font-weight: 700; font-size: 15px; cursor: pointer; box-shadow: 0 4px 14px rgba(7, 148, 85, 0.3); }
-          </style>
-        </head>
-        <body>
-          <div class="card">
-            <div class="icon">${icon}</div>
-            <h2>${title}</h2>
-            <p>${desc}</p>
-            <button onclick="${btnAction}">${btnText}</button>
-          </div>
-          <script>
-            if (window.Telegram && window.Telegram.WebApp) {
-              window.Telegram.WebApp.ready();
-              window.Telegram.WebApp.expand();
+          if (activeBot?.token) {
+            let errorMsg = '';
+            if (isAlreadyVotedPhone) {
+              errorMsg = `⚠️ <b>OVOZ BERILMAGAN:</b>\n\n+998 ${clean9} raqami orqali ushbu mavsumda allaqachon ovoz berilgan!`;
+            } else if (isAlreadyVotedCitizen) {
+              errorMsg = `⚠️ <b>OVOZ BERILMAGAN:</b>\n\nUshbu fuqaro (pasport/PINFL) nomiga boshqa raqam orqali ovoz berilgan!`;
+            } else if (isLimitExceeded) {
+              errorMsg = `⚠️ <b>LIMIT TUGADI:</b>\n\n+998 ${clean9} raqamiga bugungi SMS urinishlar soni tugadi. Boshqa raqam orqali urinib ko'ring.`;
+            } else if (isExpiredSms) {
+              errorMsg = `⏳ <b>SMS MUDDATI TUGADI:</b>\n\nKiritilgan SMS kod muddati o'tgan. Qaytadan urinib ko'ring.`;
+            } else if (isWrongSms) {
+              errorMsg = `❌ <b>KOD NOTO'G'RI:</b>\n\nSMS orqali kelgan tasdiqlash kodi noto'g'ri kiritildi!`;
             }
-          </script>
-        </body>
-        </html>
-        `);
+
+            if (errorMsg) {
+              await axios.post(`https://api.telegram.org/bot${activeBot.token}/sendMessage`, {
+                chat_id: user.telegramId,
+                text: errorMsg,
+                parse_mode: 'HTML',
+              }).catch(() => {});
+            }
+          }
+        }
+      } catch (e: any) {
+        this.logger.warn(`⚠️ [mvc/verify POST] Xato-holat xabarini yuborishda muammo: ${e.message}`);
       }
-      return res.send(bodyRaw);
+
+      // Foydalanuvchiga Mini App ichida aniq va chiroyli tushuntirish berish:
+      let title = "SMS kod noto'g'ri!";
+      let desc = "Iltimos, telefoningizga kelgan 6 xonali SMS kodni to'g'ri kiritganingizga ishonch hosil qiling.";
+      let icon = "❌";
+      let btnText = "Orqaga qaytib to'g'irlash";
+      let btnAction = "window.history.back();";
+
+      if (isAlreadyVotedPhone) {
+        title = "Ushbu raqamdan ovoz berilgan!";
+        desc = "Bu telefon raqami orqali ushbu mavsumda allaqachon ovoz berilgan. Iltimos, boshqa raqam orqali ovoz bering.";
+        icon = "⚠️";
+        btnText = "Oynani yopish";
+        btnAction = "if(window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close(); else window.close();";
+      } else if (isAlreadyVotedCitizen) {
+        title = "Fuqaro nomiga ovoz berilgan!";
+        desc = "Ushbu pasport/shaxs nomiga boshqa SIM-karta orqali allaqachon ovoz berilgan (1 fuqaro = 1 ovoz).";
+        icon = "⚠️";
+        btnText = "Oynani yopish";
+        btnAction = "if(window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close(); else window.close();";
+      } else if (isExpiredSms) {
+        title = "SMS kodi eskirgan (vaqti tugagan)!";
+        desc = "SMS kodning amal qilish vaqti (2 daqiqa) tugagan. Iltimos, yangi SMS so'rang.";
+        icon = "⏱";
+        btnText = "Qaytadan boshlash";
+        btnAction = "window.location.href = '/captcha';";
+      } else if (isLimitExceeded) {
+        title = "Bugungi urinishlar soni tugadi!";
+        desc = "Ushbu raqamga bugungi bepul SMS yuborish limiti tugagan. Iltimos, boshqa raqam bilan urinib ko'ring.";
+        icon = "🚫";
+        btnText = "Oynani yopish";
+        btnAction = "if(window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close(); else window.close();";
+      }
+
+      return res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+        <title>${title}</title>
+        <script src="https://telegram.org/js/telegram-web-app.js"></script>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f8fafc; margin: 0; padding: 20px; display: flex; align-items: center; justify-content: center; min-height: 90vh; }
+          .card { background: #fff; border-radius: 24px; padding: 26px 20px; text-align: center; max-width: 360px; box-shadow: 0 10px 25px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+          .icon { width: 68px; height: 68px; background: #fef2f2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 34px; }
+          h2 { color: #0f172a; margin: 0 0 10px; font-size: 18px; font-weight: 700; }
+          p { color: #475569; font-size: 14px; line-height: 1.5; margin: 0 0 22px; }
+          button { width: 100%; height: 50px; background: #079455; color: #fff; border: none; border-radius: 14px; font-weight: 700; font-size: 15px; cursor: pointer; box-shadow: 0 4px 14px rgba(7, 148, 85, 0.3); }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="icon">${icon}</div>
+          <h2>${title}</h2>
+          <p>${desc}</p>
+          <button onclick="${btnAction}">${btnText}</button>
+        </div>
+        <script>
+          if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
+          }
+        </script>
+      </body>
+      </html>
+      `);
     } catch (err: any) {
       this.logger.error(`❌ [mvc/verify POST] Xatolik (barcha qayta urinishlardan keyin ham): ${err.message} | Phone: +${logPhone2}`);
       return res.status(500).send(`<h3>SMS tasdiqlashda xatolik: ${err.message}</h3>`);

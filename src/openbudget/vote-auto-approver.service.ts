@@ -41,6 +41,25 @@ export class VoteAutoApproverService {
   }
 
   /**
+   * ⚡ Barcha kutilayotgan ovozlarni zudlik bilan tekshirish (masalan captcha yechilgandan so'ng)
+   */
+  async checkAllPendingVotes(): Promise<number> {
+    try {
+      const pendingVotes = await this.prisma.vote.findMany({
+        where: { status: 'PENDING_VERIFICATION' },
+        include: { user: true, botInstance: true },
+      });
+      for (const vote of pendingVotes) {
+        await this.processVote(vote).catch(() => {});
+      }
+      return pendingVotes.length;
+    } catch (e: any) {
+      this.logger.error(`checkAllPendingVotes error: ${e.message}`);
+      return 0;
+    }
+  }
+
+  /**
    * 🤖 Har 15 minutda kutilayotgan ovozlarni OpenBudget API va vaqt bo'yicha avtomatik tekshirish
    */
   startLiveVoteChecker(sendMessageCallback: (botId: number | null, telegramId: string, text: string) => Promise<void>) {
@@ -185,47 +204,43 @@ export class VoteAutoApproverService {
       }
     }
 
-    // 1.5. RASMIY OCHIQ BUDJET REYESTRIDAN TEKSHIRISH (Phone suffix & Timestamp strictly [-2 min : +2 min])
-    //
-    // MUHIM: avval bu yerda telefon raqamining oxirgi FAQAT 2 ta raqami
-    // (`suffix2`) ham mos deb hisoblanardi — bu juda zaif mezon edi: boshqa
-    // biror odamning ovozi tasodifan oxirgi 2 raqami va vaqt oynasi mos
-    // kelib qolsa, bizning foydalanuvchimiz HAQIQATDA ovoz bermagan bo'lsa
-    // ham "tasdiqlangan" deb belgilanib, mukofot to'lab yuborilardi (real
-    // holatda shunday soxta tasdiqlash yuz berdi). Endi kamida oxirgi 5 ta
-    // raqam (ko'rinadigan qism) mos kelishi SHART, va faqat bitta sahifa
-    // emas, so'nggi bir necha sahifa (eng yangi ~75 ta ovoz) tekshiriladi.
+    // 1.5. RASMIY OCHIQ BUDJET REYESTRIDAN TEKSHIRISH (Operator + Suffix & Timestamp strictly [-2 min : +2 min])
     if (!shouldApprove && !shouldReject && botRecord?.initiativeUuid) {
       try {
         const cleanPhone = vote.phone.replace(/\D/g, '');
-        // 5 ta raqam ham amalda yetarlicha zaif bo'lib chiqdi (bitta soxta
-        // tasdiqlash yana yuz berdi). OpenBudget maskalangan raqamda FAQAT
-        // oxirgi 6 ta raqamni ko'rsatadi (masalan "**-*88-37-10" -> "883710"),
-        // shuning uchun 6 — bu yerda erishsa bo'ladigan ENG YUQORI aniqlik —
-        // va vaqt oynasi ham 2 daqiqadan 60 soniyaga qisqartirildi.
-        const MIN_SUFFIX_LEN = 6;
+        const clean9 = cleanPhone.slice(-9);
+        const operatorCode = clean9.slice(0, 2); // e.g. "95", "90", "99"
+        const suffix2 = clean9.slice(-2); // e.g. "27"
+        const suffix4 = clean9.slice(-4); // e.g. "2827"
         const voteTs = new Date(vote.createdAt).getTime();
-        const SIXTY_SECONDS_MS = 60 * 1000;
+        const TWO_MINUTES_MS = 2 * 60 * 1000; // strictly [-2 minut : +2 minut]
 
         let matchedInRegistry: any = null;
-        for (let p = 0; p < 5 && !matchedInRegistry; p++) {
+        for (let p = 0; p < 8 && !matchedInRegistry; p++) {
           const offVotes = await this.openBudgetService.fetchOfficialInitiativeVotesList(botRecord.initiativeUuid, p);
           if (!offVotes.success || !Array.isArray(offVotes.content) || offVotes.content.length === 0) break;
 
           matchedInRegistry = offVotes.content.find((item: any) => {
-            const itemPhone = (item.phoneNumber || '').replace(/\D/g, '');
-            const len = Math.min(MIN_SUFFIX_LEN, itemPhone.length, cleanPhone.length);
-            const isPhoneMatch = len >= MIN_SUFFIX_LEN && itemPhone.slice(-len) === cleanPhone.slice(-len);
-            if (!isPhoneMatch) return false;
+            const rawItemPhone = String(item.phoneNumber || '');
+            const itemDigits = rawItemPhone.replace(/\D/g, '');
+            if (!itemDigits) return false;
 
+            // 1) Suffix tekshiruvi (kamida oxirgi 2 ta raqam mos bo'lishi shart)
+            const isSuffixMatch = itemDigits.endsWith(suffix2);
+            if (!isSuffixMatch) return false;
+
+            // 2) Operator kodi tekshiruvi (masalan "95", "90", "99")
+            const isOperatorMatch = rawItemPhone.includes(operatorCode) || itemDigits.includes(operatorCode);
+            if (!isOperatorMatch) return false;
+
+            // 3) Aniq vaqt tekshiruvi: [-2 daqiqa : +2 daqiqa] oralig'ida
             if (item.voteDate) {
-              // OpenBudget voteDate Tashkent vaqtida keladi ("YYYY-MM-DD HH:mm:ss")
               const formattedDateStr = item.voteDate.includes('+')
                 ? item.voteDate
                 : item.voteDate.replace(' ', 'T') + '+05:00';
               const itemTs = new Date(formattedDateStr).getTime();
               const diffMs = Math.abs(voteTs - itemTs);
-              return !isNaN(itemTs) && diffMs <= SIXTY_SECONDS_MS;
+              return !isNaN(itemTs) && diffMs <= TWO_MINUTES_MS;
             }
             return false;
           }) || null;
@@ -235,7 +250,7 @@ export class VoteAutoApproverService {
 
         if (matchedInRegistry) {
           shouldApprove = true;
-          checkReason = `[OpenBudget Rasmiy Reyestridan tasdiqlandi (aniq 6 raqam + ±60s vaqt mosligi): ${matchedInRegistry.phoneNumber} (${matchedInRegistry.voteDate})]`;
+          checkReason = `[OpenBudget Rasmiy Reyestridan tasdiqlandi (Operator ${operatorCode} + oxiri ${suffix2} + [-2m:+2m] vaqt mosligi): ${matchedInRegistry.phoneNumber} (${matchedInRegistry.voteDate})]`;
         }
       } catch (regErr: any) {
         this.logger.debug(`Registry match error: ${regErr.message}`);

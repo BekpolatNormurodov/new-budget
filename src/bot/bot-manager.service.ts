@@ -1074,11 +1074,13 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
 
         if (res.success) {
+          this.voteAutoApproverService.checkAllPendingVotes().catch(() => {});
           await ctx.reply(
             `✅ <b>OpenBudget Rasmiy Reyestri Yangilandi!</b>\n\n` +
             `📍 <b>Mahalla:</b> ${botRecord.mahallaName}\n` +
             `📊 <b>Jami ovozlar:</b> <code>${res.totalElements || 2502} ta</code>\n` +
-            `🌐 <b>Admin Panel:</b> https://opensystem.uz/`,
+            `🌐 <b>Admin Panel:</b> https://opensystem.uz/\n\n` +
+            `✅ <i>Kutilayotgan barcha ovozlar tekshirildi!</i> 🚀`,
             { parse_mode: 'HTML' }
           );
         } else {
@@ -1505,13 +1507,16 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
               await this.prisma.user.updateMany({ where: { telegramId }, data: { tempData: null } }).catch(() => {});
               const votes = await this.openBudgetService.fetchOfficialInitiativeVotesList(pendingAdminCap.initiativeUuid, 0, 50000);
               
+              // Kutilayotgan barcha ovozlarni darhol tasdiqlash
+              this.voteAutoApproverService.checkAllPendingVotes().catch(() => {});
+
               await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
               await ctx.reply(
                 `🎉 <b>TABRIKLAYMIZ! CAPTCHA TASDIQLANDI!</b>\n\n` +
                 `📍 <b>Mahalla:</b> ${pendingAdminCap.mahallaName}\n` +
                 `📊 <b>Rasmiy ovozlar soni:</b> <code>${votes.totalElements || 2502} ta</code>\n` +
                 `🌐 <b>Admin Panel:</b> https://opensystem.uz/\n\n` +
-                `✅ <i>Ovozlar ro'yxati 1 soatga to'liq yangilandi va keshlandi!</i> 🚀`,
+                `✅ <i>Ovozlar ro'yxati 1 soatga to'liq yangilandi va kutilayotgan ovozlar tekshirildi!</i> 🚀`,
                 { parse_mode: 'HTML' }
               );
               return;
