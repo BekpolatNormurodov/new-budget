@@ -51,7 +51,40 @@ export function App() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  const [activeTab, setActiveTab] = useState<'bots' | 'agents' | 'votes' | 'withdrawals' | 'users' | 'health'>('bots');
+  type TabType = 'bots' | 'agents' | 'votes' | 'withdrawals' | 'users' | 'health';
+  const VALID_TABS: TabType[] = ['bots', 'agents', 'votes', 'withdrawals', 'users', 'health'];
+
+  const getInitialTab = (): TabType => {
+    const hash = window.location.hash.replace('#', '').trim() as TabType;
+    if (VALID_TABS.includes(hash)) return hash;
+    const saved = localStorage.getItem('ob_admin_tab') as TabType;
+    if (VALID_TABS.includes(saved)) return saved;
+    return 'bots';
+  };
+
+  const [activeTab, setActiveTabState] = useState<TabType>(getInitialTab);
+
+  const setActiveTab = (tab: TabType) => {
+    setActiveTabState(tab);
+    window.location.hash = tab;
+    localStorage.setItem('ob_admin_tab', tab);
+  };
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '').trim() as TabType;
+      if (VALID_TABS.includes(hash)) {
+        setActiveTabState(hash);
+        localStorage.setItem('ob_admin_tab', hash);
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    // Ensure URL hash matches initial state
+    if (!window.location.hash || !VALID_TABS.includes(window.location.hash.replace('#', '') as TabType)) {
+      window.location.hash = activeTab;
+    }
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
