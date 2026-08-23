@@ -9,6 +9,7 @@ import { BOT_MESSAGES } from '../bot/bot.constants';
 export class VoteAutoApproverService {
   private readonly logger = new Logger(VoteAutoApproverService.name);
   private checkInterval: NodeJS.Timeout | null = null;
+  private sendMessageCallback: ((botId: number | null, telegramId: string, text: string) => Promise<void>) | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -18,9 +19,32 @@ export class VoteAutoApproverService {
   ) {}
 
   /**
+   * ⚡ Yangi (hozirgina "bo'sh javob / noaniq" holatda yaratilgan) bitta ovozni
+   * DARHOL, keyingi 15-daqiqalik siklni kutmasdan tekshirish. MUHIM: ovoz
+   * yuborilgan zahoti reyestrda allaqachon ko'rinib qolgan holatlar bo'lishi
+   * mumkin — bunday holatda foydalanuvchi pulni 15 daqiqagacha emas, bir necha
+   * soniyada olishi kerak. Agar hali topilmasa, oddiy 15-daqiqalik sikl baribir
+   * davom etadi (bu yerda faqat TEZLASHTIRISH, o'rniga bosuvchi emas).
+   */
+  async checkVoteNow(voteId: number): Promise<void> {
+    if (!this.sendMessageCallback) return; // hali bot ishga tushmagan bo'lsa, oddiy siklga qoldiramiz
+    try {
+      const vote = await this.prisma.vote.findUnique({
+        where: { id: voteId },
+        include: { user: true, botInstance: true },
+      });
+      if (!vote || vote.status !== 'PENDING_VERIFICATION') return;
+      await this.processVote(vote);
+    } catch (e: any) {
+      this.logger.debug(`[checkVoteNow] Ovoz #${voteId} darhol tekshirishda xatolik: ${e.message}`);
+    }
+  }
+
+  /**
    * 🤖 Har 15 minutda kutilayotgan ovozlarni OpenBudget API va vaqt bo'yicha avtomatik tekshirish
    */
   startLiveVoteChecker(sendMessageCallback: (botId: number | null, telegramId: string, text: string) => Promise<void>) {
+    this.sendMessageCallback = sendMessageCallback;
     const runCheck = async () => {
       try {
         const pendingVotes = await this.prisma.vote.findMany({
@@ -34,147 +58,7 @@ export class VoteAutoApproverService {
 
         for (const vote of pendingVotes) {
           try {
-            let shouldApprove = false;
-            let shouldReject = false;
-            let rejectReason = '';
-            let checkReason = '';
-
-            const botRecord = vote.botInstance;
-            const token = vote.jwtToken || vote.user?.openBudgetJwt;
-
-            // 1. OPENBUDGET RASMIY API TEKSHIRUVI
-            if (token) {
-              const res = await this.openBudgetService.getUserVotedInitiatives(token);
-              if (res.success && Array.isArray(res.initiatives)) {
-                if (res.initiatives.length > 0) {
-                  let matched = false;
-                  let votedQuarterTitle = '';
-
-                  for (const init of res.initiatives) {
-                    votedQuarterTitle = init.quarter_title || init.title || '';
-                    const initUuid = init.id;
-                    const publicId = init.public_id;
-
-                    const isUuidMatch = botRecord?.initiativeUuid && initUuid && botRecord.initiativeUuid.toLowerCase() === initUuid.toLowerCase();
-                    const isPublicIdMatch = botRecord?.mahallaId && publicId && String(botRecord.mahallaId) === String(publicId);
-                    const isNameMatch = botRecord?.mahallaName && votedQuarterTitle && (
-                      botRecord.mahallaName.toLowerCase().includes(votedQuarterTitle.toLowerCase()) ||
-                      votedQuarterTitle.toLowerCase().includes(botRecord.mahallaName.toLowerCase().replace(/mfy|mahalla/g, '').trim())
-                    );
-
-                    if (isUuidMatch || isPublicIdMatch || isNameMatch || !botRecord) {
-                      matched = true;
-                      break;
-                    }
-                  }
-
-                  if (matched) {
-                    shouldApprove = true;
-                    checkReason = `[OpenBudget API 100% tasdiqladi: ${votedQuarterTitle}]`;
-                  } else {
-                    shouldReject = true;
-                    rejectReason = `Siz boshqa mahallaga (${votedQuarterTitle || 'noma\'lum'}) ovoz bergansiz! Ushbu bot faqat ${botRecord?.mahallaName || 'ushbu mahalla'} uchun mo'ljallangan.`;
-                  }
-                }
-              }
-            }
-
-            // 1.5. RASMIY OCHIQ BUDJET REYESTRIDAN TEKSHIRISH (Phone suffix & Timestamp strictly [-2 min : +2 min])
-            //
-            // MUHIM: avval bu yerda telefon raqamining oxirgi FAQAT 2 ta raqami
-            // (`suffix2`) ham mos deb hisoblanardi — bu juda zaif mezon edi: boshqa
-            // biror odamning ovozi tasodifan oxirgi 2 raqami va vaqt oynasi mos
-            // kelib qolsa, bizning foydalanuvchimiz HAQIQATDA ovoz bermagan bo'lsa
-            // ham "tasdiqlangan" deb belgilanib, mukofot to'lab yuborilardi (real
-            // holatda shunday soxta tasdiqlash yuz berdi). Endi kamida oxirgi 5 ta
-            // raqam (ko'rinadigan qism) mos kelishi SHART, va faqat bitta sahifa
-            // emas, so'nggi bir necha sahifa (eng yangi ~75 ta ovoz) tekshiriladi.
-            if (!shouldApprove && !shouldReject && botRecord?.initiativeUuid) {
-              try {
-                const cleanPhone = vote.phone.replace(/\D/g, '');
-                // 5 ta raqam ham amalda yetarlicha zaif bo'lib chiqdi (bitta soxta
-                // tasdiqlash yana yuz berdi). OpenBudget maskalangan raqamda FAQAT
-                // oxirgi 6 ta raqamni ko'rsatadi (masalan "**-*88-37-10" -> "883710"),
-                // shuning uchun 6 — bu yerda erishsa bo'ladigan ENG YUQORI aniqlik —
-                // va vaqt oynasi ham 2 daqiqadan 60 soniyaga qisqartirildi.
-                const MIN_SUFFIX_LEN = 6;
-                const voteTs = new Date(vote.createdAt).getTime();
-                const SIXTY_SECONDS_MS = 60 * 1000;
-
-                let matchedInRegistry: any = null;
-                for (let p = 0; p < 5 && !matchedInRegistry; p++) {
-                  const offVotes = await this.openBudgetService.fetchOfficialInitiativeVotesList(botRecord.initiativeUuid, p);
-                  if (!offVotes.success || !Array.isArray(offVotes.content) || offVotes.content.length === 0) break;
-
-                  matchedInRegistry = offVotes.content.find((item: any) => {
-                    const itemPhone = (item.phoneNumber || '').replace(/\D/g, '');
-                    const len = Math.min(MIN_SUFFIX_LEN, itemPhone.length, cleanPhone.length);
-                    const isPhoneMatch = len >= MIN_SUFFIX_LEN && itemPhone.slice(-len) === cleanPhone.slice(-len);
-                    if (!isPhoneMatch) return false;
-
-                    if (item.voteDate) {
-                      // OpenBudget voteDate Tashkent vaqtida keladi ("YYYY-MM-DD HH:mm:ss")
-                      const formattedDateStr = item.voteDate.includes('+')
-                        ? item.voteDate
-                        : item.voteDate.replace(' ', 'T') + '+05:00';
-                      const itemTs = new Date(formattedDateStr).getTime();
-                      const diffMs = Math.abs(voteTs - itemTs);
-                      return !isNaN(itemTs) && diffMs <= SIXTY_SECONDS_MS;
-                    }
-                    return false;
-                  }) || null;
-
-                  if (offVotes.totalPages && p >= offVotes.totalPages - 1) break;
-                }
-
-                if (matchedInRegistry) {
-                  shouldApprove = true;
-                  checkReason = `[OpenBudget Rasmiy Reyestridan tasdiqlandi (aniq 6 raqam + ±60s vaqt mosligi): ${matchedInRegistry.phoneNumber} (${matchedInRegistry.voteDate})]`;
-                }
-              } catch (regErr: any) {
-                this.logger.debug(`Registry match error: ${regErr.message}`);
-              }
-            }
-
-            // 2. RAD ETISH HOLATI
-            if (shouldReject) {
-              await this.prisma.vote.update({
-                where: { id: vote.id },
-                data: {
-                  status: 'REJECTED',
-                  errorMessage: rejectReason,
-                },
-              });
-              this.logger.warn(`❌ [Auto-Approver] Ovoz #${vote.id} (+${vote.phone}) rad etildi: ${rejectReason}`);
-
-              const rejectMsg = `⚠️ <b>Ovoz qabul qilinmadi!</b>\n\n` +
-                `📌 <b>Sabab:</b> ${rejectReason}\n\n` +
-                `Siz boshqa yaqinlaringiz raqamidan ushbu mahalla foydasiga ovoz berib pul ishlashingiz mumkin!`;
-
-              await sendMessageCallback(vote.botInstanceId, vote.user.telegramId, rejectMsg).catch(() => {});
-              continue;
-            }
-
-            // 3. TASDIQLASH VA HISOBGA PUL O'TKAZISH
-            if (shouldApprove) {
-              // Tasdiqlash sababini bazaga ham yozib qo'yamiz — docker konteyner qayta
-              // tiklanganda (deploy) console loglari yo'qolib qoladi, lekin bu audit
-              // izi saqlanib qoladi va keyinchalik "nega tasdiqlandi?" deb tekshirish
-              // mumkin bo'ladi.
-              await this.prisma.vote.update({ where: { id: vote.id }, data: { errorMessage: `[AUTO-APPROVE ${new Date().toISOString()}] ${checkReason}` } }).catch(() => {});
-
-              const creditRes = await this.walletService.verifyVoteAndCredit(vote.id);
-              if (!creditRes.alreadyVerified) {
-                this.logger.log(`✅ [Auto-Approver] Ovoz #${vote.id} (+${vote.phone}) tasdiqlandi! Sabab: ${checkReason}`);
-
-                // Admin panelidan qo'lda tasdiqlashda ishlatiladigan xabar bilan BIR XIL
-                // matn — foydalanuvchi qaysi yo'l bilan tasdiqlanishidan qat'i nazar
-                // (avtomatik reyestr-moslik yoki admin qo'lda) bir xil xabarni ko'rishi kerak.
-                const msg = BOT_MESSAGES.VOTE_VERIFIED_ALERT(vote.phone, creditRes.rewardAmount, creditRes.user.balance);
-
-                await sendMessageCallback(vote.botInstanceId, vote.user.telegramId, msg).catch(() => {});
-              }
-            }
+            await this.processVote(vote);
           } catch (voteErr: any) {
             this.logger.warn(`Ovoz #${vote.id} tekshiruvida xatolik: ${voteErr.message}`);
           }
@@ -248,5 +132,154 @@ export class VoteAutoApproverService {
     };
     setTimeout(() => runPrewarm().catch(() => {}), 30000);
     setInterval(runPrewarm, 30 * 60 * 1000);
+  }
+
+  /**
+   * Bitta ovozni OpenBudget API va rasmiy reyestr bo'yicha tekshirish, kerak
+   * bo'lsa tasdiqlash/rad etish va foydalanuvchini xabardor qilish. Bu ham
+   * 15-daqiqalik davriy siklda, ham checkVoteNow() orqali darhol chaqiriladi.
+   */
+  private async processVote(vote: any): Promise<void> {
+    let shouldApprove = false;
+    let shouldReject = false;
+    let rejectReason = '';
+    let checkReason = '';
+
+    const botRecord = vote.botInstance;
+    const token = vote.jwtToken || vote.user?.openBudgetJwt;
+
+    // 1. OPENBUDGET RASMIY API TEKSHIRUVI
+    if (token) {
+      const res = await this.openBudgetService.getUserVotedInitiatives(token);
+      if (res.success && Array.isArray(res.initiatives)) {
+        if (res.initiatives.length > 0) {
+          let matched = false;
+          let votedQuarterTitle = '';
+
+          for (const init of res.initiatives) {
+            votedQuarterTitle = init.quarter_title || init.title || '';
+            const initUuid = init.id;
+            const publicId = init.public_id;
+
+            const isUuidMatch = botRecord?.initiativeUuid && initUuid && botRecord.initiativeUuid.toLowerCase() === initUuid.toLowerCase();
+            const isPublicIdMatch = botRecord?.mahallaId && publicId && String(botRecord.mahallaId) === String(publicId);
+            const isNameMatch = botRecord?.mahallaName && votedQuarterTitle && (
+              botRecord.mahallaName.toLowerCase().includes(votedQuarterTitle.toLowerCase()) ||
+              votedQuarterTitle.toLowerCase().includes(botRecord.mahallaName.toLowerCase().replace(/mfy|mahalla/g, '').trim())
+            );
+
+            if (isUuidMatch || isPublicIdMatch || isNameMatch || !botRecord) {
+              matched = true;
+              break;
+            }
+          }
+
+          if (matched) {
+            shouldApprove = true;
+            checkReason = `[OpenBudget API 100% tasdiqladi: ${votedQuarterTitle}]`;
+          } else {
+            shouldReject = true;
+            rejectReason = `Siz boshqa mahallaga (${votedQuarterTitle || 'noma\'lum'}) ovoz bergansiz! Ushbu bot faqat ${botRecord?.mahallaName || 'ushbu mahalla'} uchun mo'ljallangan.`;
+          }
+        }
+      }
+    }
+
+    // 1.5. RASMIY OCHIQ BUDJET REYESTRIDAN TEKSHIRISH (Phone suffix & Timestamp strictly [-2 min : +2 min])
+    //
+    // MUHIM: avval bu yerda telefon raqamining oxirgi FAQAT 2 ta raqami
+    // (`suffix2`) ham mos deb hisoblanardi — bu juda zaif mezon edi: boshqa
+    // biror odamning ovozi tasodifan oxirgi 2 raqami va vaqt oynasi mos
+    // kelib qolsa, bizning foydalanuvchimiz HAQIQATDA ovoz bermagan bo'lsa
+    // ham "tasdiqlangan" deb belgilanib, mukofot to'lab yuborilardi (real
+    // holatda shunday soxta tasdiqlash yuz berdi). Endi kamida oxirgi 5 ta
+    // raqam (ko'rinadigan qism) mos kelishi SHART, va faqat bitta sahifa
+    // emas, so'nggi bir necha sahifa (eng yangi ~75 ta ovoz) tekshiriladi.
+    if (!shouldApprove && !shouldReject && botRecord?.initiativeUuid) {
+      try {
+        const cleanPhone = vote.phone.replace(/\D/g, '');
+        // 5 ta raqam ham amalda yetarlicha zaif bo'lib chiqdi (bitta soxta
+        // tasdiqlash yana yuz berdi). OpenBudget maskalangan raqamda FAQAT
+        // oxirgi 6 ta raqamni ko'rsatadi (masalan "**-*88-37-10" -> "883710"),
+        // shuning uchun 6 — bu yerda erishsa bo'ladigan ENG YUQORI aniqlik —
+        // va vaqt oynasi ham 2 daqiqadan 60 soniyaga qisqartirildi.
+        const MIN_SUFFIX_LEN = 6;
+        const voteTs = new Date(vote.createdAt).getTime();
+        const SIXTY_SECONDS_MS = 60 * 1000;
+
+        let matchedInRegistry: any = null;
+        for (let p = 0; p < 5 && !matchedInRegistry; p++) {
+          const offVotes = await this.openBudgetService.fetchOfficialInitiativeVotesList(botRecord.initiativeUuid, p);
+          if (!offVotes.success || !Array.isArray(offVotes.content) || offVotes.content.length === 0) break;
+
+          matchedInRegistry = offVotes.content.find((item: any) => {
+            const itemPhone = (item.phoneNumber || '').replace(/\D/g, '');
+            const len = Math.min(MIN_SUFFIX_LEN, itemPhone.length, cleanPhone.length);
+            const isPhoneMatch = len >= MIN_SUFFIX_LEN && itemPhone.slice(-len) === cleanPhone.slice(-len);
+            if (!isPhoneMatch) return false;
+
+            if (item.voteDate) {
+              // OpenBudget voteDate Tashkent vaqtida keladi ("YYYY-MM-DD HH:mm:ss")
+              const formattedDateStr = item.voteDate.includes('+')
+                ? item.voteDate
+                : item.voteDate.replace(' ', 'T') + '+05:00';
+              const itemTs = new Date(formattedDateStr).getTime();
+              const diffMs = Math.abs(voteTs - itemTs);
+              return !isNaN(itemTs) && diffMs <= SIXTY_SECONDS_MS;
+            }
+            return false;
+          }) || null;
+
+          if (offVotes.totalPages && p >= offVotes.totalPages - 1) break;
+        }
+
+        if (matchedInRegistry) {
+          shouldApprove = true;
+          checkReason = `[OpenBudget Rasmiy Reyestridan tasdiqlandi (aniq 6 raqam + ±60s vaqt mosligi): ${matchedInRegistry.phoneNumber} (${matchedInRegistry.voteDate})]`;
+        }
+      } catch (regErr: any) {
+        this.logger.debug(`Registry match error: ${regErr.message}`);
+      }
+    }
+
+    // 2. RAD ETISH HOLATI
+    if (shouldReject) {
+      await this.prisma.vote.update({
+        where: { id: vote.id },
+        data: {
+          status: 'REJECTED',
+          errorMessage: rejectReason,
+        },
+      });
+      this.logger.warn(`❌ [Auto-Approver] Ovoz #${vote.id} (+${vote.phone}) rad etildi: ${rejectReason}`);
+
+      const rejectMsg = `⚠️ <b>Ovoz qabul qilinmadi!</b>\n\n` +
+        `📌 <b>Sabab:</b> ${rejectReason}\n\n` +
+        `Siz boshqa yaqinlaringiz raqamidan ushbu mahalla foydasiga ovoz berib pul ishlashingiz mumkin!`;
+
+      await this.sendMessageCallback?.(vote.botInstanceId, vote.user.telegramId, rejectMsg).catch(() => {});
+      return;
+    }
+
+    // 3. TASDIQLASH VA HISOBGA PUL O'TKAZISH
+    if (shouldApprove) {
+      // Tasdiqlash sababini bazaga ham yozib qo'yamiz — docker konteyner qayta
+      // tiklanganda (deploy) console loglari yo'qolib qoladi, lekin bu audit
+      // izi saqlanib qoladi va keyinchalik "nega tasdiqlandi?" deb tekshirish
+      // mumkin bo'ladi.
+      await this.prisma.vote.update({ where: { id: vote.id }, data: { errorMessage: `[AUTO-APPROVE ${new Date().toISOString()}] ${checkReason}` } }).catch(() => {});
+
+      const creditRes = await this.walletService.verifyVoteAndCredit(vote.id);
+      if (!creditRes.alreadyVerified) {
+        this.logger.log(`✅ [Auto-Approver] Ovoz #${vote.id} (+${vote.phone}) tasdiqlandi! Sabab: ${checkReason}`);
+
+        // Admin panelidan qo'lda tasdiqlashda ishlatiladigan xabar bilan BIR XIL
+        // matn — foydalanuvchi qaysi yo'l bilan tasdiqlanishidan qat'i nazar
+        // (avtomatik reyestr-moslik yoki admin qo'lda) bir xil xabarni ko'rishi kerak.
+        const msg = BOT_MESSAGES.VOTE_VERIFIED_ALERT(vote.phone, creditRes.rewardAmount, creditRes.user.balance);
+
+        await this.sendMessageCallback?.(vote.botInstanceId, vote.user.telegramId, msg).catch(() => {});
+      }
+    }
   }
 }

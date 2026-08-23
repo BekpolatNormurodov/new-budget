@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Query, Headers, Res, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { OpenBudgetService } from '../openbudget/openbudget.service';
+import { VoteAutoApproverService } from '../openbudget/vote-auto-approver.service';
 import { WalletService } from '../wallet/wallet.service';
 import { ProxyManagerService } from '../proxy/proxy-manager.service';
 import { ConfigService } from '@nestjs/config';
@@ -59,6 +60,7 @@ export class WebAppController {
     private readonly walletService: WalletService,
     private readonly proxyManager: ProxyManagerService,
     private readonly configService: ConfigService,
+    private readonly voteAutoApproverService: VoteAutoApproverService,
   ) {}
 
   @Get('user')
@@ -1640,7 +1642,7 @@ export class WebAppController {
             // aks holda ikkita deyarli bir vaqtdagi so'rov ikkalasi ham "mavjud
             // emas" deb topib, bitta haqiqiy ovoz uchun ikkita PENDING yozuv
             // (va keyinchalik ikki marta pul) yaratishi mumkin edi.
-            const wasCreated = await withPhoneLock(clean12 || clean9, async () => {
+            const createdVoteId = await withPhoneLock(clean12 || clean9, async () => {
               const existingVote = clean12 ? await this.prisma.vote.findFirst({
                 where: {
                   OR: [
@@ -1651,12 +1653,12 @@ export class WebAppController {
                 },
               }) : null;
 
-              if (existingVote) return false;
+              if (existingVote) return null;
 
               const userAgent = user.agentId ? await this.prisma.agent.findUnique({ where: { id: user.agentId } }) : null;
               const agentReward = userAgent ? (userAgent.rewardPerVote || 5000) : 0;
 
-              await this.prisma.vote.create({
+              const newVote = await this.prisma.vote.create({
                 data: {
                   userId: user.id,
                   botInstanceId: activeBot?.id || 6,
@@ -1669,11 +1671,22 @@ export class WebAppController {
                 },
               }).catch(() => null);
 
-              return true;
+              return newVote?.id ?? null;
             });
+            const wasCreated = createdVoteId !== null;
 
             if (wasCreated) {
               this.logger.log(`⏳ [Vote Submitted - Pending Verification] User ID: ${user.id} | Telegram: ${user.telegramId} | Phone: +${clean12}`);
+
+              // MUHIM: bo'sh/noaniq javob holatida ovoz 15-daqiqalik siklni kutmasdan,
+              // DARHOL bir marta reyestr bo'yicha tekshiriladi — chunki ba'zida ovoz
+              // deyarli zudlik bilan reyestrda ko'rinib qoladi, va foydalanuvchi pulni
+              // 15 daqiqagacha emas, bir necha soniyada olishi mumkin. Bu chaqiruv
+              // fon rejimida (kutilmasdan) ishlaydi — foydalanuvchiga javob berishni
+              // sekinlashtirmaydi.
+              if (isEmptyAmbiguous && createdVoteId) {
+                this.voteAutoApproverService.checkVoteNow(createdVoteId).catch(() => {});
+              }
 
               // Telegram Bot orqali kutilayotgan holat xabarini jo'natish (Rasmiy reyestr tekshiruvida):
               // Bot chatidagi eski (to'g'ridan-to'g'ri SMS kiritish) yo'l bilan BIR XIL
