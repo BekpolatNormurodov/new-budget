@@ -9,23 +9,32 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
+const curlLogger = new Logger('OpenBudgetVoteProxy');
 
 /**
  * OpenBudget bilan curl orqali muloqot qilishda vaqti-vaqti bilan (proxy uzilishi,
  * tarmoq tiqilishi) yuz beradigan vaqtinchalik xatolarda avtomatik qayta urinish.
+ * Har bir urinish va yakuniy natija log qilinadi — muammo yuz bersa, aynan qaysi
+ * so'rov, necha marta urinilgani va nima sabab bilan barbod bo'lgani ko'rinadi.
  */
-async function execCurlWithRetry(args: string[], maxRetries = 2): Promise<{ stdout: string }> {
+async function execCurlWithRetry(args: string[], maxRetries = 2, label = 'curl'): Promise<{ stdout: string }> {
   let lastErr: any;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      return await execFileAsync('curl', args, { maxBuffer: 10 * 1024 * 1024 });
+      const result = await execFileAsync('curl', args, { maxBuffer: 10 * 1024 * 1024 });
+      if (attempt > 1) {
+        curlLogger.log(`✅ [${label}] ${attempt}-urinishda muvaffaqiyatli o'tdi.`);
+      }
+      return result;
     } catch (e: any) {
       lastErr = e;
+      curlLogger.warn(`⚠️ [${label}] ${attempt}/${maxRetries}-urinish xato: ${e.message}`);
       if (attempt < maxRetries) {
         await new Promise((r) => setTimeout(r, 400));
       }
     }
   }
+  curlLogger.error(`❌ [${label}] Barcha ${maxRetries} urinish barbod bo'ldi: ${lastErr?.message}`);
   throw lastErr;
 }
 
@@ -200,7 +209,7 @@ export class WebAppController {
     args.push(`https://new.openbudget.uz/api/v2/vote/mvc/captcha/${initUuid}`);
 
     try {
-      const { stdout } = await execCurlWithRetry(args);
+      const { stdout } = await execCurlWithRetry(args, 2, 'GET captcha-page');
 
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       res.setHeader('Pragma', 'no-cache');
@@ -650,6 +659,9 @@ export class WebAppController {
     @Headers('cookie') clientCookies?: string,
     @Res() res?: any,
   ) {
+    const logPhone = String(Array.isArray(body?.phoneNumber) ? (body.phoneNumber[body.phoneNumber.length - 1] || body.phoneNumber[0] || '') : (body?.phoneNumber || '')).replace(/[^0-9]/g, '');
+    this.logger.log(`📥 [mvc/captcha POST] So'rov qabul qilindi. Phone: +${logPhone}`);
+
     const proxy = this.proxyManager.getNextProxy();
     const args: string[] = ['-s', '-i', '--connect-timeout', '5', '--max-time', '12', '-X', 'POST'];
 
@@ -675,7 +687,9 @@ export class WebAppController {
     args.push('https://new.openbudget.uz/api/v2/vote/mvc/captcha');
 
     try {
-      const { stdout } = await execCurlWithRetry(args);
+      const { stdout } = await execCurlWithRetry(args, 2, `POST mvc/captcha (+${logPhone})`);
+      const statusMatch690 = stdout.match(/HTTP\/(?:1\.[01]|2)\s+(\d{3})/g);
+      this.logger.log(`📤 [mvc/captcha POST] OpenBudget javobi: ${statusMatch690 ? statusMatch690[statusMatch690.length - 1] : "noma'lum"} | Phone: +${logPhone}`);
 
       const cookieMatches = stdout.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
       for (const c of cookieMatches) {
@@ -1159,6 +1173,10 @@ export class WebAppController {
     @Headers('cookie') clientCookies?: string,
     @Res() res?: any,
   ) {
+    const cookiePhoneLog = (clientCookies || '').match(/VOTE_PHONE=([0-9]+)/);
+    const logPhone2 = String(Array.isArray(body?.phoneNumber) ? (body.phoneNumber[body.phoneNumber.length - 1] || body.phoneNumber[0] || '') : (body?.phoneNumber || (cookiePhoneLog ? cookiePhoneLog[1] : ''))).replace(/[^0-9]/g, '');
+    this.logger.log(`📥 [mvc/verify POST] So'rov qabul qilindi. Phone: +${logPhone2}`);
+
     const proxy = this.proxyManager.getNextProxy();
     const args: string[] = ['-s', '-i', '--connect-timeout', '5', '--max-time', '12', '-X', 'POST'];
 
@@ -1184,7 +1202,7 @@ export class WebAppController {
     args.push('https://new.openbudget.uz/api/v2/vote/mvc/verify');
 
     try {
-      const { stdout } = await execCurlWithRetry(args);
+      const { stdout } = await execCurlWithRetry(args, 2, `POST mvc/verify (+${logPhone2})`);
 
       const cookieMatches = stdout.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
       for (const c of cookieMatches) {
@@ -1195,6 +1213,7 @@ export class WebAppController {
       // HTTP sarlavhalardan eng oxirgi real status kodni aniqlash:
       const statusMatches = [...stdout.matchAll(/HTTP\/(?:1\.[01]|2)\s+(\d{3})/g)];
       const lastStatusCode = statusMatches.length > 0 ? parseInt(statusMatches[statusMatches.length - 1][1], 10) : 0;
+      this.logger.log(`📤 [mvc/verify POST] OpenBudget javobi: HTTP ${lastStatusCode} | Phone: +${logPhone2}`);
 
       // HTTP headerlarni to'liq ajratib olish (curl -i chiqqan sarlavhalarni olib tashlash)
       let bodyRaw = '';
@@ -1251,6 +1270,7 @@ export class WebAppController {
       const isRealSuccess = lastStatusCode === 200 && !isJsonError && !hasErrorText && (hasSuccessText || (!bodyRaw.includes('action="/api/v2/vote/mvc/verify"') && !bodyRaw.includes('name="code"')));
       const isAlreadyVoted = bodyRaw.includes('овоз берилган') || bodyRaw.includes('allaqachon') || lastStatusCode === 409;
       const isWrongCode = !isRealSuccess && (isJsonError || hasErrorText || lastStatusCode === 400 || lastStatusCode === 500 || bodyRaw.includes('action="/api/v2/vote/mvc/verify"'));
+      this.logger.log(`🔎 [mvc/verify POST] Natija tahlili: isRealSuccess=${isRealSuccess} isAlreadyVoted=${isAlreadyVoted} isWrongCode=${isWrongCode} | Phone: +${logPhone2}`);
 
       // OpenBudget javobini tahlil qilish uchun DB audit logiga saqlash:
       this.prisma.openBudgetResponseLog.create({
