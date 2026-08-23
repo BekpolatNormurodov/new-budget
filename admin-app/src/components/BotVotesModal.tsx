@@ -223,10 +223,23 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
   if (!isOpen || !bot) return null;
 
   // Filtered lists
-  const filteredObVotes = obVotes.filter((v) =>
-    (v.phoneNumber || '').toLowerCase().includes(search.toLowerCase()) ||
-    (v.voteDate || '').includes(search)
-  );
+  // OpenBudget rasmiy ro'yxatida telefon raqamlar qisman yashiringan (masalan "**-*88-37-10"),
+  // shuning uchun to'liq raqam bo'yicha oddiy includes() hech qachon mos kelmaydi —
+  // faqat ko'rinadigan (oxirgi) raqamlar bo'yicha, ikkala tomonning qisqarog'i qolganining
+  // oxiri bilan solishtiriladi.
+  const searchDigits = search.replace(/\D/g, '');
+  const filteredObVotes = obVotes.filter((v) => {
+    if (!search) return true;
+    const phoneDigits = (v.phoneNumber || '').replace(/\D/g, '');
+    if (searchDigits && phoneDigits) {
+      const matchesTail =
+        phoneDigits.length <= searchDigits.length
+          ? searchDigits.endsWith(phoneDigits)
+          : phoneDigits.endsWith(searchDigits);
+      if (matchesTail) return true;
+    }
+    return (v.voteDate || '').includes(search);
+  });
 
   const filteredOurVotes = ourVotes.filter((v) => {
     const matchesSearch =
