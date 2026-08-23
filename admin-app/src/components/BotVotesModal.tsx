@@ -15,7 +15,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { BotInstanceItem } from '../types';
-import { formatSum } from '../utils/format';
+import { formatSum, formatTashkentDateTime } from '../utils/format';
 
 interface BotVotesModalProps {
   bot: BotInstanceItem | null;
@@ -682,7 +682,7 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
                             </span>
                           </td>
                           <td className="py-3 px-4 text-slate-500 dark:text-slate-400 font-mono text-[11px]">
-                            {v.voteDate}
+                            {formatTashkentDateTime((v as any).createdAt || v.voteDate)}
                           </td>
                           <td className="py-3 px-4">
                             {v.status === 'VERIFIED' ? (

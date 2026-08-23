@@ -911,14 +911,22 @@ export class AdminService {
       const maskedPhone = p.length >= 9
         ? `**-*${p.slice(-6, -4)}-${p.slice(-4, -2)}-${p.slice(-2)}`
         : `**-***-${p.slice(-4)}`;
-      // Toshkent vaqti (UTC+5) — bazada UTC saqlanadi, ko'rsatishda +5 soat qo'shiladi
-      const tashkentDate = new Date(new Date(v.createdAt).getTime() + 5 * 60 * 60 * 1000);
-      const voteDate = tashkentDate.toISOString().replace('T', ' ').slice(0, 16);
+      // Toshkent vaqti (UTC+5)
+      const voteDate = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Tashkent',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(new Date(v.createdAt)).replace(',', '');
 
       return {
         id: v.id,
         phoneNumber: maskedPhone,
         rawPhone: v.phone,
+        createdAt: v.createdAt,
         voteDate,
         status: v.status,
         rewardAmount: v.rewardAmount,
