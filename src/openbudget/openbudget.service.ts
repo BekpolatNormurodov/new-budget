@@ -1610,6 +1610,79 @@ export class OpenBudgetService {
   }
 
   /**
+   * 🔎 Telefon raqamining oxirgi (ko'rinadigan) raqamlari bo'yicha OpenBudget rasmiy
+   * ro'yxatining BARCHA sahifalari bo'ylab qidiradi. OpenBudget bir so'rovda faqat
+   * o'zining kichik sahifasini (~12-15 ta) qaytargani uchun, admin panel qidiruvi
+   * to'liq ro'yxatni topishi uchun shu funksiya kerak — bitta headless sahifa/
+   * navigatsiya doirasida, ketma-ket fetch() chaqiruvlari bilan.
+   */
+  async searchOfficialVotesByTail(
+    initiativeUuid: string,
+    tailDigits: string,
+    maxPages: number = 260,
+  ): Promise<{ success: boolean; matches: any[]; scannedPages: number; totalPages: number; error?: string }> {
+    if (!tailDigits) return { success: false, matches: [], scannedPages: 0, totalPages: 0, error: "Qidiruv matni bo'sh" };
+
+    let initToken = '';
+    const cached = this.initiativeTokenCache.get(initiativeUuid);
+    if (cached && cached.expiresAt > Date.now()) {
+      initToken = cached.token;
+    }
+    if (!initToken) {
+      const solved = await this.solveInitiativeTokenHeadless(initiativeUuid, 6);
+      if (solved.success && solved.token) initToken = solved.token;
+    }
+    if (!initToken) {
+      return { success: false, matches: [], scannedPages: 0, totalPages: 0, error: 'OpenBudget token olinmadi' };
+    }
+
+    let browserPage: any;
+    try {
+      const browser = await this.getHeadlessBrowser();
+      browserPage = await this.newHeadlessPage(browser);
+      await browserPage.setUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      );
+      await browserPage.goto(
+        `https://new.openbudget.uz/uz/initiative-budget/active-initiatives/55/${initiativeUuid}`,
+        { waitUntil: 'domcontentloaded', timeout: 20000 },
+      );
+
+      const matches: any[] = [];
+      let totalPages = 1;
+
+      for (let p = 0; p < maxPages && p < totalPages; p++) {
+        const result = await browserPage.evaluate(
+          async (token: string, page: number) => {
+            const res = await fetch(`/api/v2/info/votes/${token}?page=${page}&size=15&limit=15`, { credentials: 'include' });
+            return res.json();
+          },
+          initToken,
+          p,
+        );
+        if (!result) break;
+        totalPages = result.totalPages || 1;
+        const content = result.content || [];
+        for (const v of content) {
+          const digits = String(v.phoneNumber || '').replace(/\D/g, '');
+          const len = Math.min(tailDigits.length, digits.length);
+          if (len > 0 && digits.slice(-len) === tailDigits.slice(-len)) {
+            matches.push(v);
+          }
+        }
+        if (matches.length > 0) break; // topilgach darhol to'xtaydi
+      }
+
+      await browserPage.close().catch(() => {});
+      return { success: true, matches, scannedPages: Math.min(maxPages, totalPages), totalPages };
+    } catch (e: any) {
+      if (browserPage) await browserPage.close().catch(() => {});
+      this.logger.error(`❌ [Headless votes search] Xatolik: ${e.message}`);
+      return { success: false, matches: [], scannedPages: 0, totalPages: 0, error: e.message };
+    }
+  }
+
+  /**
    * 🌐 Headless Chrome sahifasi orqali (aynan shu fingerprint/cookie sessiyasi bilan)
    * captcha javobini yuborish va tashabbus tokenini olish.
    */
@@ -1670,23 +1743,30 @@ export class OpenBudgetService {
   }
 
   /**
-   * 📋 OpenBudget Rasmiy Saytidan Ovozlar Ro'yxatini olish (50 000 ta limit bilan to'liq ro'yxat)
+   * 📋 OpenBudget Rasmiy Saytidan Ovozlar Ro'yxatini olish.
+   *
+   * MUHIM: OpenBudget'ning o'zi `size` parametrini e'tiborga olmaydi va har doim
+   * o'zining belgilangan sahifa hajmini (odatda ~12-15 ta) qaytaradi — `size=50000`
+   * so'rasak ham. Shuning uchun "bittada hammasini olib, keshlab, o'zimiz bo'lib
+   * beramiz" degan avvalgi yondashuv har doim faqat 1-sahifani "to'liq ro'yxat" deb
+   * noto'g'ri keshlab qo'yardi (qidiruv va pagination shu tufayli ishlamasdi).
+   * Endi har so'ralgan `page` haqiqatan OpenBudget'ning shu sahifasidan olinadi.
    */
   async fetchOfficialInitiativeVotesList(
     initiativeUuid: string,
     page: number = 0,
-    size: number = 50000,
+    size: number = 15,
   ): Promise<{ success: boolean; totalElements: number; totalPages: number; page: number; content: any[]; error?: string }> {
     try {
-      // 1. Agar xotirada 15 minutlik to'liq ro'yxat keshda bo'lsa, tezkor qaytarish
-      const cachedList = this.initiativeVotesListCache.get(initiativeUuid);
-      if (cachedList && Date.now() - cachedList.fetchedAt < 15 * 60 * 1000 && cachedList.votes.length > 0) {
+      const cacheKey = `${initiativeUuid}_p${page}`;
+      const cachedPage = this.initiativeVotesListCache.get(cacheKey);
+      if (cachedPage && Date.now() - cachedPage.fetchedAt < 5 * 60 * 1000) {
         return {
           success: true,
-          totalElements: cachedList.totalElements,
-          totalPages: cachedList.totalPages,
+          totalElements: cachedPage.totalElements,
+          totalPages: cachedPage.totalPages,
           page,
-          content: size >= 50000 ? cachedList.votes : cachedList.votes.slice(page * 15, (page + 1) * 15),
+          content: cachedPage.votes,
         };
       }
 
@@ -1696,7 +1776,7 @@ export class OpenBudgetService {
         initToken = cached.token;
       }
 
-      // 2. Agar token bo'lmasa, headless Chrome + OCR orqali avtomatik yechish
+      // Agar token bo'lmasa, headless Chrome + OCR orqali avtomatik yechish
       // (bitta sahifa/navigatsiya doirasida, botning asosiy jarayonini bloklamaslik uchun)
       if (!initToken) {
         const solved = await this.solveInitiativeTokenHeadless(initiativeUuid, 6);
@@ -1709,30 +1789,23 @@ export class OpenBudgetService {
         return { success: false, totalElements: 0, totalPages: 0, page, content: [], error: 'OpenBudget token olinmadi' };
       }
 
-      // Step 3: Fetch votes with 50 000 limit to pull entire registry at once
-      // (OpenBudget WAF'i oddiy so'rovlarni bloklagani uchun headless brauzer ishlatiladi)
-      const votesData = await this.fetchVotesListHeadless(initiativeUuid, initToken, page, 50000);
+      // OpenBudget WAF'i oddiy so'rovlarni bloklagani uchun headless brauzer ishlatiladi.
+      // Haqiqiy so'ralgan sahifa (page) va hajm (size) to'g'ridan-to'g'ri uzatiladi.
+      const votesData = await this.fetchVotesListHeadless(initiativeUuid, initToken, page, size);
 
       if (votesData) {
         const content = votesData.content || [];
         const totalElements = votesData.totalElements || content.length;
         const totalPages = votesData.totalPages || 1;
 
-        // Ro'yxatni 15 minutlik xotiraga saqlash
-        this.initiativeVotesListCache.set(initiativeUuid, {
+        this.initiativeVotesListCache.set(cacheKey, {
           votes: content,
           totalElements,
           totalPages,
           fetchedAt: Date.now(),
         });
 
-        return {
-          success: true,
-          totalElements,
-          totalPages,
-          page,
-          content: size >= 50000 ? content : content.slice(page * 15, (page + 1) * 15),
-        };
+        return { success: true, totalElements, totalPages, page, content };
       }
 
       return { success: false, totalElements: 0, totalPages: 0, page, content: [] };

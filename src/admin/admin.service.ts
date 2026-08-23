@@ -938,6 +938,23 @@ export class AdminService {
   }
 
   /**
+   * 🔎 OpenBudget rasmiy ro'yxatining BARCHA sahifalari bo'ylab telefon raqami
+   * bo'yicha qidirish (bitta sahifadagi ~15 tadan emas).
+   */
+  async searchBotOfficialVotes(botId: number, tail: string) {
+    const bot = await this.prisma.botInstance.findUnique({ where: { id: botId } });
+    if (!bot) throw new Error('Bot topilmadi');
+
+    let uuid = bot.initiativeUuid;
+    if (!uuid && bot.mahallaId) {
+      const lRes = await this.openBudgetService.lookupMahallaOrInitiative(bot.mahallaId);
+      if (lRes.success && lRes.initiativeUuid) uuid = lRes.initiativeUuid;
+    }
+
+    return this.openBudgetService.searchOfficialVotesByTail(uuid, tail.replace(/\D/g, ''));
+  }
+
+  /**
    * 🌐 OpenBudget Rasmiy Saytidan Ovozlar Ro'yxatini Olish (Official Votes List)
    */
   async getBotOfficialVotesList(botId: number, page: number = 0) {

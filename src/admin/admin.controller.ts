@@ -103,6 +103,14 @@ export class AdminController {
     );
   }
 
+  @Get('bots/:id/official-votes-search')
+  async searchBotOfficialVotes(
+    @Param('id') id: string,
+    @Query('tail') tail?: string,
+  ) {
+    return this.adminService.searchBotOfficialVotes(parseInt(id, 10), tail || '');
+  }
+
   @Get('bots/:id/official-captcha')
   async getBotOfficialCaptcha(@Param('id') id: string) {
     return this.adminService.getBotOfficialCaptcha(parseInt(id, 10));

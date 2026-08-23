@@ -61,6 +61,38 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>('');
 
+  // OpenBudget ro'yxati ko'p sahifali (~210 ta) bo'lgani uchun, joriy sahifada
+  // topilmasa, 5+ raqam kiritilganda BUTUN ro'yxat bo'yicha serverdan qidiriladi.
+  const [obSearchResults, setObSearchResults] = useState<any[] | null>(null);
+  const [isObSearching, setIsObSearching] = useState(false);
+  const [obSearchNotFound, setObSearchNotFound] = useState(false);
+
+  useEffect(() => {
+    const tailDigits = search.replace(/\D/g, '');
+    if (activeTab !== 'OPENBUDGET' || tailDigits.length < 5 || !bot) {
+      setObSearchResults(null);
+      setObSearchNotFound(false);
+      return;
+    }
+    setIsObSearching(true);
+    setObSearchNotFound(false);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/admin/bots/${bot.id}/official-votes-search?tail=${tailDigits}`);
+        const data = await res.json();
+        if (data.success) {
+          setObSearchResults(data.matches || []);
+          setObSearchNotFound((data.matches || []).length === 0);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setIsObSearching(false);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [search, activeTab, bot?.id]);
+
   const [liveStats, setLiveStats] = useState<{
     openBudgetVotes: number;
     currentVotes: number;
@@ -229,15 +261,19 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
   // solishtiriladi.
   const TAIL_MATCH_LEN = 5;
   const searchDigits = search.replace(/\D/g, '');
-  const filteredObVotes = obVotes.filter((v) => {
-    if (!search) return true;
-    const phoneDigits = (v.phoneNumber || '').replace(/\D/g, '');
-    if (searchDigits && phoneDigits) {
-      const len = Math.min(TAIL_MATCH_LEN, searchDigits.length, phoneDigits.length);
-      if (len > 0 && searchDigits.slice(-len) === phoneDigits.slice(-len)) return true;
-    }
-    return (v.voteDate || '').includes(search);
-  });
+  // 5+ raqam kiritilsa, butun ro'yxat bo'yicha serverdan qidirilgan natija ko'rsatiladi;
+  // aks holda joriy sahifadagi ma'lumot bo'yicha (tezkor, lokal) filtrlanadi.
+  const filteredObVotes = obSearchResults !== null
+    ? obSearchResults
+    : obVotes.filter((v) => {
+        if (!search) return true;
+        const phoneDigits = (v.phoneNumber || '').replace(/\D/g, '');
+        if (searchDigits && phoneDigits) {
+          const len = Math.min(TAIL_MATCH_LEN, searchDigits.length, phoneDigits.length);
+          if (len > 0 && searchDigits.slice(-len) === phoneDigits.slice(-len)) return true;
+        }
+        return (v.voteDate || '').includes(search);
+      });
 
   const filteredOurVotes = ourVotes.filter((v) => {
     const matchesSearch =
@@ -384,6 +420,16 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
                 placeholder="Raqam yoki vaqt bo'yicha qidirish..."
                 className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
               />
+              {activeTab === 'OPENBUDGET' && isObSearching && (
+                <span className="absolute right-3 top-2 text-[10px] text-indigo-500 font-bold animate-pulse">
+                  Butun ro'yxatdan qidirilmoqda...
+                </span>
+              )}
+              {activeTab === 'OPENBUDGET' && !isObSearching && obSearchNotFound && (
+                <span className="absolute right-3 top-2 text-[10px] text-rose-500 font-bold">
+                  Topilmadi
+                </span>
+              )}
             </div>
 
             {activeTab === 'OUR_SYSTEM' && (
@@ -499,11 +545,13 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                      {isObLoading ? (
+                      {isObLoading || (activeTab === 'OPENBUDGET' && isObSearching) ? (
                         <tr>
                           <td colSpan={3} className="py-12 text-center text-slate-400">
                             <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-500" />
-                            OpenBudget rasmiy saytidan ovozlar yuklanmoqda...
+                            {activeTab === 'OPENBUDGET' && isObSearching
+                              ? "Butun rasmiy ro'yxat bo'ylab qidirilmoqda..."
+                              : "OpenBudget rasmiy saytidan ovozlar yuklanmoqda..."}
                           </td>
                         </tr>
                       ) : filteredObVotes.length === 0 ? (
