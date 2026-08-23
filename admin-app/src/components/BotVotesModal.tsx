@@ -495,8 +495,16 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
             )}
           </div>
 
-          {/* Tez-kesh (prewarm) qamrovi haqida shaffof ma'lumot — bu FAQAT tezkor
-              sahifalashga tegishli; "Raqam yoki vaqt" qidiruvi (yuqorida) har doim
+          {activeTab === 'OPENBUDGET' && !needCaptcha && (
+            <div className="flex items-center justify-between px-3.5 py-2 rounded-xl text-[11px] font-semibold bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400">
+              <span className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-emerald-500" />
+                <span>OpenBudget rasmiy reyestri har 1 soatda avtomatik yangilanadi</span>
+              </span>
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">🟢 24/7 Faol</span>
+            </div>
+          )}
+
           {/* TABLE: OPENBUDGET OFFICIAL LIST */}
           {activeTab === 'OPENBUDGET' ? (
             needCaptcha ? (
