@@ -1515,11 +1515,23 @@ export class WebAppController {
       }
 
 
-      // 2. Kengaytirilgan muvaffaqiyat va xatolik matnlarini tekshirish (Kirill, Lotin, Rus tillarida):
+      // 1. HTML teglari ichidagi aniq matnlarni o'qib olish:
+      const errorAlertMatch = bodyRaw.match(/<div[^>]*class="[^"]*error-alert[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+      const errorAlertText = errorAlertMatch ? errorAlertMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+
+      const cardParagraphMatch = bodyRaw.match(/<div[^>]*class="[^"]*card[^"]*"[^>]*>[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/i) || bodyRaw.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+      const cardParagraphText = cardParagraphMatch ? cardParagraphMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+
+      this.logger.log(`📄 [mvc/verify POST] Parsed HTML -> ErrorAlert: "${errorAlertText}" | CardParagraph: "${cardParagraphText}"`);
+
+      // 2. Kengaytirilgan muvaffaqiyat va xatolik matnlarini tekshirish:
       const lowerBody = (bodyRaw || '').toLowerCase();
+      const lowerCardP = cardParagraphText.toLowerCase();
+      const lowerErrorAlert = errorAlertText.toLowerCase();
       const isJsonError = bodyRaw.startsWith('{') && (bodyRaw.includes('"error"') || bodyRaw.includes('"status":500') || bodyRaw.includes('"status":400'));
       
       const hasErrorText = 
+        lowerErrorAlert.length > 0 ||
         lowerBody.includes('нотўғри') ||
         lowerBody.includes('noto\'g\'ri') ||
         lowerBody.includes('notogri') ||
@@ -1534,6 +1546,9 @@ export class WebAppController {
         lowerBody.includes('превышен');
 
       const isSuccessText = 
+        lowerCardP.includes('муваффақиятли') ||
+        lowerCardP.includes('қабул қилинган') ||
+        lowerCardP.includes('овоз берилди') ||
         lowerBody.includes('муваффақиятли қабул қилинган') || 
         lowerBody.includes('ташаббус учун овоз берилди') || 
         lowerBody.includes('овоз берилди') ||
@@ -1562,7 +1577,7 @@ export class WebAppController {
         lowerBody.includes('urinishlar soni tugadi') ||
         lowerBody.includes('бугунги урунишлар сони');
 
-      const hasErrorAlert = lowerBody.includes('error-alert') || lowerBody.includes('alert-danger');
+      const hasErrorAlert = errorAlertText.length > 0 || lowerBody.includes('error-alert') || lowerBody.includes('alert-danger');
       const isWrongOtp = lastStatusCode === 400 || (hasErrorText && !isSuccessText) || hasErrorAlert;
       const isRealSuccess = (lastStatusCode === 200 || lastStatusCode === 201) && !isJsonError && !isWrongOtp && !isAlreadyVotedPhone && !isAlreadyVotedCitizen && !isExpiredSms && !isLimitExceeded;
       this.logger.log(`🔎 [mvc/verify POST] Natija tahlili: isRealSuccess=${isRealSuccess} lastStatusCode=${lastStatusCode} isSuccessText=${isSuccessText} isWrongOtp=${isWrongOtp} | Phone: +${logPhone2}`);
