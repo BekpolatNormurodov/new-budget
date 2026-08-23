@@ -225,18 +225,16 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
   // Filtered lists
   // OpenBudget rasmiy ro'yxatida telefon raqamlar qisman yashiringan (masalan "**-*88-37-10"),
   // shuning uchun to'liq raqam bo'yicha oddiy includes() hech qachon mos kelmaydi —
-  // faqat ko'rinadigan (oxirgi) raqamlar bo'yicha, ikkala tomonning qisqarog'i qolganining
-  // oxiri bilan solishtiriladi.
+  // oxirgi 5 ta (yoki qisqaroq kiritilgan bo'lsa, shuncha) ko'rinadigan raqam bo'yicha
+  // solishtiriladi.
+  const TAIL_MATCH_LEN = 5;
   const searchDigits = search.replace(/\D/g, '');
   const filteredObVotes = obVotes.filter((v) => {
     if (!search) return true;
     const phoneDigits = (v.phoneNumber || '').replace(/\D/g, '');
     if (searchDigits && phoneDigits) {
-      const matchesTail =
-        phoneDigits.length <= searchDigits.length
-          ? searchDigits.endsWith(phoneDigits)
-          : phoneDigits.endsWith(searchDigits);
-      if (matchesTail) return true;
+      const len = Math.min(TAIL_MATCH_LEN, searchDigits.length, phoneDigits.length);
+      if (len > 0 && searchDigits.slice(-len) === phoneDigits.slice(-len)) return true;
     }
     return (v.voteDate || '').includes(search);
   });
