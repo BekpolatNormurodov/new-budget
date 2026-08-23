@@ -1533,10 +1533,29 @@ export class WebAppController {
         lowerBody.includes('limit') ||
         lowerBody.includes('превышен');
 
-      const isAlreadyVotedPhone = lowerBody.includes('рақам орқали овоз берилган') || lowerBody.includes('ushbu raqam') || lowerBody.includes('raqam orqali');
-      const isAlreadyVotedCitizen = lowerBody.includes('фуқаро') || lowerBody.includes('паспорт') || lowerBody.includes('nomiga ovoz berilgan') || lowerBody.includes('fuqaro');
-      const isExpiredSms = lowerBody.includes('муддати тугаган') || lowerBody.includes('eskirgan') || lowerBody.includes('vaqti');
-      const isLimitExceeded = lowerBody.includes('уринишлар сони тугади') || lowerBody.includes('limit') || lowerBody.includes('urinishlar soni');
+      const isAlreadyVotedPhone = 
+        lowerBody.includes('ушбу рақамингиз орқали аввал') || 
+        lowerBody.includes('ushbu raqamingiz orqali') ||
+        lowerBody.includes('ушбу рақам орқали аввал');
+
+      const isAlreadyVotedCitizen = 
+        lowerBody.includes('аввал бошқа рақам') || 
+        lowerBody.includes('аввал берилган овоз') || 
+        lowerBody.includes('boshqa raqam orqali') || 
+        lowerBody.includes('avval berilgan ovoz') || 
+        lowerBody.includes('жшшир') || 
+        lowerBody.includes('jshshir') ||
+        lowerBody.includes('шахсий идентификация');
+
+      const isExpiredSms = 
+        lowerBody.includes('муддати тугаган') || 
+        lowerBody.includes('eskirgan') || 
+        lowerBody.includes('kod muddati');
+
+      const isLimitExceeded = 
+        lowerBody.includes('уринишлар сони тугади') || 
+        lowerBody.includes('urinishlar soni tugadi') ||
+        lowerBody.includes('бугунги урунишлар сони');
 
       const isRealSuccess = (lastStatusCode === 200 || lastStatusCode === 201) && !isJsonError && !hasErrorText && !isAlreadyVotedPhone && !isAlreadyVotedCitizen && !isExpiredSms && !isLimitExceeded;
       this.logger.log(`🔎 [mvc/verify POST] Natija tahlili: isRealSuccess=${isRealSuccess} lastStatusCode=${lastStatusCode} isAlreadyVoted=${isAlreadyVotedPhone || isAlreadyVotedCitizen} | Phone: +${logPhone2}`);
