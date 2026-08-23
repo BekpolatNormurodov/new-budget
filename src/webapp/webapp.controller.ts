@@ -1487,6 +1487,8 @@ export class WebAppController {
         lowerBody.includes('нотўғри') ||
         lowerBody.includes('noto\'g\'ri') ||
         lowerBody.includes('notogri') ||
+        lowerBody.includes('мос келмади') ||
+        lowerBody.includes('mos kelmadi') ||
         lowerBody.includes('хато') ||
         lowerBody.includes('xato') ||
         lowerBody.includes('муддати тугаган') ||
@@ -1667,7 +1669,7 @@ export class WebAppController {
       }
 
       // Agar xato bo'lsa (isRealSuccess === false) - bot foydalanuvchisiga va Mini App'ga xabar berish:
-      const isWrongSms = !isAlreadyVotedPhone && !isAlreadyVotedCitizen && !isLimitExceeded && (lowerBody.includes('нотўғри') || lowerBody.includes('noto\'g\'ri') || lastStatusCode === 400 || lastStatusCode === 500);
+      const isWrongSms = !isAlreadyVotedPhone && !isAlreadyVotedCitizen && !isLimitExceeded && (lowerBody.includes('нотўғри') || lowerBody.includes('noto\'g\'ri') || lowerBody.includes('мос келмади') || lowerBody.includes('mos kelmadi') || lastStatusCode === 400 || lastStatusCode === 500);
 
       try {
         const postedTgId = String(body?.telegramId || body?.tg_id || '').trim();
