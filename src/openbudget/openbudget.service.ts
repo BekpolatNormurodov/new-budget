@@ -1615,9 +1615,15 @@ export class OpenBudgetService {
       const result = await browserPage.evaluate(
         async (token: string, p: number, s: number) => {
           const url = `/api/v2/info/votes/${token}?page=${p}&size=${s}&limit=${s}`;
-          const res = await fetch(url, { credentials: 'include' });
-          const data = await res.json();
-          return { status: res.status, data };
+          try {
+            const res = await fetch(url, { credentials: 'include' });
+            if (!res.ok) return { status: res.status, data: null };
+            const text = await res.text();
+            if (!text || !text.trim()) return { status: res.status, data: null };
+            return { status: res.status, data: JSON.parse(text) };
+          } catch (e) {
+            return { status: 0, data: null };
+          }
         },
         initToken,
         page,
@@ -1632,6 +1638,8 @@ export class OpenBudgetService {
           totalElements: result.data.totalElements || (result.data.content || []).length,
           totalPages: result.data.totalPages || 1,
         };
+      } else {
+        this.initiativeTokenCache.delete(initiativeUuid);
       }
       return null;
     } catch (e: any) {
