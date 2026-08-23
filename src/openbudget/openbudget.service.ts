@@ -1392,6 +1392,9 @@ export class OpenBudgetService {
   // 🌐 Haqiqiy Chrome brauzer orqali OpenBudget WAF/anti-bot himoyasidan o'tish uchun (headless)
   private headlessBrowser: any = null;
 
+  // Headless brauzer qaysi proxy bilan ishga tushirilganini eslab qolish (yangi sahifada auth uchun)
+  private headlessProxyAuth: { username: string; password: string } | null = null;
+
   private async getHeadlessBrowser(): Promise<any> {
     if (this.headlessBrowser && this.headlessBrowser.isConnected()) {
       return this.headlessBrowser;
@@ -1402,17 +1405,38 @@ export class OpenBudgetService {
       this.configService.get<string>('puppeteer.executablePath') ||
       '/usr/bin/chromium-browser';
 
+    const args = [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+    ];
+
+    // Server IP'sining o'zi OpenBudget tomonidan bloklangani uchun, headless brauzer
+    // ham (agar mavjud bo'lsa) proxy hovuzidagi IP orqali ishga tushiriladi.
+    const proxy = this.proxyManager.getNextProxy();
+    this.headlessProxyAuth = null;
+    if (proxy) {
+      args.push(`--proxy-server=${proxy.protocol.startsWith('socks') ? proxy.protocol : 'http'}://${proxy.host}:${proxy.port}`);
+      if (proxy.auth?.username) {
+        this.headlessProxyAuth = { username: proxy.auth.username, password: proxy.auth.password || '' };
+      }
+    }
+
     this.headlessBrowser = await puppeteer.launch({
       executablePath,
       headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-      ],
+      args,
     });
     return this.headlessBrowser;
+  }
+
+  private async newHeadlessPage(browser: any): Promise<any> {
+    const page = await browser.newPage();
+    if (this.headlessProxyAuth) {
+      await page.authenticate(this.headlessProxyAuth);
+    }
+    return page;
   }
 
   /**
@@ -1427,7 +1451,7 @@ export class OpenBudgetService {
     let page: any;
     try {
       const browser = await this.getHeadlessBrowser();
-      page = await browser.newPage();
+      page = await this.newHeadlessPage(browser);
       await page.setUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
       );
@@ -1471,7 +1495,7 @@ export class OpenBudgetService {
     let browserPage: any;
     try {
       const browser = await this.getHeadlessBrowser();
-      browserPage = await browser.newPage();
+      browserPage = await this.newHeadlessPage(browser);
       await browserPage.setUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
       );
