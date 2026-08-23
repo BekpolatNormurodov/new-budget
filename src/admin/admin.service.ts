@@ -1,4 +1,4 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as sharpImport from 'sharp';
@@ -415,25 +415,35 @@ export class AdminService {
   }
 
   async approveWithdrawal(id: number, adminNote?: string, receiptImage?: string) {
-    let receiptUrl: string | undefined = undefined;
-    let localReceiptPath: string | undefined = undefined;
+    // MUHIM: chek rasmi endi MAJBURIY — frontend'da ham talab qilinadi, lekin
+    // bu yerda (backend'da) HAM tekshiriladi, chunki frontend tekshiruvi
+    // chetlab o'tilishi mumkin. Avval rasm saqlashda xatolik yuz bersa, bu
+    // jimgina e'tiborsiz qoldirilib, to'lov RASMSIZ ham tasdiqlanaverar edi —
+    // aynan shu holat sodir bo'ldi (chek biriktirilmagan holda tasdiqlangan
+    // to'lov, chunki rasm juda katta bo'lgani uchun so'rovning o'zi serverga
+    // yetib bormagan edi). Endi rasm bo'lmasa yoki saqlanmasa, tasdiqlashning
+    // o'zi amalga oshmaydi.
+    if (!receiptImage || !receiptImage.startsWith('data:image')) {
+      throw new BadRequestException("Chek rasmini yuklash majburiy — rasmsiz to'lovni tasdiqlab bo'lmaydi.");
+    }
 
-    if (receiptImage && receiptImage.startsWith('data:image')) {
-      try {
-        const base64Data = receiptImage.replace(/^data:image\/\w+;base64,/, '');
-        const buffer = Buffer.from(base64Data, 'base64');
-        const receiptsDir = path.join(process.cwd(), 'public', 'receipts');
-        if (!fs.existsSync(receiptsDir)) {
-          fs.mkdirSync(receiptsDir, { recursive: true });
-        }
-        const fileName = `check_${id}_${Date.now()}.jpg`;
-        localReceiptPath = path.join(receiptsDir, fileName);
-        fs.writeFileSync(localReceiptPath, buffer);
-        receiptUrl = `/receipts/${fileName}`;
-        this.logger.log(`🧾 Chek rasmi saqlandi: ${localReceiptPath}`);
-      } catch (err: any) {
-        this.logger.error(`Chek rasmini saqlashda xatolik: ${err.message}`);
+    let receiptUrl: string;
+    let localReceiptPath: string;
+    try {
+      const base64Data = receiptImage.replace(/^data:image\/\w+;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+      const receiptsDir = path.join(process.cwd(), 'public', 'receipts');
+      if (!fs.existsSync(receiptsDir)) {
+        fs.mkdirSync(receiptsDir, { recursive: true });
       }
+      const fileName = `check_${id}_${Date.now()}.jpg`;
+      localReceiptPath = path.join(receiptsDir, fileName);
+      fs.writeFileSync(localReceiptPath, buffer);
+      receiptUrl = `/receipts/${fileName}`;
+      this.logger.log(`🧾 Chek rasmi saqlandi: ${localReceiptPath}`);
+    } catch (err: any) {
+      this.logger.error(`Chek rasmini saqlashda xatolik: ${err.message}`);
+      throw new BadRequestException(`Chek rasmini saqlab bo'lmadi: ${err.message}`);
     }
 
     const res = await this.walletService.approveWithdrawal(id, adminNote, receiptUrl);

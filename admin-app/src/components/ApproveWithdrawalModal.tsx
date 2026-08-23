@@ -8,7 +8,7 @@ interface ApproveWithdrawalModalProps {
   isOpen: boolean;
   onClose: () => void;
   withdrawal: WithdrawalItem | null;
-  onConfirm: (id: number, receiptImage?: string, note?: string) => void;
+  onConfirm: (id: number, receiptImage?: string, note?: string) => Promise<void> | void;
 }
 
 export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
@@ -18,6 +18,7 @@ export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
   onConfirm,
 }) => {
   const [receiptImage, setReceiptImage] = useState<string>('');
+  const [receiptError, setReceiptError] = useState<string>('');
   const [note, setNote] = useState<string>('To\'lov muvaffaqiyatli amalga oshirildi');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -31,6 +32,7 @@ export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
         alert('Rasm hajmi 5MB dan oshmasligi kerak');
         return;
       }
+      setReceiptError('');
       const reader = new FileReader();
       reader.onload = (event) => {
         setReceiptImage(event.target?.result as string);
@@ -39,11 +41,25 @@ export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // MUHIM: chek rasmi endi MAJBURIY — rasmsiz tasdiqlash to'xtatiladi va
+  // aniq xabar ko'rsatiladi. Shuningdek, `onConfirm` endi natijasi bilan
+  // KUTILADI (await) — avval xato (masalan, rasm juda katta bo'lib server
+  // rad etganda) yuz bersa ham tugma abadiy "Tasdiqlanmoqda..." holatida
+  // qotib qolar edi, chunki muvaffaqiyatsizlikdan keyin isSubmitting hech
+  // qachon false'ga qaytmas edi.
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
+    if (!receiptImage) {
+      setReceiptError("Chek rasmini yuklash MAJBURIY — rasm tanlamasdan to'lovni tasdiqlab bo'lmaydi.");
+      return;
+    }
     setIsSubmitting(true);
-    onConfirm(withdrawal.id, receiptImage || undefined, note);
+    try {
+      await onConfirm(withdrawal.id, receiptImage, note);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const formattedCard = withdrawal.accountDetails?.length === 16
@@ -145,16 +161,23 @@ export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
             ) : (
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500/60 rounded-2xl p-6 text-center cursor-pointer transition bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-100/80 dark:hover:bg-slate-900/80 space-y-2"
+                className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-100/80 dark:hover:bg-slate-900/80 space-y-2 ${
+                  receiptError
+                    ? 'border-rose-400 dark:border-rose-600'
+                    : 'border-slate-300 dark:border-slate-700 hover:border-indigo-500/60'
+                }`}
               >
-                <Upload className="w-8 h-8 text-indigo-500 dark:text-indigo-400 mx-auto" />
+                <Upload className={`w-8 h-8 mx-auto ${receiptError ? 'text-rose-500' : 'text-indigo-500 dark:text-indigo-400'}`} />
                 <p className="font-semibold text-slate-700 dark:text-slate-300">
                   Chek rasmini yuklash uchun bu yerga bosing
                 </p>
                 <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                  (JPG, PNG, WebP — Payme / Click / Bank cheki)
+                  (JPG, PNG, WebP — Payme / Click / Bank cheki) — <b>majburiy</b>
                 </p>
               </div>
+            )}
+            {receiptError && (
+              <p className="text-rose-600 dark:text-rose-400 text-[11px] font-semibold">⚠️ {receiptError}</p>
             )}
 
             <input
