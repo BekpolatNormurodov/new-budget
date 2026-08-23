@@ -756,6 +756,26 @@ export class WebAppController {
 
         this.logger.warn(`⚠️ [mvc/captcha POST] OpenBudget CAPTCHA'ni RAD ETDI: HTTP ${captchaStatusCode} | Phone: +${logPhone} | Sabab: "${openBudgetErrorText || 'matn topilmadi'}"`);
 
+        // Xato Mini App oynasida ko'rinishidan tashqari, BOT orqali ham (Telegram
+        // xabari sifatida) yuboriladi — chunki foydalanuvchi Mini App'ni tez yopib
+        // yuborishi yoki xabarni ko'rmay qolishi mumkin, lekin bot xabari doim qoladi.
+        (async () => {
+          try {
+            const tgId = String(body?.tg_id || body?.telegramId || '').trim();
+            const botIdNum = parseInt(String(body?.botId || body?.bot_id || ''), 10);
+            if (tgId && botIdNum) {
+              const bot = await this.prisma.botInstance.findUnique({ where: { id: botIdNum } });
+              if (bot?.token) {
+                await axios.post(`https://api.telegram.org/bot${bot.token}/sendMessage`, {
+                  chat_id: tgId,
+                  text: `⚠️ <b>Ovoz qabul qilinmadi!</b>\n\n📱 Telefon: +998${logPhone.replace(/^998/, '')}\n📌 <b>Sabab:</b> ${displayErrorText}`,
+                  parse_mode: 'HTML',
+                }).catch(() => {});
+              }
+            }
+          } catch { /* bot xabari yuborilmasa ham, foydalanuvchi Mini App'da xabarni ko'radi */ }
+        })();
+
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(200).send(`
           <!DOCTYPE html>
