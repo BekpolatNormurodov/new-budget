@@ -10,6 +10,25 @@ import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
 
+/**
+ * OpenBudget bilan curl orqali muloqot qilishda vaqti-vaqti bilan (proxy uzilishi,
+ * tarmoq tiqilishi) yuz beradigan vaqtinchalik xatolarda avtomatik qayta urinish.
+ */
+async function execCurlWithRetry(args: string[], maxRetries = 2): Promise<{ stdout: string }> {
+  let lastErr: any;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await execFileAsync('curl', args, { maxBuffer: 10 * 1024 * 1024 });
+    } catch (e: any) {
+      lastErr = e;
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 @Controller()
 export class WebAppController {
   private readonly logger = new Logger(WebAppController.name);
@@ -181,7 +200,7 @@ export class WebAppController {
     args.push(`https://new.openbudget.uz/api/v2/vote/mvc/captcha/${initUuid}`);
 
     try {
-      const { stdout } = await execFileAsync('curl', args, { maxBuffer: 10 * 1024 * 1024 });
+      const { stdout } = await execCurlWithRetry(args);
 
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       res.setHeader('Pragma', 'no-cache');
@@ -656,7 +675,7 @@ export class WebAppController {
     args.push('https://new.openbudget.uz/api/v2/vote/mvc/captcha');
 
     try {
-      const { stdout } = await execFileAsync('curl', args, { maxBuffer: 10 * 1024 * 1024 });
+      const { stdout } = await execCurlWithRetry(args);
 
       const cookieMatches = stdout.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
       for (const c of cookieMatches) {
@@ -1165,7 +1184,7 @@ export class WebAppController {
     args.push('https://new.openbudget.uz/api/v2/vote/mvc/verify');
 
     try {
-      const { stdout } = await execFileAsync('curl', args, { maxBuffer: 10 * 1024 * 1024 });
+      const { stdout } = await execCurlWithRetry(args);
 
       const cookieMatches = stdout.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
       for (const c of cookieMatches) {
