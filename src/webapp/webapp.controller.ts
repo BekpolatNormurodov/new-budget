@@ -565,8 +565,39 @@ export class WebAppController {
               phoneInput.value = prefilledPhone;
               phoneInput.readOnly = true;
               localStorage.setItem('phone', prefilledPhone);
+              // MUHIM: OpenBudget'ning o'z checkPhoneNumber() funksiyasi bu qiymatni
+              // yana "99 065-26-51" kabi formatlab qo'yadi (faqat ko'rsatish uchun
+              // mo'ljallangan) — shuning uchun forma jo'natilishidan TO'G'RIDAN-TO'G'RI
+              // oldin qiymatni xom raqamga qaytarib qo'yamiz, aks holda OpenBudget'ga
+              // yana formatlangan (probel/tiredagi) qiymat ketib, captcha rad etiladi.
               if (typeof checkPhoneNumber === 'function') checkPhoneNumber(phoneInput);
+              const voteFormEl = document.getElementById('vote-form') || phoneInput.closest('form');
+              if (voteFormEl) {
+                voteFormEl.addEventListener('submit', function () {
+                  phoneInput.value = prefilledPhone;
+                }, true);
+              }
             }
+
+            // MUHIM: forma (captcha yoki SMS-kod tasdiqlash) 1 marta bosilganda
+            // BIR NECHA MARTA jo'natilib ketishi kuzatildi (ehtimol tez-tez
+            // bosilgani yoki tugma o'chirilmagani sabab) — bu esa OpenBudget
+            // tomonidan "kod/captcha allaqachon ishlatilgan" xatosiga olib kelardi,
+            // hatto to'g'ri kod kiritilgan bo'lsa ham. Endi har qanday forma FAQAT
+            // 1 marta jo'natiladi, submit tugmasi darhol o'chiriladi.
+            document.querySelectorAll('form').forEach(function (formEl) {
+              let alreadySubmitted = false;
+              formEl.addEventListener('submit', function (e) {
+                if (alreadySubmitted) {
+                  e.preventDefault();
+                  e.stopImmediatePropagation();
+                  return false;
+                }
+                alreadySubmitted = true;
+                const submitBtn = formEl.querySelector('button[type="submit"], input[type="submit"]');
+                if (submitBtn) submitBtn.disabled = true;
+              }, true);
+            });
 
             // Override click handler with 100% precise scaled coordinates
             if (domImageB && domImgLazy) {
