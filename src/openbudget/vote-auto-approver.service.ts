@@ -216,6 +216,7 @@ export class VoteAutoApproverService {
         return;
       }
       prewarmRunning = true;
+      const cycleStartedAt = Date.now();
       try {
         const activeBots = await this.prisma.botInstance.findMany({
           where: { isActive: true, initiativeUuid: { not: null } },
@@ -226,6 +227,16 @@ export class VoteAutoApproverService {
           await this.openBudgetService.prewarmOfficialVotesCache(bot.initiativeUuid).catch((e: any) =>
             this.logger.warn(`Prewarm xatoligi (${bot.mahallaName}): ${e.message}`),
           );
+        }
+
+        // KUZATUV: botlar bittadan ko'payib ketsa (hozir 1 ta), ular navbat bilan
+        // (ketma-ket) keshlanadi — bitta umumiy Chrome/proxy sessiyasi ishlatilgani
+        // uchun. Agar to'liq sikl 30 daqiqalik oralig'idan uzoqroq davom etsa, bu
+        // degani ba'zi botlar navbati kelmasdan eskirib qolishi mumkin — shu holat
+        // sezilishi uchun aniq ogohlantirish yoziladi (kod o'zgartirilmasdan oldin).
+        const cycleMs = Date.now() - cycleStartedAt;
+        if (activeBots.length > 0 && cycleMs > 25 * 60 * 1000) {
+          this.logger.warn(`⚠️ [Prewarm] To'liq sikl ${Math.round(cycleMs / 60000)} daqiqa davom etdi (${activeBots.length} ta bot) — 30 daqiqalik oraliqqa yaqinlashmoqda, ba'zi botlar navbati kechikishi mumkin.`);
         }
       } catch (err: any) {
         this.logger.error(`Prewarm sikli xatoligi: ${err.message}`);

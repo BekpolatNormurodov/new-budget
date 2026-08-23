@@ -623,7 +623,7 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
                         filteredObVotes.map((v, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-900/50 transition-colors">
                             <td className="py-3 px-4 text-slate-400 font-mono text-[11px]">
-                              {obPage * 10 + idx + 1}
+                              {obPage * 15 + idx + 1}
                             </td>
                             <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
                               <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
