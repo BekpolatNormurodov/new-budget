@@ -29,7 +29,6 @@ export const BOT_MESSAGES = {
     `Kodni quyida yozib yuboring (Masalan: <code>123456</code>) 👇`,
 
   VOTE_SUBMITTED_PENDING: (phone: string, reward: number = 30000, mahallaName?: string) =>
-    `✅ ОВОЗИНГИЗ ҚАБУЛ ҚИЛИНДИ\n` +
     `✅ <b>OVOZINGIZ MUVAFFAQIYATLI QABUL QILINDI!</b>\n\n` +
     (mahallaName ? `📍 <b>Loyiha:</b> ${mahallaName}\n` : '') +
     `📱 <b>Telefon:</b> +${phone}\n` +
