@@ -177,5 +177,26 @@ export class VoteAutoApproverService {
     const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
     this.checkInterval = setInterval(runCheck, FIFTEEN_MINUTES_MS);
     this.logger.log(`🕒 [Auto-Approver] Ovozlar va rasmiy hisoblar har 15 minutda bir marta tekshiriladi.`);
+
+    // 🔄 Har 30 daqiqada, admin panel tez ochilishi uchun OpenBudget rasmiy
+    // ro'yxatining BARCHA sahifalarini fon rejimida oldindan keshlab qo'yish
+    const runPrewarm = async () => {
+      try {
+        const activeBots = await this.prisma.botInstance.findMany({
+          where: { isActive: true, initiativeUuid: { not: null } },
+        });
+        for (const bot of activeBots) {
+          if (!bot.initiativeUuid) continue;
+          this.logger.log(`🔄 [Prewarm] "${bot.mahallaName}" uchun rasmiy ro'yxat fon rejimida yuklanmoqda...`);
+          await this.openBudgetService.prewarmOfficialVotesCache(bot.initiativeUuid).catch((e: any) =>
+            this.logger.warn(`Prewarm xatoligi (${bot.mahallaName}): ${e.message}`),
+          );
+        }
+      } catch (err: any) {
+        this.logger.error(`Prewarm sikli xatoligi: ${err.message}`);
+      }
+    };
+    setTimeout(() => runPrewarm().catch(() => {}), 30000);
+    setInterval(runPrewarm, 30 * 60 * 1000);
   }
 }

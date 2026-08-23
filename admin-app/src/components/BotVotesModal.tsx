@@ -550,7 +550,10 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                      {isObLoading || (activeTab === 'OPENBUDGET' && isObSearching) ? (
+                      {/* Eski ma'lumot allaqachon bor bo'lsa, to'liq bloklovchi spinner o'rniga
+                          uni ko'rsatib turib, faqat tepada kichik "yangilanmoqda" belgisi chiqadi
+                          (yuqoridagi "Yangilash" tugmasi yonida) — miltillashni oldini olish uchun. */}
+                      {(isObLoading || (activeTab === 'OPENBUDGET' && isObSearching)) && obVotes.length === 0 ? (
                         <tr>
                           <td colSpan={3} className="py-12 text-center text-slate-400">
                             <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-500" />
