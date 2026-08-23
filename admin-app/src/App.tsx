@@ -55,10 +55,15 @@ export function App() {
   const VALID_TABS: TabType[] = ['bots', 'agents', 'votes', 'withdrawals', 'users', 'health'];
 
   const getInitialTab = (): TabType => {
+    const path = window.location.pathname.replace(/^\/+/, '').split('/')[0].trim() as TabType;
+    if (VALID_TABS.includes(path)) return path;
+
     const hash = window.location.hash.replace('#', '').trim() as TabType;
     if (VALID_TABS.includes(hash)) return hash;
+
     const saved = localStorage.getItem('ob_admin_tab') as TabType;
     if (VALID_TABS.includes(saved)) return saved;
+
     return 'bots';
   };
 
@@ -66,24 +71,26 @@ export function App() {
 
   const setActiveTab = (tab: TabType) => {
     setActiveTabState(tab);
-    window.location.hash = tab;
+    window.history.pushState(null, '', `/${tab}`);
     localStorage.setItem('ob_admin_tab', tab);
   };
 
   useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash.replace('#', '').trim() as TabType;
-      if (VALID_TABS.includes(hash)) {
-        setActiveTabState(hash);
-        localStorage.setItem('ob_admin_tab', hash);
+    const handlePopState = () => {
+      const path = window.location.pathname.replace(/^\/+/, '').split('/')[0].trim() as TabType;
+      if (VALID_TABS.includes(path)) {
+        setActiveTabState(path);
+        localStorage.setItem('ob_admin_tab', path);
       }
     };
-    window.addEventListener('hashchange', handleHashChange);
-    // Ensure URL hash matches initial state
-    if (!window.location.hash || !VALID_TABS.includes(window.location.hash.replace('#', '') as TabType)) {
-      window.location.hash = activeTab;
+    window.addEventListener('popstate', handlePopState);
+
+    const curPath = window.location.pathname.replace(/^\/+/, '').split('/')[0].trim() as TabType;
+    if (!VALID_TABS.includes(curPath)) {
+      window.history.replaceState(null, '', `/${activeTab}`);
     }
-    return () => window.removeEventListener('hashchange', handleHashChange);
+
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false);
