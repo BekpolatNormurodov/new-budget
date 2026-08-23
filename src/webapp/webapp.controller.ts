@@ -1440,7 +1440,6 @@ export class WebAppController {
     const grToken = String(Array.isArray(body?.grToken) ? body.grToken[0] : (body?.grToken ?? '')).trim();
 
     const params = new URLSearchParams();
-    if (clean9) params.set('phoneNumber', clean9);
     params.set('otpCode', otpVal);
     params.set('grToken', grToken);
     args.push('--data', params.toString());
