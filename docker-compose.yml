@@ -66,6 +66,8 @@ services:
       EXTERNAL_SERVICE_ENABLED: ${EXTERNAL_SERVICE_ENABLED:-false}
       PROXY_ENABLED: ${PROXY_ENABLED:-false}
       PROXY_LIST: ${PROXY_LIST:-}
+    volumes:
+      - app_logs:/app/logs
     network_mode: "host"
 
 # =========================================================================
