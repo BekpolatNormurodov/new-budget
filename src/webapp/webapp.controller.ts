@@ -1533,19 +1533,24 @@ export class WebAppController {
         lowerBody.includes('limit') ||
         lowerBody.includes('превышен');
 
+      const isSuccessText = 
+        lowerBody.includes('муваффақиятли қабул қилинган') || 
+        lowerBody.includes('ташаббус учун овоз берилди') || 
+        lowerBody.includes('овоз берилди') ||
+        lowerBody.includes('муваффақиятли') ||
+        lowerBody.includes('qabul qilindi');
+
       const isAlreadyVotedPhone = 
-        lowerBody.includes('ушбу рақамингиз орқали аввал') || 
-        lowerBody.includes('ushbu raqamingiz orqali') ||
-        lowerBody.includes('ушбу рақам орқали аввал');
+        !isSuccessText && (
+          lowerBody.includes('ушбу рақамингиз орқали аввал') || 
+          lowerBody.includes('ushbu raqamingiz orqali')
+        );
 
       const isAlreadyVotedCitizen = 
-        lowerBody.includes('аввал бошқа рақам') || 
-        lowerBody.includes('аввал берилган овоз') || 
-        lowerBody.includes('boshqa raqam orqali') || 
-        lowerBody.includes('avval berilgan ovoz') || 
-        lowerBody.includes('жшшир') || 
-        lowerBody.includes('jshshir') ||
-        lowerBody.includes('шахсий идентификация');
+        !isSuccessText && (
+          lowerBody.includes('бошқа рақам орқали') || 
+          lowerBody.includes('boshqa raqam orqali')
+        );
 
       const isExpiredSms = 
         lowerBody.includes('муддати тугаган') || 
@@ -1557,8 +1562,10 @@ export class WebAppController {
         lowerBody.includes('urinishlar soni tugadi') ||
         lowerBody.includes('бугунги урунишлар сони');
 
-      const isRealSuccess = (lastStatusCode === 200 || lastStatusCode === 201) && !isJsonError && !hasErrorText && !isAlreadyVotedPhone && !isAlreadyVotedCitizen && !isExpiredSms && !isLimitExceeded;
-      this.logger.log(`🔎 [mvc/verify POST] Natija tahlili: isRealSuccess=${isRealSuccess} lastStatusCode=${lastStatusCode} isAlreadyVoted=${isAlreadyVotedPhone || isAlreadyVotedCitizen} | Phone: +${logPhone2}`);
+      const hasErrorAlert = lowerBody.includes('error-alert') || lowerBody.includes('alert-danger');
+      const isWrongOtp = lastStatusCode === 400 || (hasErrorText && !isSuccessText) || hasErrorAlert;
+      const isRealSuccess = (lastStatusCode === 200 || lastStatusCode === 201) && !isJsonError && !isWrongOtp && !isAlreadyVotedPhone && !isAlreadyVotedCitizen && !isExpiredSms && !isLimitExceeded;
+      this.logger.log(`🔎 [mvc/verify POST] Natija tahlili: isRealSuccess=${isRealSuccess} lastStatusCode=${lastStatusCode} isSuccessText=${isSuccessText} isWrongOtp=${isWrongOtp} | Phone: +${logPhone2}`);
 
       this.prisma.openBudgetResponseLog.create({
         data: {
