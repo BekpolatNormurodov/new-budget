@@ -833,7 +833,20 @@ export class WebAppController {
         // O'SHA matnni ko'rsatamiz — umumiy "captcha noto'g'ri" emas, balki haqiqiy
         // sabab (limit tugagani, raqam bloklangani va h.k.) aniq ko'rinsin.
         const errorAlertMatch = stdout.match(/<div class="error-alert"[^>]*>([\s\S]*?)<\/div>/i);
-        const openBudgetErrorText = errorAlertMatch ? errorAlertMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+        let openBudgetErrorText = errorAlertMatch ? errorAlertMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+
+        // MUHIM: OpenBudget ba'zan BUTUNLAY BOSHQA sahifa shablonini qaytaradi —
+        // `error-alert` o'rniga to'liq alohida sahifa: `<div class="card">...
+        // <p>XABAR MATNI</p>...</div>`. Bu holatda yuqoridagi qidiruv hech narsa
+        // topmay, foydalanuvchiga umumiy (asl sababsiz) xabar ko'rsatilar edi.
+        // Endi bu ikkinchi shablon ham tekshiriladi.
+        if (!openBudgetErrorText) {
+          const altCardMatch = stdout.match(/<div class="card">[\s\S]*?<p>([\s\S]*?)<\/p>/i);
+          if (altCardMatch) {
+            openBudgetErrorText = altCardMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          }
+        }
+
         const displayErrorText = openBudgetErrorText || `Captcha tasdiqlanmadi. Iltimos, qaytadan urinib ko'ring.`;
 
         // Xato turini aniqlab, har biriga mos harakat/xabar berish uchun
