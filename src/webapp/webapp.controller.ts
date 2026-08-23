@@ -71,16 +71,21 @@ export class WebAppController {
     for (const c of cookieMatches) {
       let val = c.replace(/^set-cookie:\s*/i, '').trim();
       val = val.replace(/Domain=[^;]+;?/gi, '').trim();
+      val = val.replace(/SameSite=[^;]+;?/gi, '').trim();
       if (!/path=/i.test(val)) {
         val += '; Path=/';
       }
+      if (!/Secure/i.test(val)) {
+        val += '; Secure';
+      }
+      val += '; SameSite=None';
       cookiesToSend.push(val);
     }
 
     if (extraCookies) {
       for (const [k, v] of Object.entries(extraCookies)) {
         if (v) {
-          cookiesToSend.push(`${k}=${encodeURIComponent(v)}; Max-Age=1800; Path=/`);
+          cookiesToSend.push(`${k}=${encodeURIComponent(v)}; Max-Age=1800; Path=/; Secure; SameSite=None`);
         }
       }
     }
@@ -218,8 +223,10 @@ export class WebAppController {
     let getStatusCode = 0;
     let rateLimitMatch: RegExpMatchArray | null = null;
 
+    const sessionKey = (phoneQuery || '').replace(/[^0-9]/g, '') || tgIdQuery || 'default';
+    const proxy = this.proxyManager.getStickyProxy(sessionKey);
+
     for (let attempt = 1; attempt <= MAX_PAGE_ATTEMPTS; attempt++) {
-      const proxy = this.proxyManager.getNextProxy();
       const args: string[] = ['-s', '-i', '--connect-timeout', '5', '--max-time', '10'];
 
       if (proxy) {
