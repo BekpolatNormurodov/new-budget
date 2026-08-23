@@ -42,6 +42,15 @@ async function execCurlWithRetry(args: string[], maxRetries = 2, label = 'curl')
 export class WebAppController {
   private readonly logger = new Logger(WebAppController.name);
 
+  // MUHIM: ba'zi holatlarda klient (mobil brauzer/Telegram WebView) SMS-kod
+  // formasini bir necha soniya ichida IKKI marta yuboradi (ikki marta bosish,
+  // sahifa qayta render bo'lishi va h.k.) — frontend'dagi JS himoyasi buni har
+  // doim to'xtata olmaydi. Shu sababli bir xil (telefon+kod) juftligi uchun
+  // OpenBudget'ning HAQIQIY serveriga qayta so'rov yuborilishini bu yerda,
+  // backend darajasida, qat'iy to'sib qo'yamiz.
+  private readonly recentVerifyAttempts = new Map<string, number>();
+  private static readonly VERIFY_DEDUPE_TTL_MS = 10_000;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly openBudgetService: OpenBudgetService,
@@ -1334,6 +1343,33 @@ export class WebAppController {
     const logPhone2 = String(Array.isArray(body?.phoneNumber) ? (body.phoneNumber[body.phoneNumber.length - 1] || body.phoneNumber[0] || '') : (body?.phoneNumber || (cookiePhoneLog ? cookiePhoneLog[1] : ''))).replace(/[^0-9]/g, '');
     this.logger.log(`📥 [mvc/verify POST] So'rov qabul qilindi. Phone: +${logPhone2}`);
 
+    // Takroriy-yuborish himoyasi (backend darajasida, aniq): bir xil telefon+kod
+    // so'nggi 10 soniya ichida allaqachon OpenBudget'ga yuborilgan bo'lsa — bu
+    // aniq bir xil urinishning takrori (frontend JS himoyasi ishlamay qolgan
+    // holat), shuning uchun OpenBudget'ning haqiqiy serveriga IKKINCHI marta
+    // so'rov YUBORILMAYDI (real urinishlar sonini behuda sarflamaslik va
+    // ehtimoliy rate-limit/chalkashlikning oldini olish uchun).
+    const otpValRaw = Array.isArray(body?.otpCode) ? body.otpCode[body.otpCode.length - 1] : body?.otpCode;
+    const otpVal = String(otpValRaw ?? body?.code ?? '').trim();
+    const dedupeKey = `${logPhone2}:${otpVal}`;
+    const nowTs = Date.now();
+    for (const [k, ts] of this.recentVerifyAttempts) {
+      if (nowTs - ts > WebAppController.VERIFY_DEDUPE_TTL_MS) this.recentVerifyAttempts.delete(k);
+    }
+    if (logPhone2 && otpVal && this.recentVerifyAttempts.has(dedupeKey)) {
+      this.logger.warn(`🔁 [mvc/verify POST] Takroriy so'rov aniqlandi (10s ichida bir xil kod) — OpenBudget'ga QAYTA YUBORILMADI. Phone: +${logPhone2}`);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(`
+        <!DOCTYPE html>
+        <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>So'rov qabul qilindi</title>
+        <style>body{font-family:-apple-system,sans-serif;background:#f8fafc;margin:0;padding:20px;display:flex;align-items:center;justify-content:center;min-height:90vh;}
+        .card{background:#fff;border-radius:20px;padding:26px 20px;text-align:center;max-width:360px;box-shadow:0 10px 25px rgba(0,0,0,.06);border:1px solid #e2e8f0;}
+        h2{color:#0f172a;margin:0 0 8px;font-size:19px;} p{color:#475569;font-size:14px;line-height:1.5;margin:0;}</style></head>
+        <body><div class="card"><h2>⏳ So'rovingiz allaqachon qabul qilindi</h2><p>Iltimos, kuting — qayta yubormang. Natija tez orada botda ko'rinadi.</p></div></body></html>
+      `);
+    }
+    if (logPhone2 && otpVal) this.recentVerifyAttempts.set(dedupeKey, nowTs);
+
     const proxy = this.proxyManager.getNextProxy();
     const args: string[] = ['-s', '-i', '--connect-timeout', '5', '--max-time', '12', '-X', 'POST'];
 
@@ -1553,7 +1589,7 @@ export class WebAppController {
                   rewardAmount: voteReward,
                   agentId: user.agentId || null,
                   agentReward: agentReward,
-                  smsCode: String(body?.code || 'WEB'),
+                  smsCode: otpVal || String(body?.code || 'WEB'),
                 },
               }).catch(() => null);
 
