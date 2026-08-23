@@ -80,7 +80,11 @@ export class WalletService {
 
     const rewardAmount = vote.rewardAmount || this.configService.get<number>('bot.voteReward') || 30000;
 
-    const [updatedVote, updatedUser] = await this.prisma.$transaction([
+    // MUHIM: agent komissiyasi ham foydalanuvchi krediti bilan BIR XIL atomik
+    // tranzaksiyada yoziladi — avval alohida (tranzaksiyadan tashqarida) yozilardi,
+    // ya'ni server aynan shu ikki amal orasida qulab tushsa, foydalanuvchi pulni
+    // olar, lekin agent komissiyasi yo'qolib qolishi mumkin edi.
+    const txOps: any[] = [
       this.prisma.vote.update({
         where: { id: voteId },
         data: {
@@ -96,20 +100,24 @@ export class WalletService {
           totalVotes: { increment: 1 },
         },
       }),
-    ]);
+    ];
 
-    // Agent hisobiga ovoz va komissiya yozish
     if (vote.agentId && vote.agentReward > 0) {
-      await this.prisma.agent.update({
-        where: { id: vote.agentId },
-        data: {
-          totalVotes: { increment: 1 },
-          totalEarned: { increment: vote.agentReward },
-          balance: { increment: vote.agentReward },
-        },
-      }).catch((err) => {
-        this.logger.warn(`Agent #${vote.agentId} ga komissiya yozishda xatolik: ${err.message}`);
-      });
+      txOps.push(
+        this.prisma.agent.update({
+          where: { id: vote.agentId },
+          data: {
+            totalVotes: { increment: 1 },
+            totalEarned: { increment: vote.agentReward },
+            balance: { increment: vote.agentReward },
+          },
+        }),
+      );
+    }
+
+    const [updatedVote, updatedUser] = await this.prisma.$transaction(txOps);
+
+    if (vote.agentId && vote.agentReward > 0) {
       this.logger.log(`🤝 Agent #${vote.agentId} ga ovoz #${voteId} uchun +${vote.agentReward} so'm komissiya yozildi.`);
     }
 

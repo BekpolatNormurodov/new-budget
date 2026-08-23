@@ -39,6 +39,28 @@ process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || '128';
       appendToFile(chunk);
       return origStderrWrite(chunk, ...args);
     };
+
+    // 🧹 Eski log fayllarini avtomatik tozalash: bu fayllar `app-YYYY-MM-DD.log`
+    // nomida, docker volume ichida (konteyner qayta tiklansa ham) MANGU
+    // saqlanaveradi — tozalanmasa, oylar davomida disk to'lib ketishi mumkin.
+    // Shuning uchun N kundan eski fayllar har deploy'da VA har 24 soatda
+    // avtomatik o'chirib boriladi (odatiy: 14 kun saqlanadi).
+    const LOG_RETENTION_DAYS = parseInt(process.env.LOG_RETENTION_DAYS || '14', 10);
+    const cleanupOldLogs = () => {
+      try {
+        const cutoff = Date.now() - LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+        for (const fname of fs.readdirSync(logsDir)) {
+          if (!/^app-\d{4}-\d{2}-\d{2}\.log$/.test(fname)) continue;
+          const fpath = path.join(logsDir, fname);
+          const stat = fs.statSync(fpath);
+          if (stat.mtimeMs < cutoff) fs.unlinkSync(fpath);
+        }
+      } catch {
+        // Tozalashda xato bo'lsa ham, dastur ishlashda davom etishi kerak
+      }
+    };
+    cleanupOldLogs();
+    setInterval(cleanupOldLogs, 24 * 60 * 60 * 1000).unref();
   } catch {
     // Fayl-logging o'rnatilmasa ham, konsolga yozish davom etadi
   }
