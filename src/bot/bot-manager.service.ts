@@ -754,7 +754,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
             createdAt: { lte: thresholdDate },
             OR: [
               { errorMessage: null },
-              { NOT: { errorMessage: { startsWith: '[STALE-NOTIFIED]' } } },
+              { NOT: { errorMessage: { startsWith: '[STALE-NOTIFIED' } } },
             ],
           },
           include: { user: true, botInstance: true },
