@@ -202,6 +202,38 @@ export class WebAppController {
         // yerda kelishi mumkin — sahifa yuklanishning o'zida rad etiladi.
         const rateLimitMatch = stdout.match(/Жуда\s*кўп\s*сўровлар|Juda\s*ko'p\s*so'rov/i);
         this.logger.warn(`⚠️ [GET captcha-page] OpenBudget sahifa yuklashni RAD ETDI: HTTP ${getStatusCode}${rateLimitMatch ? ' | Tur: RATE_LIMIT (juda ko\'p so\'rov)' : ''}`);
+
+        // MUHIM: bu yergacha bo'lmasa, keyingi kod OpenBudget'ning XOM (bizning
+        // dizaynimizga mos kelmaydigan, ko'pincha ruscha/kirillcha WAF) xato
+        // sahifasini to'g'ridan-to'g'ri foydalanuvchiga ko'rsatib yuborardi —
+        // bu chiroyli xato-kartalarimizdan farqli, "buzilgan sahifa"dek ko'rinib,
+        // foydalanuvchini chalkashtirar edi. Endi bu holatda ham boshqa xatolar
+        // kabi aniq, tushunarli va bizning dizaynimizga mos xabar ko'rsatiladi.
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.status(200).send(`
+          <!DOCTYPE html>
+          <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <script src="https://telegram.org/js/telegram-web-app.js"></script>
+          <style>
+            body { font-family: -apple-system, sans-serif; background: #f8fafc; margin: 0; padding: 20px; display: flex; align-items: center; justify-content: center; min-height: 90vh; }
+            .card { background: #fff; border-radius: 20px; padding: 26px 20px; text-align: center; max-width: 360px; box-shadow: 0 10px 25px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+            .icon { width: 68px; height: 68px; background: #fffbeb; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 36px; }
+            h2 { color: #0f172a; margin: 0 0 8px; font-size: 19px; font-weight: 700; }
+            p { color: #475569; font-size: 14px; line-height: 1.5; margin: 0 0 20px; }
+            button { width: 100%; height: 50px; background: #f59e0b; color: #fff; border: none; border-radius: 12px; font-weight: 700; font-size: 16px; cursor: pointer; }
+          </style></head>
+          <body>
+            <div class="card">
+              <div class="icon">⏳</div>
+              <h2>Sahifa hozircha ochilmadi</h2>
+              <p>${rateLimitMatch
+                ? "Hozir juda ko'p odam urinmoqda. Iltimos, 1-2 daqiqadan so'ng botdagi tugmani qayta bosing."
+                : "OpenBudget serveridan vaqtincha javob kelmadi. Iltimos, birozdan so'ng botdagi tugmani qayta bosing."}</p>
+              <button onclick="if(window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close(); else window.close();">Botga qaytish</button>
+            </div>
+            <script>if (window.Telegram && window.Telegram.WebApp) { window.Telegram.WebApp.ready(); window.Telegram.WebApp.expand(); }</script>
+          </body></html>
+        `);
       }
 
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
