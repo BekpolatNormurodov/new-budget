@@ -107,26 +107,37 @@ export class VoteAutoApproverService {
       // edi. Endi faqat SystemHealthService orqali, bir marta ishga tushadi.
     };
 
-    // Server ko'tarilishi bilan 5 soniyadan so'ng 1-marta tekshirish va to'liq sinxronlash
+    function isUzbekistanNightTime(): boolean {
+      const now = new Date();
+      const utcHours = now.getUTCHours();
+      const uzbHours = (utcHours + 5) % 24;
+      return uzbHours >= 0 && uzbHours < 6; // 00:00 dan 06:00 gacha
+    }
+
+    // Server ko'tarilishi bilan 5 soniyadan so'ng 1-marta tekshirish (agar kechasi bo'lmasa)
     setTimeout(() => {
-      runCheck().catch(() => {});
+      if (!isUzbekistanNightTime()) {
+        runCheck().catch(() => {});
+      }
     }, 5000);
 
-    // Keyin har 15 minutda (15 * 60 * 1000 ms) fon rejimida tekshirish
-    const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
-    this.checkInterval = setInterval(runCheck, FIFTEEN_MINUTES_MS);
-    this.logger.log(`🕒 [Auto-Approver] Ovozlar va rasmiy hisoblar har 15 minutda bir marta tekshiriladi.`);
+    // Keyin har 1 soatda (60 * 60 * 1000 ms) fon rejimida tekshirish (Tungi rejimda uxlaydi)
+    const ONE_HOUR_MS = 60 * 60 * 1000;
+    this.checkInterval = setInterval(() => {
+      if (isUzbekistanNightTime()) {
+        this.logger.log('🌙 [Tungi Rejim: 00:00 - 06:00] Auto-Approver va ovozlar sinxroni uyquda. Soat 06:00 da davom etadi.');
+        return;
+      }
+      runCheck().catch(() => {});
+    }, ONE_HOUR_MS);
+    this.logger.log(`🕒 [Auto-Approver] Ovozlar va rasmiy hisoblar har 1 soatda bir marta tekshiriladi (Tungi 00:00-06:00 oralig'ida uyquda).`);
 
-    // 🔄 Har 30 daqiqada, admin panel tez ochilishi uchun OpenBudget rasmiy
-    // ro'yxatining BARCHA sahifalarini fon rejimida oldindan keshlab qo'yish.
-    // MUHIM: bitta to'liq sikl (barcha ~218 sahifa, IP-blok tufayli bir necha marta
-    // brauzer qayta ishga tushirilib) 30 daqiqadan ko'proq davom etishi mumkin —
-    // avval bunday holatda YANGI sikl eskisi ustidan boshlanib, uni to'xtatib
-    // qo'yardi (hech qachon to'liq tugamas edi). Endi qayta kirishga qarshi
-    // himoya (re-entrancy guard) bilan, oldingi sikl tugamaguncha yangisi
-    // boshlanmaydi.
     let prewarmRunning = false;
     const runPrewarm = async () => {
+      if (isUzbekistanNightTime()) {
+        this.logger.log('🌙 [Tungi Rejim: 00:00 - 06:00] Prewarm kesh sikli uyquda. Soat 06:00 da davom etadi.');
+        return;
+      }
       if (prewarmRunning) {
         this.logger.log(`⏭ [Prewarm] Oldingi sikl hali tugamagan, bu safar o'tkazib yuborilmoqda.`);
         return;
@@ -145,14 +156,9 @@ export class VoteAutoApproverService {
           );
         }
 
-        // KUZATUV: botlar bittadan ko'payib ketsa (hozir 1 ta), ular navbat bilan
-        // (ketma-ket) keshlanadi — bitta umumiy Chrome/proxy sessiyasi ishlatilgani
-        // uchun. Agar to'liq sikl 30 daqiqalik oralig'idan uzoqroq davom etsa, bu
-        // degani ba'zi botlar navbati kelmasdan eskirib qolishi mumkin — shu holat
-        // sezilishi uchun aniq ogohlantirish yoziladi (kod o'zgartirilmasdan oldin).
         const cycleMs = Date.now() - cycleStartedAt;
         if (activeBots.length > 0 && cycleMs > 25 * 60 * 1000) {
-          this.logger.warn(`⚠️ [Prewarm] To'liq sikl ${Math.round(cycleMs / 60000)} daqiqa davom etdi (${activeBots.length} ta bot) — 30 daqiqalik oraliqqa yaqinlashmoqda, ba'zi botlar navbati kechikishi mumkin.`);
+          this.logger.warn(`⚠️ [Prewarm] To'liq sikl ${Math.round(cycleMs / 60000)} daqiqa davom etdi (${activeBots.length} ta bot).`);
         }
       } catch (err: any) {
         this.logger.error(`Prewarm sikli xatoligi: ${err.message}`);
@@ -160,8 +166,10 @@ export class VoteAutoApproverService {
         prewarmRunning = false;
       }
     };
-    setTimeout(() => runPrewarm().catch(() => {}), 30000);
-    setInterval(runPrewarm, 30 * 60 * 1000);
+    setTimeout(() => {
+      if (!isUzbekistanNightTime()) runPrewarm().catch(() => {});
+    }, 30000);
+    setInterval(runPrewarm, 60 * 60 * 1000);
   }
 
   /**

@@ -18,6 +18,13 @@ export interface HealthReport {
   issues: string[];
 }
 
+function isUzbekistanNightTime(): boolean {
+  const now = new Date();
+  const utcHours = now.getUTCHours();
+  const uzbHours = (utcHours + 5) % 24;
+  return uzbHours >= 0 && uzbHours < 6; // 00:00 dan 06:00 gacha
+}
+
 @Injectable()
 export class SystemHealthService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SystemHealthService.name);
@@ -41,10 +48,10 @@ export class SystemHealthService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const intervalMinutes = this.configService.get<number>('health.intervalMinutes') || 1;
+    const intervalMinutes = this.configService.get<number>('health.intervalMinutes') || 2;
     const intervalMs = Math.max(60 * 1000, intervalMinutes * 60 * 1000);
 
-    this.logger.log(`⏱ 1 daqiqalik Avtomatik Tizim Monitoringi faollashtirildi (Har ${intervalMinutes} daqiqada ishga tushadi)`);
+    this.logger.log(`⏱ 2 daqiqalik Avtomatik Tizim Monitoringi faollashtirildi (Har ${intervalMinutes} daqiqada xotira va holat tekshiriladi)`);
 
     // Dastlabki tezkor tekshiruv (5 soniyadan so'ng)
     setTimeout(() => {
@@ -53,23 +60,29 @@ export class SystemHealthService implements OnModuleInit, OnModuleDestroy {
       });
     }, 5000);
 
-    // Har 1 daqiqalik interval (60 soniya)
+    // Har 2 daqiqalik tezkor xotira monitoringi
     this.checkIntervalHandle = setInterval(() => {
       this.runPeriodicHealthCheck().catch((err) => {
-        this.logger.error(`1 daqiqalik tekshiruvda xatolik: ${err.message}`);
+        this.logger.error(`Monitoring tekshiruvida xatolik: ${err.message}`);
       });
     }, intervalMs);
 
-    // Har 15 daqiqalik Jonli Ovozlar Sinxronizatsiyasi (Proxy orqali)
+    // Har 1 soatlik Jonli Ovozlar Sinxronizatsiyasi (Tungi 00:00-06:00 da uyquda)
     setTimeout(() => {
-      this.openBudgetService.syncAllBotVotes().catch(() => {});
+      if (!isUzbekistanNightTime()) {
+        this.openBudgetService.syncAllBotVotes().catch(() => {});
+      }
     }, 10000);
 
     const syncVotesInterval = setInterval(() => {
+      if (isUzbekistanNightTime()) {
+        this.logger.log('🌙 [Tungi Rejim: 00:00 - 06:00] Ovozlar sinxronlash uyquda. Soat 06:00 da davom etadi.');
+        return;
+      }
       this.openBudgetService.syncAllBotVotes().catch((err) => {
-        this.logger.error(`15 daqiqalik ovozlar sinxronlashda xatolik: ${err.message}`);
+        this.logger.error(`1 soatlik ovozlar sinxronlashda xatolik: ${err.message}`);
       });
-    }, 15 * 60 * 1000);
+    }, 60 * 60 * 1000);
 
     (this as any).syncVotesIntervalHandle = syncVotesInterval;
   }
@@ -86,10 +99,9 @@ export class SystemHealthService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * 30 daqiqalik to'liq tizim tekshiruvini bajarish (100% xatosiz va bardoshli)
+   * 2 daqiqalik tezkor tizim monitoringi (Yengil va xatosiz)
    */
   public async runPeriodicHealthCheck(): Promise<HealthReport> {
-    this.logger.log('🔍 [30-Daqiqalik Monitoring] Tizim, Ovoz berish, Captcha, Proxy va Botlar holati tekshirilmoqda...');
     const issues: string[] = [];
 
     // 1. OpenBudget Provider salomatligini tekshirish

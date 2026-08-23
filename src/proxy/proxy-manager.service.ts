@@ -105,6 +105,14 @@ export class ProxyManagerService implements OnModuleInit {
     this.logger.log(`🛡 Jami ${this.proxyPool.length} ta proxy muvaffaqiyatli yuklandi (Holati: ${this.isEnabled ? 'FAOL' : 'O\'CHIRILGAN'})`);
   }
 
+  public getTotalProxies(): number {
+    return this.proxyPool.length;
+  }
+
+  public getAliveProxiesCount(): number {
+    return this.proxyPool.filter((p) => p.isAlive).length;
+  }
+
   /**
    * Admin panel uchun: barcha proxylarni DB holati (bloklanganmi) va joriy hovuzdagi live statistikasi bilan birga qaytarish
    */
