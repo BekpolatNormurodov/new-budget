@@ -232,7 +232,7 @@ export class VoteAutoApproverService {
         const suffix4 = clean9.slice(-4); // e.g. "2827"
         const visible6 = clean9.length >= 9 ? clean9.slice(3) : suffix4; // e.g. "642827" for +998 95 064 28 27
         const voteTs = new Date(vote.createdAt).getTime();
-        const THIRTY_MINUTES_MS = 30 * 60 * 1000; // [-30 minut : +30 minut] Toshkent vaqti oynasi
+        const THREE_MINUTES_MS = 3 * 60 * 1000; // Aniq [-3 minut : +3 minut] oralig'i
 
         let matchedInRegistry: any = null;
         for (let p = 0; p < 10 && !matchedInRegistry; p++) {
@@ -248,16 +248,16 @@ export class VoteAutoApproverService {
             const isDigitMatch = (itemDigits === visible6) || itemDigits.endsWith(suffix4) || itemDigits.endsWith(suffix2);
             if (!isDigitMatch) return false;
 
-            // 2) Aniq vaqt tekshiruvi: Toshkent vaqti bo'yicha [-30 daqiqa : +30 daqiqa] oralig'ida
+            // 2) Aniq vaqt tekshiruvi: Ovoz berilgan vaqt bilan strictly [-3 daqiqa : +3 daqiqa] oralig'ida
             if (item.voteDate) {
               const formattedDateStr = String(item.voteDate).includes('+')
                 ? item.voteDate
                 : String(item.voteDate).replace(' ', 'T') + '+05:00';
               const itemTs = new Date(formattedDateStr).getTime();
               const diffMs = Math.abs(voteTs - itemTs);
-              return !isNaN(itemTs) && diffMs <= THIRTY_MINUTES_MS;
+              return !isNaN(itemTs) && diffMs <= THREE_MINUTES_MS;
             }
-            return isDigitMatch;
+            return false;
           }) || null;
 
           if (offVotes.totalPages && p >= offVotes.totalPages - 1) break;
@@ -265,7 +265,7 @@ export class VoteAutoApproverService {
 
         if (matchedInRegistry) {
           shouldApprove = true;
-          checkReason = `[OpenBudget Rasmiy Reyestridan tasdiqlandi (Raqam ${matchedInRegistry.phoneNumber}, Vaqt: ${matchedInRegistry.voteDate}) UTC+5]`;
+          checkReason = `[OpenBudget Rasmiy Reyestridan tasdiqlandi (Raqam ${matchedInRegistry.phoneNumber}, Vaqt: ${matchedInRegistry.voteDate}, +-3m moslik) UTC+5]`;
         }
       } catch (regErr: any) {
         this.logger.debug(`Registry match error: ${regErr.message}`);
