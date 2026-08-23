@@ -5,6 +5,7 @@ import { WalletService } from '../wallet/wallet.service';
 import { ProxyManagerService } from '../proxy/proxy-manager.service';
 import { ConfigService } from '@nestjs/config';
 import { BOT_MESSAGES } from '../bot/bot.constants';
+import { withPhoneLock } from '../common/phone-lock.util';
 import axios from 'axios';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
@@ -113,47 +114,20 @@ export class WebAppController {
     return this.openBudgetService.getDefaultInitiative();
   }
 
+  // MUHIM: bu ikki endpoint ESKI (hozirgi rasmiy /captcha Mini App oqimidan
+  // OLDINGI) arxitekturaga tegishli — hech qanday reyestr-tekshiruvi va hech
+  // qanday dublikat-tekshiruvisiz to'g'ridan-to'g'ri "VERIFIED" deb yozib, zudlik
+  // bilan pul to'lardi. Hech bir joriy bot tugmasi bularga bog'lanmagan, lekin
+  // `public/app/index.html` orqali hali ham ochiq/himoyasiz qolgan edi — buni
+  // moliyaviy xavfsizlik uchun butunlay o'chirib qo'yamiz.
   @Post('request-sms')
-  async requestSms(@Body() body: { phone: string; initiativeId?: number }) {
-    if (!body.phone) throw new BadRequestException('Telefon raqam talab qilinadi');
-    return this.openBudgetService.requestSmsForVote(body.phone, body.initiativeId);
+  async requestSms() {
+    throw new BadRequestException('Bu usul faol emas. Iltimos, botdagi "🗳 Ovoz berish" tugmasidan foydalaning.');
   }
 
   @Post('verify-sms')
-  async verifySms(@Body() body: { telegramId: string; phone: string; smsCode: string; sessionId?: string }) {
-    if (!body.telegramId || !body.phone || !body.smsCode) {
-      throw new BadRequestException('Ma\'lumotlar to\'liq emas');
-    }
-
-    const user = await this.prisma.user.findUnique({ where: { telegramId: body.telegramId } });
-    if (!user) throw new BadRequestException('Foydalanuvchi topilmadi');
-
-    const res = await this.openBudgetService.verifySmsCode(body.phone, body.smsCode, body.sessionId);
-    if (!res.success) return res;
-
-    const voteReward = this.configService.get<number>('bot.voteReward') || 200000;
-
-    // Ovoz saqlash
-    await this.prisma.vote.create({
-      data: {
-        userId: user.id,
-        phone: body.phone,
-        status: 'VERIFIED',
-        rewardAmount: voteReward,
-        smsCode: body.smsCode,
-        sessionId: body.sessionId,
-        completedAt: new Date(),
-      },
-    });
-
-    const { user: updatedUser, reward, refBonus } = await this.walletService.creditVoteReward(user.id, voteReward);
-
-    return {
-      success: true,
-      message: 'Ovoz muvaffaqiyatli qabul qilindi!',
-      reward,
-      newBalance: updatedUser.balance,
-    };
+  async verifySms() {
+    throw new BadRequestException('Bu usul faol emas. Iltimos, botdagi "🗳 Ovoz berish" tugmasidan foydalaning.');
   }
 
   @Post('withdraw')
@@ -1567,17 +1541,23 @@ export class WebAppController {
             const mahallaName = activeBot?.mahallaName || 'Янги боги сурх MFY';
 
             // Ovozni bazaga PENDING_VERIFICATION holatida yozish:
-            const existingVote = clean12 ? await this.prisma.vote.findFirst({
-              where: {
-                OR: [
-                  { phone: clean12 },
-                  { phone: clean9 },
-                ],
-                status: { in: ['VERIFIED', 'PENDING_VERIFICATION'] },
-              },
-            }) : null;
+            // Tekshirish + yaratish bir xil telefon uchun ATOMIK bo'lishi kerak —
+            // aks holda ikkita deyarli bir vaqtdagi so'rov ikkalasi ham "mavjud
+            // emas" deb topib, bitta haqiqiy ovoz uchun ikkita PENDING yozuv
+            // (va keyinchalik ikki marta pul) yaratishi mumkin edi.
+            const wasCreated = await withPhoneLock(clean12 || clean9, async () => {
+              const existingVote = clean12 ? await this.prisma.vote.findFirst({
+                where: {
+                  OR: [
+                    { phone: clean12 },
+                    { phone: clean9 },
+                  ],
+                  status: { in: ['VERIFIED', 'PENDING_VERIFICATION'] },
+                },
+              }) : null;
 
-            if (!existingVote) {
+              if (existingVote) return false;
+
               const userAgent = user.agentId ? await this.prisma.agent.findUnique({ where: { id: user.agentId } }) : null;
               const agentReward = userAgent ? (userAgent.rewardPerVote || 5000) : 0;
 
@@ -1594,6 +1574,10 @@ export class WebAppController {
                 },
               }).catch(() => null);
 
+              return true;
+            });
+
+            if (wasCreated) {
               this.logger.log(`⏳ [Vote Submitted - Pending Verification] User ID: ${user.id} | Telegram: ${user.telegramId} | Phone: +${clean12}`);
 
               // Telegram Bot orqali kutilayotgan holat xabarini jo'natish (Rasmiy reyestr tekshiruvida):

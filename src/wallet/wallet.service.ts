@@ -170,16 +170,27 @@ export class WalletService {
       throw new Error(`Hisobingizda mablag' yetarli emas! Mavjud balans: ${user.balance.toLocaleString('uz-UZ')} so'm.`);
     }
 
-    // Balansdan yechish va so'rov yaratish
-    const [updatedUser, withdrawal] = await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id: userId },
+    // MUHIM: yuqoridagi balans tekshiruvi ESKIRGAN (stale) o'qish — ikki tez-tez
+    // yuborilgan "pul yechish" so'rovi bir xil balansni ko'rib, ikkalasi ham shu
+    // tekshiruvdan o'tib ketishi va balansni MINUSGA tushirishi mumkin edi.
+    // Shuning uchun haqiqiy yechish `WHERE balance >= amount` sharti bilan BITTA
+    // atomik (shartli) yozuvda amalga oshiriladi — poyga holatida ikkinchi
+    // so'rov shart bajarilmagani uchun hech narsa yechmaydi.
+    const { updatedUser, withdrawal } = await this.prisma.$transaction(async (tx) => {
+      const updateResult = await tx.user.updateMany({
+        where: { id: userId, balance: { gte: amount } },
         data: {
           balance: { decrement: amount },
           totalWithdrawn: { increment: amount },
         },
-      }),
-      this.prisma.withdrawal.create({
+      });
+
+      if (updateResult.count === 0) {
+        throw new Error(`Hisobingizda mablag' yetarli emas!`);
+      }
+
+      const updatedUser = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+      const withdrawal = await tx.withdrawal.create({
         data: {
           userId,
           amount,
@@ -188,8 +199,10 @@ export class WalletService {
           cardHolder,
           status: 'PENDING',
         },
-      }),
-    ]);
+      });
+
+      return { updatedUser, withdrawal };
+    });
 
     return { updatedUser, withdrawal };
   }

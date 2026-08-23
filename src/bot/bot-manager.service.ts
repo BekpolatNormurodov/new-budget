@@ -12,6 +12,7 @@ import { VoteAutoApproverService } from '../openbudget/vote-auto-approver.servic
 import { ProxyManagerService } from '../proxy/proxy-manager.service';
 import { BOT_MESSAGES, BOT_BUTTONS, formatSum } from './bot.constants';
 import { BotKeyboards } from './bot.keyboards';
+import { withPhoneLock } from '../common/phone-lock.util';
 
 export interface ActiveBot {
   id: number;
@@ -1932,56 +1933,67 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
       await this.clearAllTimeouts(botRecord.id, user.id);
 
-      // GLOBAL DEDUPLICATION DOUBLE-CHECK: Boshqa botda allaqachon ovoz berilganmi?
-      const existingAnywhere = await this.prisma.vote.findFirst({
-        where: {
-          phone,
-          status: { in: ['VERIFIED', 'PENDING_VERIFICATION'] },
-        },
-        include: { botInstance: true },
+      const voteReward = botRecord.voteReward || 30000;
+
+      // GLOBAL DEDUPLICATION DOUBLE-CHECK + yaratish — bir xil telefon uchun
+      // ATOMIK (process-ichi lock bilan), aks holda Mini App va shu bot-chat
+      // yo'li deyarli bir vaqtda ishlasa, ikkalasi ham "mavjud emas" deb topib
+      // ikkita alohida PENDING yozuv (va keyin ikki marta pul) yaratishi mumkin edi.
+      const lockResult = await withPhoneLock(phone, async () => {
+        const existingAnywhere = await this.prisma.vote.findFirst({
+          where: {
+            phone,
+            status: { in: ['VERIFIED', 'PENDING_VERIFICATION'] },
+          },
+          include: { botInstance: true },
+        });
+
+        if (existingAnywhere) {
+          return { ok: false, mahallaName: existingAnywhere.botInstance?.mahallaName || 'boshqa' };
+        }
+
+        // Agar foydalanuvchi Agent referali orqali kirgan bo'lsa, agent ma'lumotlarini olish
+        let agentIdToAssign: number | null = null;
+        let agentRewardToAssign = 0;
+        if (user.agentId) {
+          const agentRec = await this.prisma.agent.findUnique({ where: { id: user.agentId } });
+          if (agentRec && agentRec.isActive) {
+            agentIdToAssign = agentRec.id;
+            agentRewardToAssign = agentRec.rewardPerVote || 5000;
+          }
+        }
+
+        // Ovozni PENDING_VERIFICATION holatida va JWT Token bilan saqlash
+        await this.prisma.vote.create({
+          data: {
+            userId: user.id,
+            botInstanceId: botRecord.id,
+            agentId: agentIdToAssign,
+            agentReward: agentRewardToAssign,
+            phone,
+            status: 'PENDING_VERIFICATION',
+            rewardAmount: voteReward,
+            smsCode,
+            sessionId,
+            jwtToken: verifyRes.accessToken || null,
+            refreshToken: verifyRes.refreshToken || null,
+          },
+        });
+
+        return { ok: true };
       });
 
-      if (existingAnywhere) {
+      if (!lockResult.ok) {
         await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
         await this.prisma.user.update({
           where: { id: user.id },
           data: { step: null, tempData: null },
         });
         return ctx.reply(
-          `⚠️ <b>Ushbu telefon raqam (+${phone}) orqali allaqachon ${existingAnywhere.botInstance?.mahallaName || 'boshqa'} mahallasiga ovoz berilgan!</b>\n\n📌 <b>Ochiq Budjet qoidasi:</b> Bitta telefon raqam yoki fuqaro nomidan bir mavsumda faqat 1 marta ovoz berish mumkin.\n\nSiz boshqa yaqinlaringiz raqamlaridan ovoz berib pul ishlashingiz mumkin!`,
+          `⚠️ <b>Ushbu telefon raqam (+${phone}) orqali allaqachon ${lockResult.mahallaName} mahallasiga ovoz berilgan!</b>\n\n📌 <b>Ochiq Budjet qoidasi:</b> Bitta telefon raqam yoki fuqaro nomidan bir mavsumda faqat 1 marta ovoz berish mumkin.\n\nSiz boshqa yaqinlaringiz raqamlaridan ovoz berib pul ishlashingiz mumkin!`,
           { parse_mode: 'HTML', ...BotKeyboards.mainMenu(user.role === 'ADMIN') }
         );
       }
-
-      const voteReward = botRecord.voteReward || 30000;
-
-      // Agar foydalanuvchi Agent referali orqali kirgan bo'lsa, agent ma'lumotlarini olish
-      let agentIdToAssign: number | null = null;
-      let agentRewardToAssign = 0;
-      if (user.agentId) {
-        const agentRec = await this.prisma.agent.findUnique({ where: { id: user.agentId } });
-        if (agentRec && agentRec.isActive) {
-          agentIdToAssign = agentRec.id;
-          agentRewardToAssign = agentRec.rewardPerVote || 5000;
-        }
-      }
-
-      // Ovozni PENDING_VERIFICATION holatida va JWT Token bilan saqlash
-      await this.prisma.vote.create({
-        data: {
-          userId: user.id,
-          botInstanceId: botRecord.id,
-          agentId: agentIdToAssign,
-          agentReward: agentRewardToAssign,
-          phone,
-          status: 'PENDING_VERIFICATION',
-          rewardAmount: voteReward,
-          smsCode,
-          sessionId,
-          jwtToken: verifyRes.accessToken || null,
-          refreshToken: verifyRes.refreshToken || null,
-        },
-      });
 
       // Agar JWT token qaytgan bo'lsa, foydalanuvchi profiliga ham bog'lab qo'yish
       if (verifyRes.accessToken) {
