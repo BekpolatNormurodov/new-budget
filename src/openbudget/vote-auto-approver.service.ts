@@ -79,18 +79,31 @@ export class VoteAutoApproverService {
             }
 
             // 1.5. RASMIY OCHIQ BUDJET REYESTRIDAN TEKSHIRISH (Phone suffix & Timestamp strictly [-2 min : +2 min])
+            //
+            // MUHIM: avval bu yerda telefon raqamining oxirgi FAQAT 2 ta raqami
+            // (`suffix2`) ham mos deb hisoblanardi — bu juda zaif mezon edi: boshqa
+            // biror odamning ovozi tasodifan oxirgi 2 raqami va vaqt oynasi mos
+            // kelib qolsa, bizning foydalanuvchimiz HAQIQATDA ovoz bermagan bo'lsa
+            // ham "tasdiqlangan" deb belgilanib, mukofot to'lab yuborilardi (real
+            // holatda shunday soxta tasdiqlash yuz berdi). Endi kamida oxirgi 5 ta
+            // raqam (ko'rinadigan qism) mos kelishi SHART, va faqat bitta sahifa
+            // emas, so'nggi bir necha sahifa (eng yangi ~75 ta ovoz) tekshiriladi.
             if (!shouldApprove && !shouldReject && botRecord?.initiativeUuid) {
               try {
-                const offVotes = await this.openBudgetService.fetchOfficialInitiativeVotesList(botRecord.initiativeUuid, 0);
-                if (offVotes.success && Array.isArray(offVotes.content) && offVotes.content.length > 0) {
-                  const cleanPhone = vote.phone.replace(/\D/g, '');
-                  const suffix2 = cleanPhone.slice(-2);
-                  const suffix4 = cleanPhone.slice(-4);
-                  const voteTs = new Date(vote.createdAt).getTime();
+                const cleanPhone = vote.phone.replace(/\D/g, '');
+                const MIN_SUFFIX_LEN = 5;
+                const voteTs = new Date(vote.createdAt).getTime();
+                const TWO_MINUTES_MS = 2 * 60 * 1000;
 
-                  const matchedInRegistry = offVotes.content.find((item: any) => {
+                let matchedInRegistry: any = null;
+                for (let p = 0; p < 5 && !matchedInRegistry; p++) {
+                  const offVotes = await this.openBudgetService.fetchOfficialInitiativeVotesList(botRecord.initiativeUuid, p);
+                  if (!offVotes.success || !Array.isArray(offVotes.content) || offVotes.content.length === 0) break;
+
+                  matchedInRegistry = offVotes.content.find((item: any) => {
                     const itemPhone = (item.phoneNumber || '').replace(/\D/g, '');
-                    const isPhoneMatch = itemPhone.endsWith(suffix4) || itemPhone.endsWith(suffix2);
+                    const len = Math.min(MIN_SUFFIX_LEN, itemPhone.length, cleanPhone.length);
+                    const isPhoneMatch = len >= MIN_SUFFIX_LEN && itemPhone.slice(-len) === cleanPhone.slice(-len);
                     if (!isPhoneMatch) return false;
 
                     if (item.voteDate) {
@@ -100,18 +113,17 @@ export class VoteAutoApproverService {
                         : item.voteDate.replace(' ', 'T') + '+05:00';
                       const itemTs = new Date(formattedDateStr).getTime();
                       const diffMs = Math.abs(voteTs - itemTs);
-
-                      // Qat'iy chegaralangan tekshiruv: faqat [-2 minut : +2 minut] darchasida (120 000 ms)
-                      const TWO_MINUTES_MS = 2 * 60 * 1000;
                       return !isNaN(itemTs) && diffMs <= TWO_MINUTES_MS;
                     }
                     return false;
-                  });
+                  }) || null;
 
-                  if (matchedInRegistry) {
-                    shouldApprove = true;
-                    checkReason = `[OpenBudget Rasmiy Reyestridan tasdiqlandi (Aniq [-2m:+2m] vaqt mosligi): ${matchedInRegistry.phoneNumber} (${matchedInRegistry.voteDate})]`;
-                  }
+                  if (offVotes.totalPages && p >= offVotes.totalPages - 1) break;
+                }
+
+                if (matchedInRegistry) {
+                  shouldApprove = true;
+                  checkReason = `[OpenBudget Rasmiy Reyestridan tasdiqlandi (kamida 5 raqam + [-2m:+2m] vaqt mosligi): ${matchedInRegistry.phoneNumber} (${matchedInRegistry.voteDate})]`;
                 }
               } catch (regErr: any) {
                 this.logger.debug(`Registry match error: ${regErr.message}`);
