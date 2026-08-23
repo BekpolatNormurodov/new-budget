@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { OpenBudgetService } from '../openbudget/openbudget.service';
 import { WalletService } from '../wallet/wallet.service';
 import { ConfigService } from '@nestjs/config';
+import { BOT_MESSAGES } from '../bot/bot.constants';
 
 @Injectable()
 export class VoteAutoApproverService {
@@ -98,7 +99,7 @@ export class VoteAutoApproverService {
                 // va vaqt oynasi ham 2 daqiqadan 60 soniyaga qisqartirildi.
                 const MIN_SUFFIX_LEN = 6;
                 const voteTs = new Date(vote.createdAt).getTime();
-                const TWO_MINUTES_MS = 60 * 1000;
+                const SIXTY_SECONDS_MS = 60 * 1000;
 
                 let matchedInRegistry: any = null;
                 for (let p = 0; p < 5 && !matchedInRegistry; p++) {
@@ -118,7 +119,7 @@ export class VoteAutoApproverService {
                         : item.voteDate.replace(' ', 'T') + '+05:00';
                       const itemTs = new Date(formattedDateStr).getTime();
                       const diffMs = Math.abs(voteTs - itemTs);
-                      return !isNaN(itemTs) && diffMs <= TWO_MINUTES_MS;
+                      return !isNaN(itemTs) && diffMs <= SIXTY_SECONDS_MS;
                     }
                     return false;
                   }) || null;
@@ -128,7 +129,7 @@ export class VoteAutoApproverService {
 
                 if (matchedInRegistry) {
                   shouldApprove = true;
-                  checkReason = `[OpenBudget Rasmiy Reyestridan tasdiqlandi (kamida 5 raqam + [-2m:+2m] vaqt mosligi): ${matchedInRegistry.phoneNumber} (${matchedInRegistry.voteDate})]`;
+                  checkReason = `[OpenBudget Rasmiy Reyestridan tasdiqlandi (aniq 6 raqam + ±60s vaqt mosligi): ${matchedInRegistry.phoneNumber} (${matchedInRegistry.voteDate})]`;
                 }
               } catch (regErr: any) {
                 this.logger.debug(`Registry match error: ${regErr.message}`);
@@ -166,11 +167,10 @@ export class VoteAutoApproverService {
               if (!creditRes.alreadyVerified) {
                 this.logger.log(`✅ [Auto-Approver] Ovoz #${vote.id} (+${vote.phone}) tasdiqlandi! Sabab: ${checkReason}`);
 
-                const msg = `✅ <b>OVOZINGIZ RASMAN TASDIQLANDI!</b>\n\n` +
-                  `📱 <b>Telefon:</b> +${vote.phone}\n` +
-                  `💰 <b>Hisobingizga:</b> +${creditRes.rewardAmount.toLocaleString('uz-UZ')} so'm o'tkazildi!\n` +
-                  `💳 <b>Yangi balansingiz:</b> ${creditRes.user.balance.toLocaleString('uz-UZ')} so'm\n\n` +
-                  `🚀 Do'stlaringizni taklif qiling va har bir do'stingiz uchun bonus oling!`;
+                // Admin panelidan qo'lda tasdiqlashda ishlatiladigan xabar bilan BIR XIL
+                // matn — foydalanuvchi qaysi yo'l bilan tasdiqlanishidan qat'i nazar
+                // (avtomatik reyestr-moslik yoki admin qo'lda) bir xil xabarni ko'rishi kerak.
+                const msg = BOT_MESSAGES.VOTE_VERIFIED_ALERT(vote.phone, creditRes.rewardAmount, creditRes.user.balance);
 
                 await sendMessageCallback(vote.botInstanceId, vote.user.telegramId, msg).catch(() => {});
               }

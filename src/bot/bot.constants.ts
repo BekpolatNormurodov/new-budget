@@ -28,13 +28,14 @@ export const BOT_MESSAGES = {
     `<b>+${phone}</b> raqamingizga 6 xonali tasdiqlash kodi yuborildi.\n\n` +
     `Kodni quyida yozib yuboring (Masalan: <code>123456</code>) 👇`,
 
-  VOTE_SUBMITTED_PENDING: (phone: string, reward: number = 30000) =>
+  VOTE_SUBMITTED_PENDING: (phone: string, reward: number = 30000, mahallaName?: string) =>
     `✅ ОВОЗИНГИЗ ҚАБУЛ ҚИЛИНДИ\n` +
     `✅ <b>OVOZINGIZ MUVAFFAQIYATLI QABUL QILINDI!</b>\n\n` +
+    (mahallaName ? `📍 <b>Loyiha:</b> ${mahallaName}\n` : '') +
     `📱 <b>Telefon:</b> +${phone}\n` +
     `⏳ <b>Holati:</b> Tekshiruvda\n` +
     `💰 <b>Mukofot:</b> <code>+${formatSum(reward)} so'm</code>\n\n` +
-    `⏰ Ovoz tizim tomonidan tasdiqlanishi bilan balansingizga mablag' qo'shiladi va bildirishnoma yuboriladi! 🚀`,
+    `ℹ️ Ovozingiz OpenBudget rasmiy reyestrida tasdiqlangach, hisobingizga avtomatik mablag' o'tkaziladi va sizga alohida xabar yuboriladi. Odatda bu bir necha daqiqa ichida amalga oshadi. ⚡️`,
 
   VOTE_VERIFIED_ALERT: (phone: string, reward: number, balance: number) => 
     `🎉 <b>TABRIKLAYMIZ! OVOZINGIZ TASDIQLANDI!</b>\n\n` +

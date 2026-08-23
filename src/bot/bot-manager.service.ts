@@ -2010,7 +2010,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
       await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
       await ctx.reply(
-        BOT_MESSAGES.VOTE_SUBMITTED_PENDING(phone, voteReward),
+        BOT_MESSAGES.VOTE_SUBMITTED_PENDING(phone, voteReward, botRecord.mahallaName),
         { parse_mode: 'HTML', ...BotKeyboards.mainMenu(user.role === 'ADMIN') }
       );
     } catch (err) {

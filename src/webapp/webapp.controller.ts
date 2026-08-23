@@ -4,6 +4,7 @@ import { OpenBudgetService } from '../openbudget/openbudget.service';
 import { WalletService } from '../wallet/wallet.service';
 import { ProxyManagerService } from '../proxy/proxy-manager.service';
 import { ConfigService } from '@nestjs/config';
+import { BOT_MESSAGES } from '../bot/bot.constants';
 import axios from 'axios';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
@@ -1596,13 +1597,13 @@ export class WebAppController {
               this.logger.log(`⏳ [Vote Submitted - Pending Verification] User ID: ${user.id} | Telegram: ${user.telegramId} | Phone: +${clean12}`);
 
               // Telegram Bot orqali kutilayotgan holat xabarini jo'natish (Rasmiy reyestr tekshiruvida):
+              // Bot chatidagi eski (to'g'ridan-to'g'ri SMS kiritish) yo'l bilan BIR XIL
+              // umumiy matn ishlatiladi — foydalanuvchi qaysi yo'l bilan ovoz berishidan
+              // qat'i nazar bir xil xabar ko'rishi kerak.
               if (activeBot?.token) {
                 const tgUrl = `https://api.telegram.org/bot${activeBot.token}/sendMessage`;
-                const text = `✅ <b>OVOZINGIZ QABUL QILINDI!</b>\n\n` +
-                  `📍 <b>Loyiha:</b> ${mahallaName}\n` +
-                  `📱 <b>Telefon:</b> +998 ${clean9 ? `${clean9.slice(0,2)} ${clean9.slice(2,5)}-${clean9.slice(5,7)}-${clean9.slice(7,9)}` : '***'}\n` +
-                  `💰 <b>Mukofot:</b> +${voteReward.toLocaleString('uz-UZ')} so'm\n\n` +
-                  `ℹ️ <i>Ovozingiz OpenBudget rasmiy reyestrida tasdiqlangach, hisobingizga avtomatik mablag' o'tkaziladi va sizga alohida xabar yuboriladi. Odatda bu bir necha daqiqa ichida amalga oshadi.</i> ⚡️`;
+                const formattedPhoneForMsg = `998 ${clean9 ? `${clean9.slice(0,2)} ${clean9.slice(2,5)}-${clean9.slice(5,7)}-${clean9.slice(7,9)}` : '***'}`;
+                const text = BOT_MESSAGES.VOTE_SUBMITTED_PENDING(formattedPhoneForMsg, voteReward, mahallaName);
 
                 await axios.post(tgUrl, {
                   chat_id: user.telegramId,
