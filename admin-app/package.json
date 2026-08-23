@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "rm -f ../public/assets/*.js ../public/assets/*.css && tsc && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
