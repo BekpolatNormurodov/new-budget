@@ -19,6 +19,7 @@ export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
 }) => {
   const [receiptImage, setReceiptImage] = useState<string>('');
   const [note, setNote] = useState<string>('To\'lov muvaffaqiyatli amalga oshirildi');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen || !withdrawal) return null;
@@ -40,9 +41,9 @@ export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     onConfirm(withdrawal.id, receiptImage || undefined, note);
-    setReceiptImage('');
-    setNote('To\'lov muvaffaqiyatli amalga oshirildi');
   };
 
   const formattedCard = withdrawal.accountDetails?.length === 16
@@ -64,10 +65,13 @@ export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
           <ModalCancelButton onClick={onClose} />
           <button
             type="submit"
-            className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:opacity-95 text-white rounded-xl font-bold text-xs shadow-lg cursor-pointer transition flex items-center gap-1.5"
+            disabled={isSubmitting}
+            className={`px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:opacity-95 text-white rounded-xl font-bold text-xs shadow-lg cursor-pointer transition flex items-center gap-1.5 ${
+              isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
           >
             <CheckCircle className="w-4 h-4" />
-            <span>To'lovni Tasdiqlash & Yuborish</span>
+            <span>{isSubmitting ? 'Tasdiqlanmoqda...' : 'To\'lovni Tasdiqlash & Yuborish'}</span>
           </button>
         </>
       }

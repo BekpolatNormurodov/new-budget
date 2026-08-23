@@ -485,12 +485,21 @@ export function App() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ receiptImage, note }),
       });
-      if (!res.ok) throw new Error();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (data.message?.includes('allaqachon')) {
+          showToast(`ℹ️ Ushbu to'lov allaqachon tasdiqlangan!`, 'info');
+          setApprovingWithdrawal(null);
+          loadAllData();
+          return;
+        }
+        throw new Error(data.message || 'Xatolik');
+      }
       showToast(`✅ #${id} arizaga to'lov tasdiqlandi va chek mijozga yuborildi!`, 'success');
       setApprovingWithdrawal(null);
       loadAllData();
-    } catch (e) {
-      showToast('To\'lovni tasdiqlashda xatolik yuz berdi', 'error');
+    } catch (e: any) {
+      showToast(e.message || 'To\'lovni tasdiqlashda xatolik yuz berdi', 'error');
     }
   };
 
