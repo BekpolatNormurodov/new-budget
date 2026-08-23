@@ -1779,26 +1779,39 @@ export class OpenBudgetService {
         if (!result) {
           consecutiveFailures++;
           this.logger.debug(`⚠️ [Prewarm] Sahifa ${p} bo'sh javob qaytardi (ketma-ket ${consecutiveFailures}-marta).`);
-          // ANIQLANDI: bu vaqt-asosidagi cheklov EMAS — 80 soniya kutish ham yordam
-          // bermadi. Aslida bitta TOKEN faqat cheklangan marta (taxminan ~20)
-          // ishlatilgandan so'ng, OpenBudget uni "tugatib" bo'sh javob qaytara
-          // boshlaydi. Yechim: kutish emas, balki captcha'ni qayta yechib, YANGI
-          // token bilan xuddi shu sahifadan davom etish.
+          // ANIQLANDI (tajriba bilan): bu na vaqt-asosidagi cheklov (80s kutish
+          // yordam bermadi), na token-asosidagi cheklov (yangi token olish ham
+          // yordam bermadi — chunki eski token bilan ishlagan headless brauzer
+          // O'SHA proxy ulanishini/IP'ni davom ettiraveradi, faqat --proxy-server
+          // argumenti bilan BIR MARTA ishga tushirilgani uchun). Demak bu haqiqatan
+          // ham IP-asosidagi cheklov. Yechim: butun headless brauzerni yangi proxy
+          // IP bilan qayta ishga tushirish, so'ng yangi sahifa+token olish.
           if (consecutiveFailures >= 6) {
             if (tokenRefreshesUsed < MAX_TOKEN_REFRESHES) {
               tokenRefreshesUsed++;
-              this.logger.warn(`🔄 [Prewarm] Token ${consecutiveFailures} marta ketma-ket bo'sh javob berdi — yangi token olinmoqda (${tokenRefreshesUsed}/${MAX_TOKEN_REFRESHES}), so'ng ${p}-sahifadan davom etiladi...`);
+              this.logger.warn(`🔄 [Prewarm] IP/token ${consecutiveFailures} marta ketma-ket bo'sh javob berdi — brauzer yangi proxy IP bilan qayta ishga tushirilmoqda (${tokenRefreshesUsed}/${MAX_TOKEN_REFRESHES}), so'ng ${p}-sahifadan davom etiladi...`);
+              await this.restartHeadlessBrowser();
+              await browserPage.close().catch(() => {});
               const solved = await this.solveInitiativeTokenHeadless(initiativeUuid, 6);
               if (solved.success && solved.token) {
                 initToken = solved.token;
+                const newBrowser = await this.getHeadlessBrowser();
+                browserPage = await this.newHeadlessPage(newBrowser);
+                await browserPage.setUserAgent(
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+                );
+                await browserPage.goto(
+                  `https://new.openbudget.uz/uz/initiative-budget/active-initiatives/55/${initiativeUuid}`,
+                  { waitUntil: 'domcontentloaded', timeout: 20000 },
+                );
                 consecutiveFailures = 0;
-                p--; // shu sahifani yangi token bilan qayta urinish uchun
+                p--; // shu sahifani yangi IP/token bilan qayta urinish uchun
                 continue;
               }
-              this.logger.warn(`⚠️ [Prewarm] Yangi token olinmadi, to'xtatilmoqda (${cachedCount} sahifa keshlandi).`);
+              this.logger.warn(`⚠️ [Prewarm] Yangi IP/token olinmadi, to'xtatilmoqda (${cachedCount} sahifa keshlandi).`);
               break;
             }
-            this.logger.warn(`⚠️ [Prewarm] Token yangilash limiti tugadi — to'xtatilmoqda (${cachedCount} sahifa keshlandi).`);
+            this.logger.warn(`⚠️ [Prewarm] IP/token yangilash limiti tugadi — to'xtatilmoqda (${cachedCount} sahifa keshlandi).`);
             break;
           }
           continue;
