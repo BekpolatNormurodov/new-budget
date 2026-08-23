@@ -740,18 +740,29 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     this.autoApproveInterval = setInterval(async () => {
       try {
         const thresholdDate = new Date(Date.now() - approveDelayMs);
+        // MUHIM (haqiqiy xato topildi va tuzatildi): SQL/Prisma'da
+        // `NOT: { errorMessage: { startsWith: ... } }` — errorMessage NULL
+        // bo'lgan qatorlarda `NOT NULL` natijasi NULL (ya'ni "noma'lum") bo'lib,
+        // WHERE sharti buni HAQIQIY (true) deb hisoblamaydi — demak errorMessage
+        // hali umuman yozilmagan (ya'ni HAR BIR yangi, hali ogohlantirilmagan)
+        // ovoz bu so'rovdan BUTUNLAY chetlab o'tib ketardi! Natijada bu "qo'lda
+        // tekshiruv kerak" xavfsizlik-tarmog'i amalda hech qachon ishlamagan edi.
+        // Endi errorMessage=NULL holati alohida, aniq qo'shildi.
         const staleVotes = await this.prisma.vote.findMany({
           where: {
             status: 'PENDING_VERIFICATION',
             createdAt: { lte: thresholdDate },
-            // Har safar qayta-qayta ogohlantirmaslik uchun, oxirgi ogohlantirilgan
-            // ovozlarni belgilab qo'yamiz (errorMessage orqali) va ularni o'tkazib yuboramiz.
-            NOT: { errorMessage: { startsWith: '[STALE-NOTIFIED]' } },
+            OR: [
+              { errorMessage: null },
+              { NOT: { errorMessage: { startsWith: '[STALE-NOTIFIED]' } } },
+            ],
           },
           include: { user: true, botInstance: true },
         });
 
         if (staleVotes.length === 0) return;
+
+        this.logger.warn(`⚠️ [Stale-Vote Watchdog] ${staleVotes.length} ta ovoz ${autoApproveHours} soatdan ortiq kutilmoqda — adminlarga xabar berilmoqda: ${staleVotes.map((v) => '+' + v.phone).join(', ')}`);
 
         const adminIds = this.configService.get<string[]>('bot.adminIds') || ['8140304652', '2053690211', '5957905121'];
         for (const vote of staleVotes) {
