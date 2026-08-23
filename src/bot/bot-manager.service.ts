@@ -722,7 +722,15 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Avtomatik tasdiqlash fon vazifasi (2-24 soat oralig'i)
+   * ⚠️ ESKI XATTI-HARAKAT (O'CHIRILDI): bu vazifa avval hech qanday haqiqiy
+   * tekshiruvsiz — shunchaki ovoz N soatdan (odatda 2 soat) ortiq "kutilmoqda"
+   * holatda tursa — uni avtomatik "tasdiqlangan" deb belgilab, pul to'lab
+   * yuborardi. Bu jiddiy xato edi: OpenBudget rasmiy reyestrida umuman
+   * bo'lmagan ovozlar ham (masalan captcha/tarmoq xatosi bilan barbod bo'lgan
+   * urinishlar) faqat vaqt o'tgani uchun soxta ravishda tasdiqlanib, pul
+   * to'lanardi (aynan shu sabab bilan bir nechta soxta tasdiqlash yuz berdi).
+   * Endi bu holatlar avtomatik pul to'lamaydi — faqat mas'ul administratorlarga
+   * "qo'lda tekshiring" degan bildirishnoma yuboradi.
    */
   private startVoteAutoApprover() {
     const autoApproveHours = this.configService.get<number>('bot.autoApproveHours') || 2;
@@ -731,27 +739,37 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     this.autoApproveInterval = setInterval(async () => {
       try {
         const thresholdDate = new Date(Date.now() - approveDelayMs);
-        const pendingVotes = await this.prisma.vote.findMany({
+        const staleVotes = await this.prisma.vote.findMany({
           where: {
             status: 'PENDING_VERIFICATION',
             createdAt: { lte: thresholdDate },
+            // Har safar qayta-qayta ogohlantirmaslik uchun, oxirgi ogohlantirilgan
+            // ovozlarni belgilab qo'yamiz (errorMessage orqali) va ularni o'tkazib yuboramiz.
+            NOT: { errorMessage: { startsWith: '[STALE-NOTIFIED]' } },
           },
           include: { user: true, botInstance: true },
         });
 
-        for (const vote of pendingVotes) {
-          try {
-            const res = await this.walletService.verifyVoteAndCredit(vote.id);
-            if (!res.alreadyVerified) {
-              const activeBot = vote.botInstanceId ? this.activeBots.get(vote.botInstanceId) : null;
-              const sender = activeBot ? activeBot.bot.telegram : this.activeBots.values().next().value?.bot.telegram;
+        if (staleVotes.length === 0) return;
 
-              if (sender) {
-                await sender.sendMessage(
-                  vote.user.telegramId,
-                  BOT_MESSAGES.VOTE_VERIFIED_ALERT(vote.phone, res.rewardAmount, res.user.balance),
-                  { parse_mode: 'HTML' }
-                ).catch(() => {});
+        const adminIds = this.configService.get<string[]>('bot.adminIds') || ['8140304652', '2053690211', '5957905121'];
+        for (const vote of staleVotes) {
+          try {
+            await this.prisma.vote.update({
+              where: { id: vote.id },
+              data: { errorMessage: `[STALE-NOTIFIED ${new Date().toISOString()}] ${autoApproveHours} soatdan ortiq kutilmoqda, qo'lda tekshiruv kerak` },
+            }).catch(() => {});
+
+            const activeBot = vote.botInstanceId ? this.activeBots.get(vote.botInstanceId) : null;
+            const sender = activeBot ? activeBot.bot.telegram : this.activeBots.values().next().value?.bot.telegram;
+            if (sender) {
+              const msg = `⚠️ <b>Qo'lda tekshiruv kerak!</b>\n\n` +
+                `📱 Telefon: +${vote.phone}\n` +
+                `🏘 Mahalla: ${vote.botInstance?.mahallaName || '-'}\n` +
+                `⏳ ${autoApproveHours} soatdan ortiq "kutilmoqda" holatida, hali rasmiy reyestrda tasdiqlanmagan.\n\n` +
+                `Admin panelda qo'lda tekshirib, kerak bo'lsa tasdiqlang.`;
+              for (const adminId of adminIds) {
+                await sender.sendMessage(adminId, msg, { parse_mode: 'HTML' }).catch(() => {});
               }
             }
           } catch (e) {}
