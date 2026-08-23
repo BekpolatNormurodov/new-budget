@@ -572,12 +572,28 @@ export class WebAppController {
               }
             }
 
-            // MUHIM: forma (captcha yoki SMS-kod tasdiqlash) 1 marta bosilganda
-            // BIR NECHA MARTA jo'natilib ketishi kuzatildi (ehtimol tez-tez
-            // bosilgani yoki tugma o'chirilmagani sabab) — bu esa OpenBudget
-            // tomonidan "kod/captcha allaqachon ishlatilgan" xatosiga olib kelardi,
-            // hatto to'g'ri kod kiritilgan bo'lsa ham. Endi har qanday forma FAQAT
-            // 1 marta jo'natiladi, submit tugmasi darhol o'chiriladi.
+            // MUHIM (ILDIZ SABABI TOPILDI): OpenBudget'ning O'Z sahifasidagi skript
+            // Enter/mobil klaviaturaning "Go" tugmasi bosilganda formani IKKI XIL
+            // yo'l bilan yuboradi — (1) keydown handleri to'g'ridan-to'g'ri
+            // forms[i].submit() chaqiradi, (2) forma o'zining "submit" hodisa
+            // ichida yana e.target.submit() chaqiradi. Muammo shundaki, JS'da
+            // formaning .submit() metodi TO'G'RIDAN-TO'G'RI chaqirilsa, brauzer
+            // "submit" HODISASINI UMUMAN ISHGA TUSHIRMAYDI — shuning uchun oddiy
+            // addEventListener('submit', ...) orqali qo'yilgan himoya (pastda)
+            // shu yo'lni butunlay o'tkazib yuborardi. To'g'ri yechim — formaning
+            // .submit() METODINI o'zini almashtirish: shunda uni kim va qanday
+            // chaqirmasin (klaviatura Enter'i, tugma bosilishi, OpenBudget skripti)
+            // — baribir faqat BIR MARTA haqiqiy yuborilishi kafolatlanadi.
+            (function () {
+              var origSubmit = HTMLFormElement.prototype.submit;
+              HTMLFormElement.prototype.submit = function () {
+                if (this.__obAlreadySubmitted) return;
+                this.__obAlreadySubmitted = true;
+                var submitBtn = this.querySelector('button[type="submit"], input[type="submit"]');
+                if (submitBtn) submitBtn.disabled = true;
+                return origSubmit.call(this);
+              };
+            })();
             document.querySelectorAll('form').forEach(function (formEl) {
               let alreadySubmitted = false;
               formEl.addEventListener('submit', function (e) {
@@ -1278,6 +1294,26 @@ export class WebAppController {
             // shuning uchun ikki marta yuborilishning oldini olish himoyasi bu yerga
             // ALOHIDA qo'shilishi kerak edi (avvalgi tuzatish faqat boshqa GET
             // yo'lida ishlar edi, aynan shu sahifada emas).
+            //
+            // ILDIZ SABABI (aynan shu SMS-kod sahifasida): OpenBudget'ning o'z
+            // skripti mobil klaviaturaning "Go"/Enter tugmasi bosilganda formani
+            // keydown handleri orqali TO'G'RIDAN-TO'G'RI form.submit() bilan
+            // yuboradi — bu esa "submit" HODISASINI ishga tushirmaydi, shuning
+            // uchun pastdagi oddiy hodisa-tinglagichi buni tutib qololmasdi. Shu
+            // sabab bitta "Go" bosilganda ham serverga ikki so'rov ketardi. To'g'ri
+            // yechim — formaning .submit() metodini o'zini almashtirish orqali,
+            // uni QANDAY chaqirishidan qat'i nazar (klaviatura, tugma, OpenBudget
+            // skripti) faqat bitta haqiqiy yuborilishni kafolatlash.
+            (function () {
+              var origSubmit = HTMLFormElement.prototype.submit;
+              HTMLFormElement.prototype.submit = function () {
+                if (this.__obAlreadySubmitted) return;
+                this.__obAlreadySubmitted = true;
+                var submitBtn = this.querySelector('button[type="submit"], input[type="submit"]');
+                if (submitBtn) submitBtn.disabled = true;
+                return origSubmit.call(this);
+              };
+            })();
             document.querySelectorAll('form').forEach(function (formEl) {
               let alreadySubmitted = false;
               formEl.addEventListener('submit', function (e) {
