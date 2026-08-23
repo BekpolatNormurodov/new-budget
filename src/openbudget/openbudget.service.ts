@@ -1753,6 +1753,7 @@ export class OpenBudgetService {
 
       let totalPages = maxPages;
       let cachedCount = 0;
+      let consecutiveFailures = 0;
 
       for (let p = 0; p < maxPages && p < totalPages; p++) {
         let result: any = null;
@@ -1773,7 +1774,19 @@ export class OpenBudgetService {
           }
           if (!result) await new Promise((r) => setTimeout(r, 300));
         }
-        if (!result) continue;
+        if (!result) {
+          consecutiveFailures++;
+          this.logger.debug(`⚠️ [Prewarm] Sahifa ${p} bo'sh javob qaytardi (ketma-ket ${consecutiveFailures}-marta).`);
+          // OpenBudget ma'lum miqdordagi tez ketma-ket so'rovlardan keyin bo'sh javob
+          // qaytara boshlaydi (tezlik-asosidagi cheklov). Ketma-ket ko'p muvaffaqiyatsiz
+          // urinishdan keyin, vaqtni behuda sarflamaslik uchun to'xtaymiz.
+          if (consecutiveFailures >= 8) {
+            this.logger.warn(`⚠️ [Prewarm] ${consecutiveFailures} marta ketma-ket bo'sh javob — OpenBudget tezlik cheklovi ehtimoli, to'xtatilmoqda (${cachedCount} sahifa keshlandi).`);
+            break;
+          }
+          continue;
+        }
+        consecutiveFailures = 0;
         totalPages = result.totalPages || totalPages;
         this.initiativeVotesListCache.set(`${initiativeUuid}_p${p}`, {
           votes: result.content || [],
@@ -1782,6 +1795,9 @@ export class OpenBudgetService {
           fetchedAt: Date.now(),
         });
         cachedCount++;
+        // Har sahifadan keyin kichik pauza — so'rov tezligini pasaytirib,
+        // OpenBudget'ning tezlik-asosidagi cheklovidan qochish uchun.
+        await new Promise((r) => setTimeout(r, 700));
       }
 
       await browserPage.close().catch(() => {});
