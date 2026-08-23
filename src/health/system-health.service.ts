@@ -22,7 +22,7 @@ function isUzbekistanNightTime(): boolean {
   const now = new Date();
   const utcHours = now.getUTCHours();
   const uzbHours = (utcHours + 5) % 24;
-  return uzbHours >= 0 && uzbHours < 6; // 00:00 dan 06:00 gacha
+  return uzbHours >= 1 && uzbHours < 6; // 01:00 dan 06:00 gacha (00:00 - 01:00 oralig'ida ham faol ishlaydi)
 }
 
 @Injectable()
