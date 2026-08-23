@@ -687,18 +687,60 @@ export class WebAppController {
     args.push('--data', params.toString());
     args.push('https://new.openbudget.uz/api/v2/vote/mvc/captcha');
 
+    this.logger.log(`📦 [mvc/captcha POST] So'rov tanasi (request body): ${params.toString()}`);
+
     try {
       const { stdout } = await execCurlWithRetry(args, 2, `POST mvc/captcha (+${logPhone})`);
       const statusMatch690 = stdout.match(/HTTP\/(?:1\.[01]|2)\s+(\d{3})/g);
       const captchaStatusCode = statusMatch690 ? parseInt(statusMatch690[statusMatch690.length - 1].match(/\d{3}/)![0], 10) : 0;
+      this.logger.log(`📤 [mvc/captcha POST] OpenBudget javobi: ${statusMatch690 ? statusMatch690[statusMatch690.length - 1] : "noma'lum"} | Phone: +${logPhone}`);
+
+      // Javob tanasini audit uchun bazaga saqlash (keyinchalik "nima javob keldi?"
+      // degan savolga aniq javob berish uchun — konsol loglar deploy paytida yo'qolib
+      // qolishi mumkin, lekin bu yozuv bazada qoladi).
+      const captchaBodyForLog = stdout.slice(0, 10000);
+      this.prisma.openBudgetResponseLog.create({
+        data: {
+          endpoint: 'CAPTCHA',
+          phone: logPhone ? `998${logPhone.replace(/^998/, '')}` : null,
+          statusCode: captchaStatusCode,
+          requestBody: params.toString(),
+          responseBody: captchaBodyForLog,
+          isSuccess: captchaStatusCode === 200,
+        },
+      }).catch(() => {});
+
       if (captchaStatusCode && captchaStatusCode !== 200) {
         // Captcha bosqichining o'zi rad etilgan (masalan noto'g'ri nuqtalar bosilgan) —
         // bu holatda verify bosqichi baribir HTTP 200 qaytarishi mumkin (OpenBudget
-        // ba'zan bo'sh 200 bilan javob beradi), shuning uchun buni ALOHIDA ogohlantirib
-        // qo'yamiz — keyinchalik "nega ovoz hech qachon tasdiqlanmadi" savoliga javob.
-        this.logger.warn(`⚠️ [mvc/captcha POST] OpenBudget CAPTCHA'ni RAD ETDI: HTTP ${captchaStatusCode} | Phone: +${logPhone} — bu ovoz haqiqatda hisoblanmagan bo'lishi mumkin!`);
+        // ba'zan bo'sh 200 bilan javob beradi), shuning uchun bu yerning o'zida
+        // to'xtatamiz va foydalanuvchiga ANIQ xato ko'rsatamiz — "muvaffaqiyat"
+        // sahifasiga soxta o'tib ketmasligi uchun.
+        this.logger.warn(`⚠️ [mvc/captcha POST] OpenBudget CAPTCHA'ni RAD ETDI: HTTP ${captchaStatusCode} | Phone: +${logPhone}`);
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.status(200).send(`
+          <!DOCTYPE html>
+          <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <script src="https://telegram.org/js/telegram-web-app.js"></script>
+          <style>
+            body { font-family: -apple-system, sans-serif; background: #f8fafc; margin: 0; padding: 20px; display: flex; align-items: center; justify-content: center; min-height: 90vh; }
+            .card { background: #fff; border-radius: 20px; padding: 26px 20px; text-align: center; max-width: 360px; box-shadow: 0 10px 25px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+            .icon { width: 68px; height: 68px; background: #fef2f2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 36px; }
+            h2 { color: #0f172a; margin: 0 0 8px; font-size: 19px; font-weight: 700; }
+            p { color: #475569; font-size: 14px; line-height: 1.5; margin: 0 0 20px; }
+            button { width: 100%; height: 50px; background: #dc2626; color: #fff; border: none; border-radius: 12px; font-weight: 700; font-size: 16px; cursor: pointer; }
+          </style></head>
+          <body>
+            <div class="card">
+              <div class="icon">⚠️</div>
+              <h2>Captcha noto'g'ri!</h2>
+              <p>OpenBudget rasmiy tizimi captcha javobini rad etdi (nuqtalar noto'g'ri bosilgan bo'lishi mumkin). Iltimos, botga qaytib, qaytadan urinib ko'ring.</p>
+              <button onclick="if(window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close(); else window.close();">Botga qaytish</button>
+            </div>
+            <script>if (window.Telegram && window.Telegram.WebApp) { window.Telegram.WebApp.ready(); window.Telegram.WebApp.expand(); }</script>
+          </body></html>
+        `);
       }
-      this.logger.log(`📤 [mvc/captcha POST] OpenBudget javobi: ${statusMatch690 ? statusMatch690[statusMatch690.length - 1] : "noma'lum"} | Phone: +${logPhone}`);
 
       const cookieMatches = stdout.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
       for (const c of cookieMatches) {
@@ -1210,6 +1252,8 @@ export class WebAppController {
     }
     args.push('--data', params.toString());
     args.push('https://new.openbudget.uz/api/v2/vote/mvc/verify');
+
+    this.logger.log(`📦 [mvc/verify POST] So'rov tanasi (request body): ${params.toString()}`);
 
     try {
       const { stdout } = await execCurlWithRetry(args, 2, `POST mvc/verify (+${logPhone2})`);
