@@ -1580,8 +1580,10 @@ export class OpenBudgetService {
         this.captchaSessionMap.delete(captchaKey);
         return { success: true, token };
       }
+      this.logger.warn(`⚠️ [submitOfficialInitiativeCaptcha] Token yo'q javobda: ${JSON.stringify(tokenRes?.data)}`);
       return { success: false, error: 'Token olinmadi' };
     } catch (e: any) {
+      this.logger.error(`❌ [submitOfficialInitiativeCaptcha] Xatolik: status=${e.response?.status} data=${JSON.stringify(e.response?.data)} msg=${e.message}`);
       return { success: false, error: e.response?.data?.message || e.message || 'Noto\'g\'ri captcha' };
     }
   }
