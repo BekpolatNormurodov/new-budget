@@ -177,38 +177,65 @@ export class WebAppController {
     const defaultUuid = 'b8752aa2-e6da-470c-8a26-52d5b594526a';
     const initUuid = initiativeUuidQuery || defaultUuid;
 
-    const proxy = this.proxyManager.getNextProxy();
-    const args: string[] = ['-s', '-i', '--connect-timeout', '5', '--max-time', '10'];
+    // MUHIM: "Жуда кўп сўровлар" (juda ko'p so'rov / rate-limit) chiqsa, buni
+    // foydalanuvchiga xato sifatida ko'rsatish o'rniga, KO'RINMAS TARZDA
+    // (proxy — Webshare rotating gateway — har yangi ulanishda AVTOMATIK yangi
+    // IP beradi) bir necha marta qayta urinamiz. Aksariyat hollarda 1-2
+    // urinishda o'tib ketadi va foydalanuvchi hech qanday to'xtalishni sezmay,
+    // to'g'ridan-to'g'ri SMS-kod sahifasiga o'tadi. Faqat BARCHA urinishlar
+    // ham rad etilsa, xato-karta ko'rsatiladi.
+    const MAX_PAGE_ATTEMPTS = 5;
+    let stdout = '';
+    let getStatusCode = 0;
+    let rateLimitMatch: RegExpMatchArray | null = null;
 
-    if (proxy) {
-      const auth = proxy.auth ? `${proxy.auth.username}:${proxy.auth.password}@` : '';
-      args.push('-x', `http://${auth}${proxy.host}:${proxy.port}`);
-    }
+    for (let attempt = 1; attempt <= MAX_PAGE_ATTEMPTS; attempt++) {
+      const proxy = this.proxyManager.getNextProxy();
+      const args: string[] = ['-s', '-i', '--connect-timeout', '5', '--max-time', '10'];
 
-    if (clientCookies) {
-      args.push('-H', `Cookie: ${clientCookies}`);
+      if (proxy) {
+        const auth = proxy.auth ? `${proxy.auth.username}:${proxy.auth.password}@` : '';
+        args.push('-x', `http://${auth}${proxy.host}:${proxy.port}`);
+      }
+
+      if (clientCookies) {
+        args.push('-H', `Cookie: ${clientCookies}`);
+      }
+      args.push('-H', 'User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1');
+      args.push('-H', 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+      args.push(`https://new.openbudget.uz/api/v2/vote/mvc/captcha/${initUuid}`);
+
+      const result = await execCurlWithRetry(args, 2, `GET captcha-page (${attempt}/${MAX_PAGE_ATTEMPTS})`);
+      stdout = result.stdout;
+      const getStatusMatch = stdout.match(/HTTP\/(?:1\.[01]|2)\s+(\d{3})/g);
+      getStatusCode = getStatusMatch ? parseInt(getStatusMatch[getStatusMatch.length - 1].match(/\d{3}/)![0], 10) : 0;
+      rateLimitMatch = stdout.match(/Жуда\s*кўп\s*сўровлар|Juda\s*ko'p\s*so'rov/i);
+
+      if (getStatusCode === 200) {
+        if (attempt > 1) {
+          this.logger.log(`✅ [GET captcha-page] ${attempt}-urinishda (yangi IP bilan) muvaffaqiyatli o'tdi.`);
+        }
+        break;
+      }
+
+      this.logger.warn(`⚠️ [GET captcha-page] ${attempt}/${MAX_PAGE_ATTEMPTS}-urinish rad etildi: HTTP ${getStatusCode}${rateLimitMatch ? ' | Tur: RATE_LIMIT (juda ko\'p so\'rov)' : ''}`);
+
+      if (attempt < MAX_PAGE_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 400 * attempt));
+      }
     }
-    args.push('-H', 'User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1');
-    args.push('-H', 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
-    args.push(`https://new.openbudget.uz/api/v2/vote/mvc/captcha/${initUuid}`);
 
     try {
-      const { stdout } = await execCurlWithRetry(args, 2, 'GET captcha-page');
-      const getStatusMatch = stdout.match(/HTTP\/(?:1\.[01]|2)\s+(\d{3})/g);
-      const getStatusCode = getStatusMatch ? parseInt(getStatusMatch[getStatusMatch.length - 1].match(/\d{3}/)![0], 10) : 0;
       this.logger.log(`📤 [GET captcha-page] OpenBudget javobi: HTTP ${getStatusCode || "noma'lum"}`);
       if (getStatusCode && getStatusCode !== 200) {
-        // "Жуда кўп сўровлар" (juda ko'p so'rov) kabi WAF/rate-limit sahifasi shu
-        // yerda kelishi mumkin — sahifa yuklanishning o'zida rad etiladi.
-        const rateLimitMatch = stdout.match(/Жуда\s*кўп\s*сўровлар|Juda\s*ko'p\s*so'rov/i);
-        this.logger.warn(`⚠️ [GET captcha-page] OpenBudget sahifa yuklashni RAD ETDI: HTTP ${getStatusCode}${rateLimitMatch ? ' | Tur: RATE_LIMIT (juda ko\'p so\'rov)' : ''}`);
-
         // MUHIM: bu yergacha bo'lmasa, keyingi kod OpenBudget'ning XOM (bizning
         // dizaynimizga mos kelmaydigan, ko'pincha ruscha/kirillcha WAF) xato
         // sahifasini to'g'ridan-to'g'ri foydalanuvchiga ko'rsatib yuborardi —
         // bu chiroyli xato-kartalarimizdan farqli, "buzilgan sahifa"dek ko'rinib,
         // foydalanuvchini chalkashtirar edi. Endi bu holatda ham boshqa xatolar
-        // kabi aniq, tushunarli va bizning dizaynimizga mos xabar ko'rsatiladi.
+        // kabi aniq, tushunarli va bizning dizaynimizga mos xabar ko'rsatiladi —
+        // va bu FAQAT yuqoridagi barcha (yangi IP bilan qilingan) urinishlar
+        // ham muvaffaqiyatsiz bo'lganda ko'rinadi.
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(200).send(`
           <!DOCTYPE html>
