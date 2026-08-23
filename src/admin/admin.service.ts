@@ -1017,7 +1017,13 @@ export class AdminService {
   }
 
   async getBotOfficialCaptcha(botId: number) {
-    const cap = await this.openBudgetService.getOfficialInitiativeCaptcha();
+    const bot = await this.prisma.botInstance.findUnique({ where: { id: botId } });
+    let uuid = bot?.initiativeUuid;
+    if (!uuid && bot?.mahallaId) {
+      const lRes = await this.openBudgetService.lookupMahallaOrInitiative(bot.mahallaId);
+      if (lRes.success && lRes.initiativeUuid) uuid = lRes.initiativeUuid;
+    }
+    const cap = await this.openBudgetService.getOfficialInitiativeCaptcha(uuid);
     return { ...cap, botId };
   }
 
