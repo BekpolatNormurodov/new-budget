@@ -229,12 +229,13 @@ export class WebAppController {
     const proxy = this.proxyManager.getStickyProxy(sessionKey);
     this.logger.log(`🌐 [GET captcha-page] Sticky Proxy: ${proxy?.host}:${proxy?.port} (user: ${proxy?.auth?.username}) | SessionKey: ${sessionKey}`);
 
+    let currentProxy = proxy;
     for (let attempt = 1; attempt <= MAX_PAGE_ATTEMPTS; attempt++) {
       const args: string[] = ['-s', '-i', '--connect-timeout', '5', '--max-time', '10'];
 
-      if (proxy) {
-        const auth = proxy.auth ? `${proxy.auth.username}:${proxy.auth.password}@` : '';
-        args.push('-x', `http://${auth}${proxy.host}:${proxy.port}`);
+      if (currentProxy) {
+        const auth = currentProxy.auth ? `${currentProxy.auth.username}:${currentProxy.auth.password}@` : '';
+        args.push('-x', `http://${auth}${currentProxy.host}:${currentProxy.port}`);
       }
 
       if (clientCookies) {
@@ -244,20 +245,27 @@ export class WebAppController {
       args.push('-H', 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
       args.push(`https://new.openbudget.uz/api/v2/vote/mvc/captcha/${initUuid}`);
 
-      const result = await execCurlWithRetry(args, 2, `GET captcha-page (${attempt}/${MAX_PAGE_ATTEMPTS})`);
-      stdout = result.stdout;
-      const getStatusMatch = stdout.match(/HTTP\/(?:1\.[01]|2)\s+(\d{3})/g);
-      getStatusCode = getStatusMatch ? parseInt(getStatusMatch[getStatusMatch.length - 1].match(/\d{3}/)![0], 10) : 0;
-      rateLimitMatch = stdout.match(/Жуда\s*кўп\s*сўровлар|Juda\s*ko'p\s*so'rov/i);
+      try {
+        const result = await execCurlWithRetry(args, 2, `GET captcha-page (${attempt}/${MAX_PAGE_ATTEMPTS})`);
+        stdout = result.stdout;
+        const getStatusMatch = stdout.match(/HTTP\/(?:1\.[01]|2)\s+(\d{3})/g);
+        getStatusCode = getStatusMatch ? parseInt(getStatusMatch[getStatusMatch.length - 1].match(/\d{3}/)![0], 10) : 0;
+        rateLimitMatch = stdout.match(/Жуда\s*кўп\s*сўровлар|Juda\s*ko'p\s*so'rov/i);
 
-      if (getStatusCode === 200) {
-        if (attempt > 1) {
-          this.logger.log(`✅ [GET captcha-page] ${attempt}-urinishda (yangi IP bilan) muvaffaqiyatli o'tdi.`);
+        if (getStatusCode === 200) {
+          if (attempt > 1) {
+            this.logger.log(`✅ [GET captcha-page] ${attempt}-urinishda muvaffaqiyatli o'tdi.`);
+          }
+          break;
         }
-        break;
-      }
 
-      this.logger.warn(`⚠️ [GET captcha-page] ${attempt}/${MAX_PAGE_ATTEMPTS}-urinish rad etildi: HTTP ${getStatusCode}${rateLimitMatch ? ' | Tur: RATE_LIMIT (juda ko\'p so\'rov)' : ''}`);
+        this.logger.warn(`⚠️ [GET captcha-page] ${attempt}/${MAX_PAGE_ATTEMPTS}-urinish rad etildi: HTTP ${getStatusCode}${rateLimitMatch ? ' | Tur: RATE_LIMIT' : ''}`);
+      } catch (err: any) {
+        this.logger.warn(`⚠️ [GET captcha-page] ${attempt}-urinishda proxy xatosi (${currentProxy?.auth?.username}): ${err?.message || err}`);
+        if (currentProxy) this.proxyManager.markProxyFailure(currentProxy);
+        this.proxyManager.releaseSession(sessionKey);
+        currentProxy = this.proxyManager.getStickyProxy(sessionKey);
+      }
 
       if (attempt < MAX_PAGE_ATTEMPTS) {
         await new Promise((r) => setTimeout(r, 400 * attempt));
