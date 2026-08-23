@@ -1440,6 +1440,82 @@ export class OpenBudgetService {
   }
 
   /**
+   * 🌐 Bitta headless sahifa/navigatsiya doirasida OCR bilan captcha'ni bir necha marta
+   * urinib avtomatik yechadi va tokenni qaytaradi. Har bir urinishda YANGI sahifa/
+   * navigatsiya OCHMAYDI (faqat fetch() qayta chaqiradi) — shu bilan CPU sarfini va
+   * botning asosiy event loop'ini bloklab qo'yish xavfini keskin kamaytiradi.
+   */
+  private async solveInitiativeTokenHeadless(
+    initiativeUuid: string,
+    maxAttempts: number = 6,
+  ): Promise<{ success: boolean; token?: string; error?: string }> {
+    let page: any;
+    try {
+      const browser = await this.getHeadlessBrowser();
+      page = await this.newHeadlessPage(browser);
+      await page.setUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      );
+      await page.goto(
+        `https://new.openbudget.uz/uz/initiative-budget/active-initiatives/55/${initiativeUuid}`,
+        { waitUntil: 'domcontentloaded', timeout: 20000 },
+      );
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          const capResult = await page.evaluate(async () => {
+            const res = await fetch('/api/v2/vote/captcha-2', {
+              headers: { hl: 'uz_lat' },
+              credentials: 'include',
+            });
+            return res.json();
+          });
+          if (!capResult?.image || !capResult?.captchaKey) continue;
+
+          const solveRes = await this.captchaSolver.solve(capResult.image);
+          if (!solveRes.success || solveRes.answer === undefined) continue;
+          const numAns = typeof solveRes.answer === 'number' ? solveRes.answer : parseInt(String(solveRes.answer), 10);
+          if (isNaN(numAns)) continue;
+
+          const submitResult = await page.evaluate(
+            async (uuid: string, key: string, ans: number) => {
+              const res = await fetch('/api/v2/info/get-initiative-token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ captchaKey: key, captchaResult: ans, initiativeId: uuid }),
+              });
+              return res.json();
+            },
+            initiativeUuid,
+            capResult.captchaKey,
+            numAns,
+          );
+
+          if (submitResult?.token) {
+            this.logger.log(`🎉 [Headless Auto-OCR] Muvaffaqiyatli yechildi (${attempt}-urinish): ${solveRes.expression} = ${solveRes.answer}`);
+            this.initiativeTokenCache.set(initiativeUuid, {
+              token: submitResult.token,
+              expiresAt: Date.now() + 60 * 60 * 1000,
+            });
+            await page.close().catch(() => {});
+            return { success: true, token: submitResult.token };
+          }
+        } catch (attemptErr: any) {
+          this.logger.debug(`Headless auto-solver attempt #${attempt} error: ${attemptErr.message}`);
+        }
+      }
+
+      await page.close().catch(() => {});
+      return { success: false, error: 'OpenBudget token olinmadi (barcha urinishlar tugadi)' };
+    } catch (e: any) {
+      if (page) await page.close().catch(() => {});
+      this.logger.error(`❌ [Headless Auto-OCR] Xatolik: ${e.message}`);
+      return { success: false, error: e.message };
+    }
+  }
+
+  /**
    * 🌐 Headless Chrome orqali OpenBudget'ning haqiqiy brauzer-fingerprint himoyasidan
    * (WAF) muvaffaqiyatli o'tib, captcha rasmini olib beradi. Sahifa keyinchalik
    * submitOfficialInitiativeCaptcha'da xuddi shu sessiyani (cookie/fingerprint) davom
@@ -1620,28 +1696,12 @@ export class OpenBudgetService {
         initToken = cached.token;
       }
 
-      // 2. Agar token bo'lmasa, avtomatik OCR Tesseract orqali 100% avtomatik yechish
+      // 2. Agar token bo'lmasa, headless Chrome + OCR orqali avtomatik yechish
+      // (bitta sahifa/navigatsiya doirasida, botning asosiy jarayonini bloklamaslik uchun)
       if (!initToken) {
-        for (let attempt = 1; attempt <= 8; attempt++) {
-          try {
-            const cap = await this.getOfficialInitiativeCaptcha(initiativeUuid);
-            if (!cap.success || !cap.image || !cap.captchaKey) continue;
-
-            const solveRes = await this.captchaSolver.solve(cap.image);
-            if (solveRes.success && solveRes.answer !== undefined) {
-              const numAns = typeof solveRes.answer === 'number' ? solveRes.answer : parseInt(String(solveRes.answer), 10);
-              if (!isNaN(numAns)) {
-                const sub = await this.submitOfficialInitiativeCaptcha(initiativeUuid, cap.captchaKey, numAns);
-                if (sub.success && sub.token) {
-                  initToken = sub.token;
-                  this.logger.log(`🎉 [Auto-OCR Official List Token] Muvaffaqiyatli avtomatik yechildi: ${solveRes.expression} = ${solveRes.answer}`);
-                  break;
-                }
-              }
-            }
-          } catch (solveErr: any) {
-            this.logger.debug(`Auto-solver attempt #${attempt} error: ${solveErr.message}`);
-          }
+        const solved = await this.solveInitiativeTokenHeadless(initiativeUuid, 6);
+        if (solved.success && solved.token) {
+          initToken = solved.token;
         }
       }
 
