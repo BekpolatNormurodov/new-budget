@@ -754,7 +754,25 @@ export class WebAppController {
         const openBudgetErrorText = errorAlertMatch ? errorAlertMatch[1].replace(/<[^>]+>/g, '').trim() : '';
         const displayErrorText = openBudgetErrorText || `OpenBudget rasmiy tizimi captcha javobini rad etdi (HTTP ${captchaStatusCode}).`;
 
-        this.logger.warn(`⚠️ [mvc/captcha POST] OpenBudget CAPTCHA'ni RAD ETDI: HTTP ${captchaStatusCode} | Phone: +${logPhone} | Sabab: "${openBudgetErrorText || 'matn topilmadi'}"`);
+        // Xato turini aniqlab, har biriga mos harakat/xabar berish uchun
+        // klassifikatsiya qilinadi — umumiy "captcha xato" o'rniga aniq sabab.
+        const lowerErr = openBudgetErrorText.toLowerCase();
+        type CaptchaErrorType = 'DAILY_LIMIT' | 'CAPTCHA_EXPIRED' | 'OTHER';
+        let errorType: CaptchaErrorType = 'OTHER';
+        if (lowerErr.includes('урунишлар сони тугади') || lowerErr.includes('urinishlar soni tugadi') || lowerErr.includes('limit')) {
+          errorType = 'DAILY_LIMIT';
+        } else if (lowerErr.includes('топилмади') || lowerErr.includes('ишлатилган') || lowerErr.includes('topilmadi') || lowerErr.includes('ishlatilgan')) {
+          errorType = 'CAPTCHA_EXPIRED';
+        }
+
+        // Turga qarab foydalanuvchiga qo'shimcha maslahat beriladi:
+        const advice = errorType === 'DAILY_LIMIT'
+          ? "\n\n💡 Bu raqam uchun bugungi urinishlar tugagan — ertaga yoki boshqa raqam bilan urinib ko'ring."
+          : errorType === 'CAPTCHA_EXPIRED'
+            ? "\n\n💡 Captcha eskirgan bo'lishi mumkin — botga qaytib, sahifani qayta oching."
+            : '';
+
+        this.logger.warn(`⚠️ [mvc/captcha POST] OpenBudget CAPTCHA'ni RAD ETDI: HTTP ${captchaStatusCode} | Phone: +${logPhone} | Tur: ${errorType} | Sabab: "${openBudgetErrorText || 'matn topilmadi'}"`);
 
         // Xato Mini App oynasida ko'rinishidan tashqari, BOT orqali ham (Telegram
         // xabari sifatida) yuboriladi — chunki foydalanuvchi Mini App'ni tez yopib
@@ -768,7 +786,7 @@ export class WebAppController {
               if (bot?.token) {
                 await axios.post(`https://api.telegram.org/bot${bot.token}/sendMessage`, {
                   chat_id: tgId,
-                  text: `⚠️ <b>Ovoz qabul qilinmadi!</b>\n\n📱 Telefon: +998${logPhone.replace(/^998/, '')}\n📌 <b>Sabab:</b> ${displayErrorText}`,
+                  text: `⚠️ <b>Ovoz qabul qilinmadi!</b>\n\n📱 Telefon: +998${logPhone.replace(/^998/, '')}\n📌 <b>Sabab:</b> ${displayErrorText}${advice}`,
                   parse_mode: 'HTML',
                 }).catch(() => {});
               }
@@ -793,7 +811,7 @@ export class WebAppController {
             <div class="card">
               <div class="icon">⚠️</div>
               <h2>Ovoz qabul qilinmadi!</h2>
-              <p>${displayErrorText}</p>
+              <p>${displayErrorText}${advice.replace(/\n\n💡\s*/, '<br><br>💡 ')}</p>
               <button onclick="if(window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close(); else window.close();">Botga qaytish</button>
             </div>
             <script>if (window.Telegram && window.Telegram.WebApp) { window.Telegram.WebApp.ready(); window.Telegram.WebApp.expand(); }</script>
@@ -1520,7 +1538,7 @@ export class WebAppController {
                   `📍 <b>Loyiha:</b> ${mahallaName}\n` +
                   `📱 <b>Telefon:</b> +998 ${clean9 ? `${clean9.slice(0,2)} ${clean9.slice(2,5)}-${clean9.slice(5,7)}-${clean9.slice(7,9)}` : '***'}\n` +
                   `💰 <b>Mukofot:</b> +${voteReward.toLocaleString('uz-UZ')} so'm\n\n` +
-                  `ℹ️ <i>Ovozingiz OpenBudget rasmiy reyestridan (telefon raqami va berilgan vaqti bo'yicha) o'tgandan so'ng balansingizga mablag' qo'shiladi va tasdiqlash xabari yuboriladi!</i> ⚡️`;
+                  `ℹ️ <i>Ovozingiz OpenBudget rasmiy reyestrida tasdiqlangach, hisobingizga avtomatik mablag' o'tkaziladi va sizga alohida xabar yuboriladi. Odatda bu bir necha daqiqa ichida amalga oshadi.</i> ⚡️`;
 
                 await axios.post(tgUrl, {
                   chat_id: user.telegramId,

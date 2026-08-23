@@ -1754,6 +1754,8 @@ export class OpenBudgetService {
       let totalPages = maxPages;
       let cachedCount = 0;
       let consecutiveFailures = 0;
+      let cooldownRoundsUsed = 0;
+      const MAX_COOLDOWN_ROUNDS = 4; // jami ~4 marta "sovutish pauzasi" beriladi
 
       for (let p = 0; p < maxPages && p < totalPages; p++) {
         let result: any = null;
@@ -1777,11 +1779,22 @@ export class OpenBudgetService {
         if (!result) {
           consecutiveFailures++;
           this.logger.debug(`⚠️ [Prewarm] Sahifa ${p} bo'sh javob qaytardi (ketma-ket ${consecutiveFailures}-marta).`);
-          // OpenBudget ma'lum miqdordagi tez ketma-ket so'rovlardan keyin bo'sh javob
-          // qaytara boshlaydi (tezlik-asosidagi cheklov). Ketma-ket ko'p muvaffaqiyatsiz
-          // urinishdan keyin, vaqtni behuda sarflamaslik uchun to'xtaymiz.
+          // OpenBudget ma'lum miqdordagi tez ketma-ket so'rovlardan keyin (taxminan
+          // ~20 sahifa) VAQTINCHA bo'sh javob qaytara boshlaydi (tezlik-asosidagi
+          // cheklov). Bu DOIMIY blok emas — biroz kutilsa, yana ochiladi. Shuning
+          // uchun darhol taslim bo'lish o'rniga, uzoqroq "sovutish pauzasi" berib,
+          // xuddi shu sahifadan davom etamiz (jami bir necha marta).
           if (consecutiveFailures >= 8) {
-            this.logger.warn(`⚠️ [Prewarm] ${consecutiveFailures} marta ketma-ket bo'sh javob — OpenBudget tezlik cheklovi ehtimoli, to'xtatilmoqda (${cachedCount} sahifa keshlandi).`);
+            if (cooldownRoundsUsed < MAX_COOLDOWN_ROUNDS) {
+              cooldownRoundsUsed++;
+              const cooldownMs = 20000 * cooldownRoundsUsed; // 20s, 40s, 60s, 80s
+              this.logger.warn(`⏸ [Prewarm] ${consecutiveFailures} marta ketma-ket bo'sh javob — ${cooldownMs / 1000}s sovutish pauzasi (${cooldownRoundsUsed}/${MAX_COOLDOWN_ROUNDS}), so'ng ${p}-sahifadan davom etiladi...`);
+              await new Promise((r) => setTimeout(r, cooldownMs));
+              consecutiveFailures = 0;
+              p--; // shu sahifani qayta urinish uchun
+              continue;
+            }
+            this.logger.warn(`⚠️ [Prewarm] Barcha sovutish pauzalaridan keyin ham javob yo'q — to'xtatilmoqda (${cachedCount} sahifa keshlandi).`);
             break;
           }
           continue;
