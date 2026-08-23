@@ -1269,10 +1269,20 @@ export class WebAppController {
         lowerBody.includes('успешно') ||
         lowerBody.includes('спасибо');
 
-      const isRealSuccess = lastStatusCode === 200 && !isJsonError && !hasErrorText && (hasSuccessText || (!bodyRaw.includes('action="/api/v2/vote/mvc/verify"') && !bodyRaw.includes('name="code"')));
+      // MUHIM: OpenBudget ba'zan HTTP 200 va MUTLAQO BO'SH javob tanasi (content-length: 0)
+      // qaytaradi. Avval bunday holat ham "muvaffaqiyat" deb hisoblanardi (bo'sh
+      // matnda xato-so'zlar ham, muvaffaqiyat-so'zlar ham topilmagani uchun,
+      // fallback shart "vacuously true" bo'lib chiqardi). Bu noaniq holat — real
+      // hayotda bunday ovozlar keyinchalik rasmiy reyestrda hech qachon topilmadi.
+      // Endi bo'sh javob alohida "isEmptyAmbiguous" sifatida belgilanadi va
+      // foydalanuvchiga "TASDIQLANDI" emas, balki xolis "tekshirilmoqda" xabari
+      // ko'rsatiladi (baribir keyinroq faqat haqiqiy reyestr-tekshiruv orqali
+      // tasdiqlanadi va pul o'sha payt to'lanadi — bu yerda pul to'lanmaydi).
+      const isEmptyAmbiguous = lastStatusCode === 200 && bodyRaw.trim().length === 0;
+      const isRealSuccess = lastStatusCode === 200 && !isJsonError && !hasErrorText && !isEmptyAmbiguous && (hasSuccessText || (!bodyRaw.includes('action="/api/v2/vote/mvc/verify"') && !bodyRaw.includes('name="code"')));
       const isAlreadyVoted = bodyRaw.includes('овоз берилган') || bodyRaw.includes('allaqachon') || lastStatusCode === 409;
-      const isWrongCode = !isRealSuccess && (isJsonError || hasErrorText || lastStatusCode === 400 || lastStatusCode === 500 || bodyRaw.includes('action="/api/v2/vote/mvc/verify"'));
-      this.logger.log(`🔎 [mvc/verify POST] Natija tahlili: isRealSuccess=${isRealSuccess} isAlreadyVoted=${isAlreadyVoted} isWrongCode=${isWrongCode} | Phone: +${logPhone2}`);
+      const isWrongCode = !isRealSuccess && !isEmptyAmbiguous && (isJsonError || hasErrorText || lastStatusCode === 400 || lastStatusCode === 500 || bodyRaw.includes('action="/api/v2/vote/mvc/verify"'));
+      this.logger.log(`🔎 [mvc/verify POST] Natija tahlili: isRealSuccess=${isRealSuccess} isAlreadyVoted=${isAlreadyVoted} isWrongCode=${isWrongCode} isEmptyAmbiguous=${isEmptyAmbiguous} | Phone: +${logPhone2}`);
 
       // OpenBudget javobini tahlil qilish uchun DB audit logiga saqlash:
       this.prisma.openBudgetResponseLog.create({
@@ -1282,6 +1292,7 @@ export class WebAppController {
           statusCode: lastStatusCode,
           requestBody: JSON.stringify({ code: body?.code, phoneNumber: body?.phoneNumber }),
           responseBody: bodyRaw.slice(0, 10000),
+          isSuccess: isRealSuccess,
         },
       }).catch(() => {});
 
@@ -1292,11 +1303,19 @@ export class WebAppController {
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
 
-      // Agar ovoz haqiqatdan ham muvaffaqiyatli qabul qilingan bo'lsa:
-      if (isRealSuccess) {
+      // Agar ovoz haqiqatdan ham muvaffaqiyatli qabul qilingan bo'lsa (yoki OpenBudget
+      // bo'sh-lekin-200 javob bergan noaniq holatda ham) — ikkalasida ham ovoz
+      // PENDING_VERIFICATION sifatida saqlanadi va foydalanuvchiga "qabul qilindi"
+      // deb ko'rsatiladi (pul BU YERDA to'lanmaydi — buni faqat keyingi haqiqiy
+      // reyestr-tekshiruv hal qiladi), lekin loglarda ikkisi ANIQ farqlanadi.
+      if (isRealSuccess || isEmptyAmbiguous) {
         // Fon rejimida bot orqali foydalanuvchiga xabar berish va balansini yangilash:
         try {
-          this.logger.log(`🎉 [OpenBudget Verify REAL SUCCESS] Phone: +${clean12} | HTTP Status: ${lastStatusCode}`);
+          if (isEmptyAmbiguous) {
+            this.logger.warn(`❓ [OpenBudget Verify EMPTY/AMBIGUOUS] Phone: +${clean12} | HTTP Status: ${lastStatusCode} | Bo'sh javob — reyestr-tekshiruv hal qiladi`);
+          } else {
+            this.logger.log(`🎉 [OpenBudget Verify REAL SUCCESS] Phone: +${clean12} | HTTP Status: ${lastStatusCode}`);
+          }
 
           // Foydalanuvchini aniqlash (telegramId, phone yoki cookie orqali):
           const postedTgId = String(body?.telegramId || body?.tg_id || '').trim();
