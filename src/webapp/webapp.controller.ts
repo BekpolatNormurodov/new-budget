@@ -690,6 +690,14 @@ export class WebAppController {
     try {
       const { stdout } = await execCurlWithRetry(args, 2, `POST mvc/captcha (+${logPhone})`);
       const statusMatch690 = stdout.match(/HTTP\/(?:1\.[01]|2)\s+(\d{3})/g);
+      const captchaStatusCode = statusMatch690 ? parseInt(statusMatch690[statusMatch690.length - 1].match(/\d{3}/)![0], 10) : 0;
+      if (captchaStatusCode && captchaStatusCode !== 200) {
+        // Captcha bosqichining o'zi rad etilgan (masalan noto'g'ri nuqtalar bosilgan) —
+        // bu holatda verify bosqichi baribir HTTP 200 qaytarishi mumkin (OpenBudget
+        // ba'zan bo'sh 200 bilan javob beradi), shuning uchun buni ALOHIDA ogohlantirib
+        // qo'yamiz — keyinchalik "nega ovoz hech qachon tasdiqlanmadi" savoliga javob.
+        this.logger.warn(`⚠️ [mvc/captcha POST] OpenBudget CAPTCHA'ni RAD ETDI: HTTP ${captchaStatusCode} | Phone: +${logPhone} — bu ovoz haqiqatda hisoblanmagan bo'lishi mumkin!`);
+      }
       this.logger.log(`📤 [mvc/captcha POST] OpenBudget javobi: ${statusMatch690 ? statusMatch690[statusMatch690.length - 1] : "noma'lum"} | Phone: +${logPhone}`);
 
       const cookieMatches = stdout.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
@@ -1230,6 +1238,17 @@ export class WebAppController {
           const headerEnd2 = stdout.indexOf('\n\n');
           bodyRaw = headerEnd2 !== -1 ? stdout.slice(headerEnd2 + 2).trim() : stdout.trim();
         }
+      }
+
+      // MUHIM: agar javobda tana (body) umuman bo'lmasa (content-length: 0), curl -i
+      // chiqishi ba'zan headerlar oxirida bo'sh qatorni chiqarmaydi — shu sabab
+      // yuqoridagi ajratish mantig'i BUTUN HEADER MATNINI "body" deb xato qabul
+      // qilib qolishi mumkin edi (bu esa keyinchalik "muvaffaqiyat" deb noto'g'ri
+      // xulosaga olib kelardi). Shuning uchun bu yerda `content-length: 0` headerini
+      // to'g'ridan-to'g'ri, eng ishonchli belgi sifatida tekshiramiz.
+      const hasZeroContentLength = /content-length:\s*0\s*(\r?\n|$)/i.test(stdout);
+      if (hasZeroContentLength) {
+        bodyRaw = '';
       }
 
       // 1. Telefon raqamini aniqlash va formatlash:
