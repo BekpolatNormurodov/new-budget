@@ -66,12 +66,14 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
   const [obSearchResults, setObSearchResults] = useState<any[] | null>(null);
   const [isObSearching, setIsObSearching] = useState(false);
   const [obSearchNotFound, setObSearchNotFound] = useState(false);
+  const [obSearchCoverage, setObSearchCoverage] = useState<{ scannedPages: number; totalPages: number } | null>(null);
 
   useEffect(() => {
     const tailDigits = search.replace(/\D/g, '');
     if (activeTab !== 'OPENBUDGET' || tailDigits.length < 5 || !bot) {
       setObSearchResults(null);
       setObSearchNotFound(false);
+      setObSearchCoverage(null);
       return;
     }
     setIsObSearching(true);
@@ -83,6 +85,7 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
         if (data.success) {
           setObSearchResults(data.matches || []);
           setObSearchNotFound((data.matches || []).length === 0);
+          setObSearchCoverage({ scannedPages: data.scannedPages || 0, totalPages: data.totalPages || 0 });
         }
       } catch (e) {
         console.error(e);
@@ -427,7 +430,9 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
               )}
               {activeTab === 'OPENBUDGET' && !isObSearching && obSearchNotFound && (
                 <span className="absolute right-3 top-2 text-[10px] text-rose-500 font-bold">
-                  Topilmadi
+                  {obSearchCoverage && obSearchCoverage.scannedPages < obSearchCoverage.totalPages
+                    ? `Topilmadi (so'nggi ${obSearchCoverage.scannedPages * 15} tadan)`
+                    : 'Topilmadi'}
                 </span>
               )}
             </div>

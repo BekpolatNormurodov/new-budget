@@ -1619,7 +1619,7 @@ export class OpenBudgetService {
   async searchOfficialVotesByTail(
     initiativeUuid: string,
     tailDigits: string,
-    maxPages: number = 230,
+    maxPages: number = 140,
   ): Promise<{ success: boolean; matches: any[]; scannedPages: number; totalPages: number; error?: string }> {
     if (!tailDigits) return { success: false, matches: [], scannedPages: 0, totalPages: 0, error: "Qidiruv matni bo'sh" };
 
