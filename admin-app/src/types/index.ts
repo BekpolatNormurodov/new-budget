@@ -16,6 +16,8 @@ export interface BotInstanceItem {
   initiativeUuid?: string;
   targetVotes: number;
   currentVotes: number;
+  openBudgetVotes?: number;
+  verifiedVotes?: number;
   pendingVotes?: number;
   totalCollectedVotes?: number;
   remainingVotes?: number;

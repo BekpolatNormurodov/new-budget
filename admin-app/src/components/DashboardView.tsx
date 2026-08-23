@@ -17,9 +17,12 @@ import {
   DollarSign,
   AlertTriangle,
   Send,
+  RefreshCw,
+  Eye,
 } from 'lucide-react';
 import { DashboardStats, BotInstanceItem, VoteItem, WithdrawalItem } from '../types';
 import { formatSum } from '../utils/format';
+import { BotVotesModal } from './BotVotesModal';
 
 interface DashboardViewProps {
   stats: DashboardStats | null;
@@ -37,6 +40,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenEditBot,
 }) => {
   const [isBroadcasting, setIsBroadcasting] = useState(false);
+  const [selectedBotForVotes, setSelectedBotForVotes] = useState<BotInstanceItem | null>(null);
+  const [syncingBotId, setSyncingBotId] = useState<number | null>(null);
+
+  const handleSyncSingleBot = async (botId: number) => {
+    setSyncingBotId(botId);
+    try {
+      const res = await fetch(`/api/admin/bots/${botId}/sync`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        window.location.reload();
+      }
+    } catch (e) {
+      alert('Botni yangilashda xatolik yuz berdi');
+    } finally {
+      setSyncingBotId(null);
+    }
+  };
 
   const handleTestMarketingBroadcast = async () => {
     setIsBroadcasting(true);
@@ -281,22 +301,35 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       </div>
                     </div>
 
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                        bot.status === 'ONLINE'
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700'
-                      }`}
-                    >
-                      {bot.status === 'ONLINE' ? '🟢 Online' : '⏸ To\'xtatilgan'}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleSyncSingleBot(bot.id)}
+                        disabled={syncingBotId === bot.id}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 transition-all active:scale-95 cursor-pointer shadow-sm disabled:opacity-50"
+                        title="OpenBudget rasmiy serveri bilan sinxronlash"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${syncingBotId === bot.id ? 'animate-spin' : ''}`} />
+                        <span>{syncingBotId === bot.id ? 'Yangilanmoqda...' : 'Yangilash'}</span>
+                      </button>
+
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                          bot.status === 'ONLINE'
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        {bot.status === 'ONLINE' ? '🟢 Online' : '⏸ To\'xtatilgan'}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Progress Bar */}
                   <div className="space-y-1.5 mb-3">
                     <div className="flex justify-between text-xs">
-                      <span className="text-slate-500 dark:text-slate-400">Yig'ilgan ovozlar:</span>
-                      <span className="text-slate-900 dark:text-white font-bold">{formatSum(bot.currentVotes)} / {formatSum(bot.targetVotes)} ta ({percentage}%)</span>
+                      <span className="text-slate-500 dark:text-slate-400">🤖 Biz orqali: <b>{formatSum(bot.currentVotes)}</b> ta</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-bold">🌐 OpenBudget: {formatSum(bot.openBudgetVotes || bot.currentVotes)} ta</span>
                     </div>
                     <div className="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
                       <div
@@ -304,7 +337,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         style={{ width: `${Math.max(2, percentage)}%` }}
                       ></div>
                     </div>
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500 text-right">Qoldi: {formatSum(remaining)} ta</p>
+                    <div className="flex justify-between text-[11px] text-slate-400 dark:text-slate-500">
+                      <span>Reja: {formatSum(bot.targetVotes)} ta ({percentage}%)</span>
+                      <span>Qoldi: {formatSum(remaining)} ta</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedBotForVotes(bot)}
+                      className="w-full mt-2 py-1.5 px-3 rounded-xl bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 text-xs font-bold border border-indigo-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>📋 Ovozlarni Ko'rish</span>
+                    </button>
                   </div>
                 </div>
 
@@ -440,6 +485,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Bot Votes & Captcha Modal */}
+      <BotVotesModal
+        bot={selectedBotForVotes}
+        isOpen={Boolean(selectedBotForVotes)}
+        onClose={() => setSelectedBotForVotes(null)}
+      />
     </div>
   );
 };

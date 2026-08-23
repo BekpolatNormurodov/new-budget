@@ -9,7 +9,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { VoteItem, BotInstanceItem } from '../types';
-import { formatSum, toTashkentDateStr, tashkentToday, tashkentYesterday } from '../utils/format';
+import { formatSum, toTashkentDateStr, tashkentToday, tashkentYesterday, formatPhone } from '../utils/format';
 import { Pagination } from './Pagination';
 import { exportToCsv } from '../utils/exportToCsv';
 import { SmartFilterBar } from './SmartFilterBar';
@@ -316,7 +316,7 @@ export const VotesView: React.FC<VotesViewProps> = ({
                     <td className="p-3.5 font-mono text-slate-400 dark:text-slate-500">#{vote.id}</td>
 
                     <td className="p-3.5">
-                      <span className="font-mono font-bold text-slate-900 dark:text-white tracking-wide">+{vote.phone}</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white tracking-wide">{formatPhone(vote.phone)}</span>
                     </td>
 
                     <td className="p-3.5">

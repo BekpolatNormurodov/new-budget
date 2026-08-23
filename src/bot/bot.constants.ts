@@ -28,7 +28,8 @@ export const BOT_MESSAGES = {
     `<b>+${phone}</b> raqamingizga 6 xonali tasdiqlash kodi yuborildi.\n\n` +
     `Kodni quyida yozib yuboring (Masalan: <code>123456</code>) 👇`,
 
-  VOTE_SUBMITTED_PENDING: (phone: string, reward: number = 30000) => 
+  VOTE_SUBMITTED_PENDING: (phone: string, reward: number = 30000) =>
+    `✅ ОВОЗИНГИЗ ҚАБУЛ ҚИЛИНДИ\n` +
     `✅ <b>OVOZINGIZ MUVAFFAQIYATLI QABUL QILINDI!</b>\n\n` +
     `📱 <b>Telefon:</b> +${phone}\n` +
     `⏳ <b>Holati:</b> Tekshiruvda\n` +

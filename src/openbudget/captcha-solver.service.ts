@@ -47,8 +47,6 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async initWorkerPool() {
-    // 💤 Tesseract OCR Multi-Worker Pool vaqtincha o'chirilgan (RAM tejash uchun)
-    /*
     if (this.isInitializing || this.isInitialized) return;
     this.isInitializing = true;
 
@@ -76,16 +74,31 @@ export class CaptchaSolverService implements OnModuleInit, OnModuleDestroy {
     } finally {
       this.isInitializing = false;
     }
-    */
   }
 
   async acquireWorker(): Promise<Worker | null> {
-    // OCR vaqtincha nofaol
-    return null;
+    if (!this.isInitialized) {
+      await this.initWorkerPool();
+    }
+
+    if (this.availableWorkers.length > 0) {
+      return this.availableWorkers.pop()!;
+    }
+
+    return new Promise((resolve) => {
+      this.waitQueue.push(resolve);
+    });
   }
 
   releaseWorker(worker: Worker | null) {
-    // no-op
+    if (!worker) return;
+
+    if (this.waitQueue.length > 0) {
+      const next = this.waitQueue.shift()!;
+      next(worker);
+    } else {
+      this.availableWorkers.push(worker);
+    }
   }
 
   /**

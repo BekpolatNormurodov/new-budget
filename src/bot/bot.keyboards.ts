@@ -31,19 +31,18 @@ export class BotKeyboards {
   /**
    * Ovoz berish variantlari inline klaviaturasi (Telegram Bot + Web App + Brauzer)
    */
-  static voteOptionsInline(initiativeUuid?: string, boardId: number | string = 55, mahallaId: string = '055497192014', phone?: string) {
+  static voteOptionsInline(initiativeUuid?: string, boardId: number | string = 55, mahallaId: string = '055497192014', phone?: string, telegramId?: string, botId?: number) {
     const defaultUuid = 'b8752aa2-e6da-470c-8a26-52d5b594526a';
     const finalUuid = initiativeUuid || defaultUuid;
     const phoneParam = phone ? `&phone=${encodeURIComponent(phone)}` : '';
-    const miniAppCaptchaUrl = `https://opensystem.uz/captcha?initiativeUuid=${finalUuid}${phoneParam}`;
-    const directWebUrl = `https://openbudget.uz/boards/initiatives/initiative/${boardId}/${finalUuid}`;
+    const tgParam = telegramId ? `&tg_id=${encodeURIComponent(telegramId)}` : '';
+    const botParam = botId ? `&botId=${botId}` : '';
+    const ts = Date.now();
+    const miniAppCaptchaUrl = `https://opensystem.uz/captcha?initiativeUuid=${finalUuid}${phoneParam}${tgParam}${botParam}&t=${ts}`;
 
     return Markup.inlineKeyboard([
       [
-        Markup.button.webApp('🗳 Rasmdagi 2 ta harfni belgilash', miniAppCaptchaUrl),
-      ],
-      [
-        Markup.button.url('🌐 Saytda ochish', directWebUrl),
+        Markup.button.webApp('✨ 🔐 Rasmdagi 2 ta harfni tasdiqlash ➔', miniAppCaptchaUrl),
       ],
     ]);
   }

@@ -187,6 +187,17 @@ model SponsorChannel {
   createdAt   DateTime @default(now())
 }
 
+model OpenBudgetResponseLog {
+  id           Int      @id @default(autoincrement())
+  endpoint     String   // "CAPTCHA" | "REQUEST_SMS" | "VERIFY_SMS"
+  phone        String?
+  statusCode   Int?
+  requestBody  String?  @db.Text
+  responseBody String?  @db.LongText
+  isSuccess    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+}
+
 model BotSetting {
   id          Int      @id @default(autoincrement())
   key         String   @unique

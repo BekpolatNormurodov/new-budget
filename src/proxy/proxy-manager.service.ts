@@ -372,6 +372,13 @@ export class ProxyManagerService implements OnModuleInit {
         return await requestFn(client);
       } catch (err: any) {
         lastError = err;
+
+        // Agar server 4xx javob bersa (400 Bad Request, 404 Not Found va h.k.) - bu proxy nosozligi emas,
+        // serverning mantiqiy javobi (masalan noto'g'ri captcha kodi). Qayta urinmasdan zudlik bilan uzatamiz!
+        if (err.response && err.response.status >= 400 && err.response.status < 500) {
+          throw err;
+        }
+
         this.logger.warn(`⚠️ [Proxy Auto-Failover ${attempt}/${maxRetries}] So'rov xatoligi (${err.message}). Keyingi toza kanalga o'tilmoqda...`);
 
         // Agar bu sticky sessiya bo'lsa va xato bersa, eski nofaol proxyni o'chirib, boshqasini tanlaymiz

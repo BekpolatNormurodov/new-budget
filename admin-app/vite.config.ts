@@ -4,10 +4,10 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
-  base: '/admin-view/',
+  base: '/',
   build: {
-    outDir: '../public/admin-view',
-    emptyOutDir: true,
+    outDir: '../public',
+    emptyOutDir: false,
   },
   server: {
     port: 5173,

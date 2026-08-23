@@ -32,7 +32,7 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     this.startDailyScheduler();
-    this.logger.log('📢 Avtomatik Kunlik Marketing & Eslatma Tizimi faollashtirildi (09:00 va 17:00).');
+    this.logger.log('📢 Avtomatik Kunlik 4-Vaqtli Marketing & Eslatma Tizimi faollashtirildi (10:00, 14:00, 18:30, 21:00).');
   }
 
   onModuleDestroy() {
@@ -42,7 +42,8 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Kunlik 2 martalik rejalashtiruvchi (Ertalab 09:00 va Kechqurun 17:00 - Toshkent vaqti bilan)
+   * Kunlik 4 martalik aqlli rejalashtiruvchi (10:00, 14:00, 18:30, 21:00 - Toshkent vaqti)
+   * Ovoz bermagan yoki start bosib chala qoldirgan userlarga chiroyli eslatmalar yuboradi
    */
   private startDailyScheduler() {
     this.scheduleIntervalHandle = setInterval(async () => {
@@ -53,34 +54,53 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
         const tashkentMinutes = now.getUTCMinutes();
         const dateStr = now.toISOString().slice(0, 10);
 
-        // Ertalabki xabar (09:00 - 09:05)
-        if (tashkentHours === 9 && tashkentMinutes <= 5) {
+        // 1. Ertalabki xabar (10:00 - 10:05)
+        if (tashkentHours === 10 && tashkentMinutes <= 5) {
           const slotKey = `${dateStr}_MORNING`;
           if (this.lastExecutedKey !== slotKey) {
             this.lastExecutedKey = slotKey;
-            this.logger.log('🌅 Ertalabki (09:00) marketing xabarlari yuborilmoqda...');
+            this.logger.log('🌅 Ertalabki (10:00) eslatma yuborilmoqda...');
             await this.executeBroadcast('MORNING');
           }
         }
 
-        // Kechki xabar (17:00 - 17:05)
-        if (tashkentHours === 17 && tashkentMinutes <= 5) {
+        // 2. Tushlik xabari (14:00 - 14:05)
+        if (tashkentHours === 14 && tashkentMinutes <= 5) {
+          const slotKey = `${dateStr}_AFTERNOON`;
+          if (this.lastExecutedKey !== slotKey) {
+            this.lastExecutedKey = slotKey;
+            this.logger.log('☀️ Tushlik (14:00) eslatmasi yuborilmoqda...');
+            await this.executeBroadcast('AFTERNOON' as any);
+          }
+        }
+
+        // 3. Kechki xabar (18:30 - 18:35)
+        if (tashkentHours === 18 && tashkentMinutes >= 30 && tashkentMinutes <= 35) {
           const slotKey = `${dateStr}_EVENING`;
           if (this.lastExecutedKey !== slotKey) {
             this.lastExecutedKey = slotKey;
-            this.logger.log('🌆 Kechki (17:00) marketing xabarlari yuborilmoqda...');
+            this.logger.log('🌆 Kechki (18:30) eslatmasi yuborilmoqda...');
             await this.executeBroadcast('EVENING');
+          }
+        }
+
+        // 4. Tungi yakuniy xabar (21:00 - 21:05)
+        if (tashkentHours === 21 && tashkentMinutes <= 5) {
+          const slotKey = `${dateStr}_NIGHT`;
+          if (this.lastExecutedKey !== slotKey) {
+            this.lastExecutedKey = slotKey;
+            this.logger.log('🌙 Tungi (21:00) eslatmasi yuborilmoqda...');
+            await this.executeBroadcast('NIGHT' as any);
           }
         }
       } catch (err: any) {
         this.logger.error(`Scheduler xatoligi: ${err.message}`);
       }
-    }, 60000); // Har daqiqada tekshiradi
+    }, 60000);
   }
 
   /**
-   * Xabarlarni yuborishni bajarish (Ertalabki, Kechki yoki Test)
-   * QOIDA: Barcha faol botlar o'z foydalanuvchilariga mustaqil xabar yuboradi!
+   * Xabarlarni yuborishni bajarish
    */
   public async executeBroadcast(
     slot: 'MORNING' | 'EVENING' | 'TEST' = 'MORNING',
@@ -242,11 +262,11 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
       if (slot === 'MORNING') {
         const text =
           `🌅 <b>Xayrli tong, aziz yurtdosh!</b>\n\n` +
-          `🔥 <b>Open Budgetda ovoz berib, qo'shimcha daromad oling!</b>\n\n` +
+          `🔥 <b>Open Budgetda ovoz berib, kafolatlangan daromad oling!</b>\n\n` +
           `📍 Mahalla: <b>${mahalla}</b>\n` +
           `💰 Har bir ovoz uchun to'lov: <b>${reward} so'm</b> (Darhol Uzcard / Humo kartangizga)\n` +
           `👥 Oila a'zolaringiz va yaqinlaringiz raqamlaridan ham ovoz berib pul ishlashingiz mumkin!\n\n` +
-          `Hoziroq "🗳 Ovoz berish" tugmasini bosing va o'z mukofotingizni oling 👇`;
+          `Hoziroq "🗳 Ovoz berish" tugmasini bosing va mukofotingizni oling 👇`;
 
         const keyboard = Markup.inlineKeyboard([
           [Markup.button.callback(`🗳 Ovoz berish (+${reward} so'm)`, 'start_vote')],
@@ -254,14 +274,42 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
         ]);
 
         return { text, keyboard };
+      } else if (slot === 'AFTERNOON' as any) {
+        const text =
+          `☀️ <b>Kuningiz unumli o'tsin!</b>\n\n` +
+          `💡 <b>Ovozingiz hali ham kutilmoqda!</b> Atigi 1 daqiqa ajratib, o'z mahallangiz rivojiga hissa qo'shing va <b>${reward} so'm</b> mukofot oling!\n\n` +
+          `📍 Mahalla: <b>${mahalla}</b>\n` +
+          `⚡️ To'lovlar 100% kafolatlangan va tasdiqlangach avtomatik kartangizga o'tkaziladi.\n\n` +
+          `Ovoz berishni davom ettirish uchun bosing 👇`;
+
+        const keyboard = Markup.inlineKeyboard([
+          [Markup.button.callback(`🗳 Hoziroq ovoz berish (+${reward} so'm)`, 'start_vote')],
+          [Markup.button.callback('👥 Do\'stlarni taklif qilish (+5 000 so\'m)', 'ref_menu')],
+        ]);
+
+        return { text, keyboard };
+      } else if (slot === 'NIGHT' as any) {
+        const text =
+          `🌙 <b>Bugungi kunni qo'shimcha daromad bilan yakunlang!</b>\n\n` +
+          `⏳ <b>${mahalla}</b> bo'yicha bugungi ovozlar soni cheklangan!\n\n` +
+          `💰 Har bir ovoz uchun: <b>${reward} so'm</b>\n` +
+          `📲 Telefoningiz orqali hoziroq ovoz bering va daromadingizni yechib oling!\n\n` +
+          `Pastdagi tugmani bosing 👇`;
+
+        const keyboard = Markup.inlineKeyboard([
+          [Markup.button.callback(`🗳 Ovoz berish (+${reward} so'm)`, 'start_vote')],
+          [Markup.button.callback('💳 Balans va Pul Yechish', 'withdraw_menu')],
+        ]);
+
+        return { text, keyboard };
       } else {
         // EVENING yoki TEST
         const text =
-          `🌆 <b>Xayrli kech! Bugungi imkoniyatni qo'ldan boy bermang!</b>\n\n` +
-          `⚡️ <b>${mahalla}</b> bo'yicha ovoz berish jarayoni davom etmoqda!\n\n` +
+          `🌆 <b>Xayrli kech! Bugungi imkoniyatni boy bermang!</b>\n\n` +
+          `⚡️ <b>${mahalla}</b> bo'yicha ovoz berish jarayoni qizg'in davom etmoqda!\n\n` +
           `📍 Mahalla: <b>${mahalla}</b>\n` +
           `💰 Ovoz mukofoti: <b>${reward} so'm</b> (Uzcard / Humo)\n` +
-          `👥 Yaqinlaringiz nomidagi raqamlardan ham ovoz berib, balansingizni to'ldiring!\n\n` +
+          `👥 Yaqinlaringiz nomidagi barcha raqamlardan ham ovoz berib, balansingizni to'ldiring!\n\n` +
           `Ovoz berish uchun pastdagi tugmani bosing 👇`;
 
         const keyboard = Markup.inlineKeyboard([

@@ -33,3 +33,14 @@ export const tashkentToday = (): string => toTashkentDateStr(new Date());
 // Toshkent vaqti bilan kechagi sana "YYYY-MM-DD".
 export const tashkentYesterday = (): string =>
   toTashkentDateStr(new Date(Date.now() - 86400000));
+
+// Universal O'zbekiston telefon raqami formati: +998 90 123-45-67
+export const formatPhone = (phone?: string | null): string => {
+  if (!phone) return '-';
+  const clean = String(phone).replace(/\D/g, '');
+  const p9 = clean.length >= 9 ? clean.slice(-9) : clean;
+  if (p9.length === 9) {
+    return `+998 ${p9.slice(0, 2)} ${p9.slice(2, 5)}-${p9.slice(5, 7)}-${p9.slice(7, 9)}`;
+  }
+  return clean ? `+${clean}` : '-';
+};

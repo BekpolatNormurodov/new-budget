@@ -69,6 +69,57 @@ export class AdminController {
     return this.adminService.syncBotVotes();
   }
 
+  @Post('bots/:id/sync')
+  async syncSingleBot(@Param('id') id: string) {
+    return this.adminService.syncSingleBot(parseInt(id, 10));
+  }
+
+  @Get('bots/captcha-challenge')
+  async getBotCaptchaChallenge() {
+    return this.adminService.getBotCaptchaChallenge();
+  }
+
+  @Get('bots/:id/votes-feed')
+  async getBotVotesFeed(
+    @Param('id') id: string,
+    @Query('page') page?: string,
+    @Query('size') size?: string,
+  ) {
+    return this.adminService.getBotVotesFeed(
+      parseInt(id, 10),
+      page ? parseInt(page, 10) : 1,
+      size ? parseInt(size, 10) : 15,
+    );
+  }
+
+  @Get('bots/:id/official-votes-list')
+  async getBotOfficialVotesList(
+    @Param('id') id: string,
+    @Query('page') page?: string,
+  ) {
+    return this.adminService.getBotOfficialVotesList(
+      parseInt(id, 10),
+      page ? parseInt(page, 10) : 0,
+    );
+  }
+
+  @Get('bots/:id/official-captcha')
+  async getBotOfficialCaptcha(@Param('id') id: string) {
+    return this.adminService.getBotOfficialCaptcha(parseInt(id, 10));
+  }
+
+  @Post('bots/:id/official-captcha')
+  async submitBotOfficialCaptcha(
+    @Param('id') id: string,
+    @Body() body: { captchaKey: string; captchaResult: number },
+  ) {
+    return this.adminService.submitBotOfficialCaptcha(
+      parseInt(id, 10),
+      body.captchaKey,
+      body.captchaResult,
+    );
+  }
+
   // Votes Routes
   @Get('votes/pending')
   async getPendingVotes() {

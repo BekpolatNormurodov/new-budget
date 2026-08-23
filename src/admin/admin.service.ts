@@ -1,15 +1,19 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as sharpImport from 'sharp';
+const sharp = (sharpImport as any).default || sharpImport;
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { OpenBudgetService } from '../openbudget/openbudget.service';
+import { CaptchaSolverService } from '../openbudget/captcha-solver.service';
 import { BotManagerService } from '../bot/bot-manager.service';
 import { BotMarketingService } from '../bot/bot-marketing.service';
 import { SystemHealthService } from '../health/system-health.service';
 import { ProxyManagerService } from '../proxy/proxy-manager.service';
 import { BOT_MESSAGES, formatSum } from '../bot/bot.constants';
 import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
 
 @Injectable()
 export class AdminService {
@@ -19,6 +23,7 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
     private readonly openBudgetService: OpenBudgetService,
+    private readonly captchaSolverService: CaptchaSolverService,
     private readonly botManagerService: BotManagerService,
     private readonly botMarketingService: BotMarketingService,
     private readonly systemHealthService: SystemHealthService,
@@ -761,5 +766,249 @@ export class AdminService {
    */
   async syncBotVotes() {
     return this.openBudgetService.syncAllBotVotes();
+  }
+
+  /**
+   * 🔄 Aynan bitta botni OpenBudget bilan zudlik bilan sinxronlash
+   */
+  async syncSingleBot(id: number) {
+    const bot = await this.prisma.botInstance.findUnique({ where: { id } });
+    if (!bot) throw new Error('Bot topilmadi');
+
+    let uuid = bot.initiativeUuid;
+    if (!uuid && bot.mahallaId) {
+      const lRes = await this.openBudgetService.lookupMahallaOrInitiative(bot.mahallaId);
+      if (lRes.success && lRes.initiativeUuid) {
+        uuid = lRes.initiativeUuid;
+        await this.prisma.botInstance.update({
+          where: { id: bot.id },
+          data: { initiativeUuid: uuid, boardId: lRes.boardId },
+        });
+      }
+    }
+
+    let officialVotes = bot.currentVotes || 0;
+    let grantedAmount = bot.grantedAmount ? Number(bot.grantedAmount) : 0;
+
+    if (uuid) {
+      // 1. Jonli rasmiy ovozlar sonini olish (v2 count)
+      try {
+        const countRes = await this.proxyManagerService.requestWithRetry(async (client) => {
+          return client.get(`https://new.openbudget.uz/api/v2/info/initiative/count/${uuid}`, {
+            timeout: 9000,
+          });
+        });
+        if (countRes?.data && countRes.data.count !== undefined) {
+          officialVotes = Number(countRes.data.count) || 0;
+        }
+      } catch (cErr) {}
+
+      // 2. Loyiha ma'lumotlarini olish (v1 initiative)
+      try {
+        const res = await this.proxyManagerService.requestWithRetry(async (client) => {
+          return client.get(`https://new.openbudget.uz/api/v1/initiatives/${uuid}`, {
+            timeout: 9000,
+          });
+        });
+        if (res?.data?.granted_amount) {
+          grantedAmount = Number(res.data.granted_amount);
+        }
+      } catch (iErr) {}
+
+      await this.prisma.botInstance.update({
+        where: { id: bot.id },
+        data: {
+          currentVotes: officialVotes,
+          ...(grantedAmount ? { grantedAmount: BigInt(grantedAmount) } : {}),
+        },
+      });
+    }
+
+    const verifiedVotes = await this.prisma.vote.count({
+      where: { botInstanceId: bot.id, status: 'VERIFIED' },
+    });
+    const pendingVotes = await this.prisma.vote.count({
+      where: { botInstanceId: bot.id, status: 'PENDING_VERIFICATION' },
+    });
+
+    return {
+      success: true,
+      botId: bot.id,
+      mahallaName: bot.mahallaName,
+      openBudgetVotes: officialVotes,
+      currentVotes: verifiedVotes,
+      pendingVotes,
+      targetVotes: bot.targetVotes,
+      grantedAmount: bot.grantedAmount ? Number(bot.grantedAmount) : 0,
+      percentage: Math.min(100, Math.round(((verifiedVotes + pendingVotes) / (bot.targetVotes || 5000)) * 100)),
+    };
+  }
+
+  /**
+   * 🧩 Jonli OpenBudget Captcha Challenge olish va OCR bilan yechish
+   */
+  async getBotCaptchaChallenge() {
+    try {
+      const res = await this.proxyManagerService.requestWithRetry(async (client) => {
+        return client.get('https://new.openbudget.uz/api/v2/vote/captcha-2', { timeout: 8000 });
+      });
+
+      if (!res?.data?.image) {
+        return { success: false, error: 'Captcha yuklab bo\'lmadi' };
+      }
+
+      const captchaKey = res.data.captchaKey || '';
+      const imageBase64 = res.data.image;
+      const rawBuffer = Buffer.from(imageBase64, 'base64');
+
+      let autoAnswer = '';
+      try {
+        const cleanPng = await sharp(rawBuffer, { failOn: 'none' }).png().toBuffer();
+        const worker = await this.captchaSolverService.acquireWorker();
+        if (worker) {
+          try {
+            const ocrRes = await worker.recognize(cleanPng);
+            if (ocrRes?.data?.text) {
+              autoAnswer = ocrRes.data.text.trim().replace(/[^a-zA-Z0-9]/g, '');
+            }
+          } finally {
+            this.captchaSolverService.releaseWorker(worker);
+          }
+        }
+      } catch (ocrErr: any) {
+        this.logger.warn(`Captcha auto OCR error: ${ocrErr.message}`);
+      }
+
+      return {
+        success: true,
+        captchaKey,
+        image: imageBase64,
+        autoAnswer,
+      };
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  /**
+   * 📋 Botga oid ovozlar ro'yxati va faollik tasmasi (Ovozlarni ko'rish)
+   */
+  async getBotVotesFeed(botId: number, page: number = 1, size: number = 15) {
+    const bot = await this.prisma.botInstance.findUnique({ where: { id: botId } });
+    if (!bot) throw new Error('Bot topilmadi');
+
+    const total = await this.prisma.vote.count({ where: { botInstanceId: botId } });
+    const votes = await this.prisma.vote.findMany({
+      where: { botInstanceId: botId },
+      include: { user: true },
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * size,
+      take: size,
+    });
+
+    const formatted = votes.map((v) => {
+      const p = v.phone.replace(/[^0-9]/g, '');
+      const maskedPhone = p.length >= 9
+        ? `**-*${p.slice(-6, -4)}-${p.slice(-4, -2)}-${p.slice(-2)}`
+        : `**-***-${p.slice(-4)}`;
+      const voteDate = new Date(v.createdAt).toISOString().replace('T', ' ').slice(0, 16);
+
+      return {
+        id: v.id,
+        phoneNumber: maskedPhone,
+        rawPhone: v.phone,
+        voteDate,
+        status: v.status,
+        rewardAmount: v.rewardAmount,
+        user: v.user ? { firstName: v.user.firstName, username: v.user.username } : null,
+      };
+    });
+
+    return {
+      success: true,
+      botId,
+      mahallaName: bot.mahallaName,
+      openBudgetVotes: bot.currentVotes || 0,
+      total,
+      page,
+      size,
+      totalPages: Math.ceil(total / size) || 1,
+      content: formatted,
+    };
+  }
+
+  /**
+   * 🌐 OpenBudget Rasmiy Saytidan Ovozlar Ro'yxatini Olish (Official Votes List)
+   */
+  async getBotOfficialVotesList(botId: number, page: number = 0) {
+    const bot = await this.prisma.botInstance.findUnique({ where: { id: botId } });
+    if (!bot) throw new Error('Bot topilmadi');
+
+    let uuid = bot.initiativeUuid;
+    if (!uuid && bot.mahallaId) {
+      const lRes = await this.openBudgetService.lookupMahallaOrInitiative(bot.mahallaId);
+      if (lRes.success && lRes.initiativeUuid) {
+        uuid = lRes.initiativeUuid;
+      }
+    }
+
+    const res = await this.openBudgetService.fetchOfficialInitiativeVotesList(uuid, page);
+    if (!res.success && res.error === 'OpenBudget token olinmadi') {
+      const cap = await this.openBudgetService.getOfficialInitiativeCaptcha(uuid);
+
+      // 📢 10 ta urinishdan keyin ham o'tmasa, barcha mas'ul Administratorlarga Telegram orqali xabar berish
+      if (cap.captchaKey && cap.image) {
+        await this.botManagerService.notifyAdminsOfficialCaptcha(
+          botId,
+          bot.mahallaName,
+          uuid,
+          cap.captchaKey,
+          cap.image,
+        ).catch(() => {});
+      }
+
+      return {
+        success: false,
+        needCaptcha: true,
+        captchaKey: cap.captchaKey,
+        image: cap.image,
+        botId,
+        mahallaName: bot.mahallaName,
+        content: [],
+        totalElements: bot.currentVotes || 0,
+        totalPages: 0,
+        page,
+      };
+    }
+
+    return {
+      ...res,
+      botId,
+      mahallaName: bot.mahallaName,
+    };
+  }
+
+  async getBotOfficialCaptcha(botId: number) {
+    const cap = await this.openBudgetService.getOfficialInitiativeCaptcha();
+    return { ...cap, botId };
+  }
+
+  async submitBotOfficialCaptcha(botId: number, captchaKey: string, captchaResult: number) {
+    const bot = await this.prisma.botInstance.findUnique({ where: { id: botId } });
+    if (!bot || !bot.initiativeUuid) throw new Error('Bot yoki tashabbus UUID topilmadi');
+
+    const res = await this.openBudgetService.submitOfficialInitiativeCaptcha(
+      bot.initiativeUuid,
+      captchaKey,
+      captchaResult,
+    );
+
+    if (res.success) {
+      // First page of votes
+      const votes = await this.openBudgetService.fetchOfficialInitiativeVotesList(bot.initiativeUuid, 0);
+      return { success: true, ...votes };
+    }
+
+    return res;
   }
 }

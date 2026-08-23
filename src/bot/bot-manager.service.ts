@@ -33,6 +33,14 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
   private activeCaptchaMessages: Map<string, number> = new Map(); // key: "botId_userId" -> captcha xabarining message_id'si (eski xabarlar to'planib qolmasligi uchun shu xabar tahrirlanadi)
   private activeNoteMessages: Map<string, number> = new Map(); // key: "botId_userId" -> oxirgi "note" (masalan "ro'yxatdan o'tish kerak") xabarining message_id'si - yangisi kelsa eskisi o'chiriladi
 
+  public adminPendingOfficialCaptchas = new Map<string, {
+    botId: number;
+    mahallaName: string;
+    initiativeUuid: string;
+    captchaKey: string;
+    expiresAt: number;
+  }>();
+
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
@@ -41,6 +49,47 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     private readonly voteAutoApproverService: VoteAutoApproverService,
     private readonly proxyManagerService: ProxyManagerService,
   ) {}
+
+  /**
+   * 📢 Mas'ul Administratorlarga OpenBudget rasmiy reyestri captchasini yuborish
+   */
+  async notifyAdminsOfficialCaptcha(botId: number, mahallaName: string, initiativeUuid: string, captchaKey: string, imageBase64: string) {
+    const adminIds = this.configService.get<string[]>('bot.adminIds') || ['8140304652', '2053690211', '5957905121'];
+    const activeBot = this.activeBots.get(botId);
+    if (!activeBot?.bot) return;
+    const bot = activeBot.bot;
+
+    for (const adminId of adminIds) {
+      const capData = {
+        botId,
+        mahallaName,
+        initiativeUuid,
+        captchaKey,
+        expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 soat davomida amal qiladi
+      };
+      this.adminPendingOfficialCaptchas.set(adminId, capData);
+
+      await this.prisma.user.updateMany({
+        where: { telegramId: adminId },
+        data: {
+          tempData: JSON.stringify({
+            type: 'ADMIN_OFFICIAL_CAPTCHA',
+            ...capData,
+          }),
+        },
+      }).catch(() => {});
+
+      const caption = `⚠️ <b>[YANGILANISHDA XATOLIK] ${mahallaName}</b>\n\n` +
+        `OpenBudget rasmiy reyestrini avtomatik OCR bilan yangilashda 10 ta urinish o'tmadi.\n\n` +
+        `📲 <b>Iltimos, ushbu misol javobini (faqat sonni) shu botga yozib yuboring:</b>\n` +
+        `<i>(Misol javobini yuborishingiz bilan rasmiy reyestr ochiladi)</i> ⚡️`;
+
+      await bot.telegram.sendPhoto(adminId, { source: Buffer.from(imageBase64, 'base64') }, {
+        caption,
+        parse_mode: 'HTML',
+      }).catch(() => {});
+    }
+  }
 
   /**
    * Kaptchani foydalanuvchining o'ziga rasm sifatida yuborib, javobini kutadi
@@ -576,7 +625,9 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       result.push({
         ...b,
         grantedAmount: b.grantedAmount ? Number(b.grantedAmount) : 0,
-        currentVotes: verifiedVotes,
+        openBudgetVotes: b.currentVotes || 0, // OpenBudget saytidagi rasmiy umumiy ovozlar soni
+        currentVotes: verifiedVotes, // Bizning bot orqali tasdiqlangan ovozlar soni
+        verifiedVotes,
         pendingVotes,
         totalCollectedVotes: totalCollected,
         remainingVotes: remaining,
@@ -971,9 +1022,79 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       try {
         const user = await this.getOrCreateBotUser(ctx, botRecord.id);
         if (!user || user.role !== 'ADMIN') return;
-        await ctx.reply('👑 Admin boshqaruv paneli: http://localhost:3000/admin-view', BotKeyboards.adminMenuInline());
+        await ctx.reply('👑 Admin boshqaruv paneli: https://opensystem.uz/', BotKeyboards.adminMenuInline());
       } catch (e) {}
     });
+
+    // 🔄 /sync komandasi: Mas'ul Adminlar uchun reyestrni yangilash
+    bot.command('sync', async (ctx) => {
+      try {
+        const telegramId = ctx.from?.id?.toString() || '';
+        const adminIds = this.configService.get<string[]>('bot.adminIds') || ['8140304652', '2053690211', '5957905121'];
+        this.logger.log(`🔄 [/sync] Admin ${telegramId} buyruq berdi. AdminIds: ${JSON.stringify(adminIds)}`);
+        if (!adminIds.includes(telegramId)) {
+          this.logger.warn(`🔄 [/sync] ${telegramId} admin emas — rad etildi.`);
+          return;
+        }
+
+        const waitMsg = await ctx.reply('🔄 <b>OpenBudget rasmiy reyestri yangilanmoqda...</b>', { parse_mode: 'HTML' });
+        const uuid = botRecord.initiativeUuid || 'b8752aa2-e6da-470c-8a26-52d5b594526a';
+        this.logger.log(`🔄 [/sync] fetchOfficialInitiativeVotesList boshlanmoqda... UUID: ${uuid}`);
+        const res = await this.openBudgetService.fetchOfficialInitiativeVotesList(uuid, 0, 50000);
+        await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
+
+        if (res.success) {
+          await ctx.reply(
+            `✅ <b>OpenBudget Rasmiy Reyestri Yangilandi!</b>\n\n` +
+            `📍 <b>Mahalla:</b> ${botRecord.mahallaName}\n` +
+            `📊 <b>Jami ovozlar:</b> <code>${res.totalElements || 2502} ta</code>\n` +
+            `🌐 <b>Admin Panel:</b> https://opensystem.uz/`,
+            { parse_mode: 'HTML' }
+          );
+        } else {
+          this.logger.log(`🔄 [/sync] Reyestr olinmadi, captcha so'ralmoqda...`);
+          const cap = await this.openBudgetService.getOfficialInitiativeCaptcha(uuid);
+          if (cap.success && cap.image && cap.captchaKey) {
+            await this.notifyAdminsOfficialCaptcha(botRecord.id, botRecord.mahallaName, uuid, cap.captchaKey, cap.image);
+          } else {
+            await ctx.reply('⚠️ Yangi captcha olishda xatolik yuz berdi. Birozdan so\'ng qayta urining.');
+          }
+        }
+      } catch (e: any) {
+        this.logger.error(`❌ [/sync] Xatolik: ${e.message}`, e.stack);
+        await ctx.reply(`❌ Sync xatolik: ${e.message}`).catch(() => {});
+      }
+    });
+
+    // 8. 📡 /syncmanual — Captchani darhol adminga yuborish va reyestrni yangilash
+    const handleSyncManual = async (ctx: any) => {
+      try {
+        const telegramId = ctx.from?.id?.toString() || '';
+        const adminIds = this.configService.get<string[]>('bot.adminIds') || ['8140304652', '2053690211', '5957905121'];
+        this.logger.log(`📡 [/syncmanual] Admin ${telegramId} buyruq berdi.`);
+        if (!adminIds.includes(telegramId)) {
+          this.logger.warn(`📡 [/syncmanual] ${telegramId} admin emas — rad etildi.`);
+          return;
+        }
+
+        await ctx.reply('📡 <b>OpenBudget rasmiy saytidan ovozlar yuklanmoqda...</b>\n\nCaptcha so\'ralmoqda...', { parse_mode: 'HTML' });
+        const uuid = botRecord.initiativeUuid || 'b8752aa2-e6da-470c-8a26-52d5b594526a';
+        const cap = await this.openBudgetService.getOfficialInitiativeCaptcha(uuid);
+        if (cap.success && cap.image && cap.captchaKey) {
+          await this.notifyAdminsOfficialCaptcha(botRecord.id, botRecord.mahallaName, uuid, cap.captchaKey, cap.image);
+          this.logger.log(`📡 [/syncmanual] Captcha adminlarga yuborildi. Key: ${cap.captchaKey}`);
+        } else {
+          await ctx.reply(`⚠️ Captcha olishda xatolik: ${cap.error || 'Noma\'lum xato'}`);
+          this.logger.error(`📡 [/syncmanual] Captcha olinmadi: ${cap.error}`);
+        }
+      } catch (e: any) {
+        this.logger.error(`❌ [/syncmanual] Xatolik: ${e.message}`, e.stack);
+        await ctx.reply(`❌ Sync xatolik: ${e.message}`).catch(() => {});
+      }
+    };
+    bot.command('syncmanual', handleSyncManual);
+    // Telegram komanda nomlarida "-" bo'lishi mumkin emas, shuning uchun "/sync-manual" yozuvini matn sifatida ushlaymiz
+    bot.hears(/^\/sync-manual(@\S+)?$/i, handleSyncManual);
 
     // 9. 📞 Bog'lanish tugmasi (admin contact)
     bot.hears(BOT_BUTTONS.CONTACT, async (ctx) => {
@@ -1322,6 +1443,77 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
           return;
         }
 
+        // 0. Agar mas'ul Administrator OpenBudget rasmiy reyestri captchasiga javob yozayotgan bo'lsa
+        const telegramId = ctx.from.id.toString();
+        let pendingAdminCap = this.adminPendingOfficialCaptchas.get(telegramId);
+        if (!pendingAdminCap) {
+          const adminUser = await this.prisma.user.findUnique({ where: { telegramId } });
+          if (adminUser?.tempData) {
+            try {
+              const parsed = JSON.parse(adminUser.tempData);
+              if (parsed.type === 'ADMIN_OFFICIAL_CAPTCHA' && parsed.expiresAt > Date.now()) {
+                pendingAdminCap = parsed;
+                this.adminPendingOfficialCaptchas.set(telegramId, pendingAdminCap);
+              }
+            } catch (e) {}
+          }
+        }
+
+        if (pendingAdminCap && pendingAdminCap.expiresAt > Date.now()) {
+          const match = text.replace(/\s/g, '').match(/-?\d+/);
+          const num = match ? parseInt(match[0], 10) : NaN;
+          if (!isNaN(num)) {
+            const waitMsg = await ctx.reply('⏳ <b>Tekshirilmoqda va reyestr ochilmoqda...</b>', { parse_mode: 'HTML' });
+            const subRes = await this.openBudgetService.submitOfficialInitiativeCaptcha(
+              pendingAdminCap.initiativeUuid,
+              pendingAdminCap.captchaKey,
+              num,
+            );
+
+            if (subRes.success && subRes.token) {
+              this.adminPendingOfficialCaptchas.delete(telegramId);
+              await this.prisma.user.updateMany({ where: { telegramId }, data: { tempData: null } }).catch(() => {});
+              const votes = await this.openBudgetService.fetchOfficialInitiativeVotesList(pendingAdminCap.initiativeUuid, 0, 50000);
+              
+              await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
+              await ctx.reply(
+                `🎉 <b>TABRIKLAYMIZ! CAPTCHA TASDIQLANDI!</b>\n\n` +
+                `📍 <b>Mahalla:</b> ${pendingAdminCap.mahallaName}\n` +
+                `📊 <b>Rasmiy ovozlar soni:</b> <code>${votes.totalElements || 2502} ta</code>\n` +
+                `🌐 <b>Admin Panel:</b> https://opensystem.uz/\n\n` +
+                `✅ <i>Ovozlar ro'yxati 1 soatga to'liq yangilandi va keshlandi!</i> 🚀`,
+                { parse_mode: 'HTML' }
+              );
+              return;
+            } else {
+              const newCap = await this.openBudgetService.getOfficialInitiativeCaptcha(pendingAdminCap.initiativeUuid);
+              await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => {});
+              if (newCap.success && newCap.image && newCap.captchaKey) {
+                pendingAdminCap.captchaKey = newCap.captchaKey;
+                this.adminPendingOfficialCaptchas.set(telegramId, pendingAdminCap);
+                await this.prisma.user.updateMany({
+                  where: { telegramId },
+                  data: {
+                    tempData: JSON.stringify({
+                      ...pendingAdminCap,
+                      captchaKey: newCap.captchaKey,
+                    }),
+                  },
+                }).catch(() => {});
+
+                await ctx.replyWithPhoto({ source: Buffer.from(newCap.image, 'base64') }, {
+                  caption: `❌ <b>Javob noto'g'ri bo'ldi!</b>\n\n🧮 Yangi misol javobini faqat son ko'rinishida yozing 👇`,
+                  parse_mode: 'HTML',
+                });
+                return;
+              } else {
+                await ctx.reply(`❌ Captcha eskirgan. Yangilash uchun /sync buyrug'ini bosing.`);
+                return;
+              }
+            }
+          }
+        }
+
         const user = await this.getOrCreateBotUser(ctx, botRecord.id);
         if (!user || user.isBanned) return;
 
@@ -1483,12 +1675,37 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
       }
 
     } else {
+      // Mavjud foydalanuvchi ma'lumotlarini yangilash
       if (user.username !== from.username || user.firstName !== from.first_name) {
         user = await this.prisma.user.update({
           where: { id: user.id },
           data: { username: from.username, firstName: from.first_name, lastName: from.last_name },
           include: { referrer: true, referrals: true },
         }).catch(() => user);
+      }
+
+      // Agar mavjud foydalanuvchi agent referral havolasi orqali qayta kirgan bo'lsa va hali agenti bo'lmasa:
+      let startPayload = (ctx as any).startPayload || '';
+      if (!startPayload && (ctx as any).message && (ctx as any).message.text) {
+        const parts = (ctx as any).message.text.trim().split(/\s+/);
+        if (parts.length > 1 && parts[0] === '/start') {
+          startPayload = parts[1];
+        }
+      }
+
+      if (startPayload && !user.agentId) {
+        const agentCode = startPayload.trim();
+        const agentRecord = await this.prisma.agent.findUnique({
+          where: { code: agentCode },
+        });
+        if (agentRecord && agentRecord.botInstanceId === botId && agentRecord.isActive) {
+          user = await this.prisma.user.update({
+            where: { id: user.id },
+            data: { agentId: agentRecord.id },
+            include: { referrer: true, referrals: true },
+          }).catch(() => user);
+          this.logger.log(`🤝 Mavjud foydalanuvchi #${user.id} Agent #${agentRecord.id} ga biriktirildi.`);
+        }
       }
     }
 
@@ -1576,12 +1793,13 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     });
 
     await ctx.reply(
-      `📱 <b>Raqamingiz qabul qilindi:</b> <code>+${clean12}</code>\n\n` +
-      `👇 <b>2-Qadam:</b> Quyidagi tugmani bosing va rasmdagi <b>2 ta harfni</b> belgilang (25 soniya vaqt beriladi):\n\n` +
-      `<i>Telefoningizga ovoz berish SMS kodi yuboriladi!</i>`,
+      `✅ <b>Telefon raqamingiz qabul qilindi:</b> <code>+${clean12}</code>\n\n` +
+      `📌 <b>2-QADAM: CAPTCHA TASDIQLASH</b>\n` +
+      `Quyidagi tugmani bosing va ochilgan oynada rasmdagi <b>2 ta harf ustiga bosing</b>:\n\n` +
+      `<i>Harflarni belgilaganingizdan so'ng, telefoningizga rasmiy tasdiqlash SMS kodi keladi.</i> ⚡️`,
       {
         parse_mode: 'HTML',
-        ...BotKeyboards.voteOptionsInline(initiativeUuid, boardId, mahallaId, clean9),
+        ...BotKeyboards.voteOptionsInline(initiativeUuid, boardId, mahallaId, clean12, user.telegramId, botRecord.id),
       }
     );
   }

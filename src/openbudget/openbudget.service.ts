@@ -1151,55 +1151,93 @@ export class OpenBudgetService {
   /**
    * Barcha faol botlarning ovozlar sonini OpenBudgetdan 15 minutlik yangilash (Cron orqali PROXY bilan)
    */
-  async syncAllBotVotes() {
+  async syncAllBotVotes(): Promise<{ success: boolean; updatedCount: number; results: any[] }> {
     try {
       const activeBots = await this.prisma.botInstance.findMany({
         where: { isActive: true },
       });
 
       this.logger.log(`🔄 [15-Min Live Vote Sync] Jami ${activeBots.length} ta faol bot ovozlari yangilanmoqda...`);
-      let updatedCount = 0;
+      const results = [];
 
       for (const bot of activeBots) {
-        let uuid = bot.initiativeUuid;
-        if (!uuid && bot.mahallaId && /^\d{12}$/.test(bot.mahallaId)) {
-          // Resolve UUID
-          const lRes = await this.lookupMahallaOrInitiative(bot.mahallaId);
-          if (lRes.success && lRes.initiativeUuid) {
-            uuid = lRes.initiativeUuid;
-            await this.prisma.botInstance.update({
-              where: { id: bot.id },
-              data: { initiativeUuid: uuid, boardId: lRes.boardId },
-            }).catch(() => {});
-          }
-        }
-
-        if (uuid) {
-          try {
-            const res = await axios.get(`https://new.openbudget.uz/api/v1/initiatives/${uuid}`, {
-              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-              timeout: 6000,
-            }).catch(() => null);
-
-            if (res?.data && typeof res.data.vote_count === 'number') {
-              const liveVotes = res.data.vote_count;
+        try {
+          let uuid = bot.initiativeUuid;
+          if (!uuid && bot.mahallaId) {
+            const lRes = await this.lookupMahallaOrInitiative(bot.mahallaId);
+            if (lRes.success && lRes.initiativeUuid) {
+              uuid = lRes.initiativeUuid;
               await this.prisma.botInstance.update({
                 where: { id: bot.id },
-                data: { currentVotes: liveVotes },
-              });
-              updatedCount++;
+                data: { initiativeUuid: uuid, boardId: lRes.boardId },
+              }).catch(() => {});
             }
-          } catch (botSyncErr: any) {
-            this.logger.warn(`Bot #${bot.id} (${bot.mahallaName}) ovozlarini sinxronlashda xatolik: ${botSyncErr.message}`);
           }
+
+          let officialVotes = 0;
+          let grantedAmount: bigint | undefined;
+
+          if (uuid) {
+            // 1. Jonli rasmiy ovozlar sonini olish (v2 count)
+            try {
+              const countRes = await this.proxyManager.requestWithRetry(async (client) => {
+                return client.get(`https://new.openbudget.uz/api/v2/info/initiative/count/${uuid}`, {
+                  timeout: 9000,
+                });
+              });
+              if (countRes?.data && countRes.data.count !== undefined) {
+                officialVotes = Number(countRes.data.count) || 0;
+              }
+            } catch (cErr) {}
+
+            // 2. Loyiha ma'lumotlarini olish (v1 initiative)
+            try {
+              const res = await this.proxyManager.requestWithRetry(async (client) => {
+                return client.get(`https://new.openbudget.uz/api/v1/initiatives/${uuid}`, {
+                  timeout: 9000,
+                });
+              });
+              if (res?.data?.granted_amount) {
+                grantedAmount = BigInt(res.data.granted_amount);
+              }
+            } catch (iErr) {}
+
+            await this.prisma.botInstance.update({
+              where: { id: bot.id },
+              data: {
+                currentVotes: officialVotes,
+                ...(grantedAmount ? { grantedAmount } : {}),
+              },
+            });
+
+            // 3. To'liq rasmiy ovozlar ro'yxatini yuklash va keshga joylash (Auto-Approver uchun)
+            try {
+              const listRes = await this.fetchOfficialInitiativeVotesList(uuid, 0, 50000);
+              if (listRes.success && listRes.totalElements > 0) {
+                this.logger.log(`📋 [Full Official Registry] ${bot.mahallaName}: Jami ${listRes.totalElements} ta rasmiy ovoz ro'yxati xotiraga saqlandi.`);
+              }
+            } catch (lErr: any) {
+              this.logger.debug(`Full registry fetch attempt error: ${lErr.message}`);
+            }
+            
+            this.logger.log(`🔄 [Sync Bot Votes] ${bot.mahallaName}: OpenBudget rasmiy jonli ovozlari = ${officialVotes} ta`);
+          }
+
+          results.push({
+            botId: bot.id,
+            mahallaName: bot.mahallaName,
+            openBudgetVotes: officialVotes,
+          });
+        } catch (botSyncErr: any) {
+          this.logger.warn(`Bot #${bot.id} (${bot.mahallaName}) ovozlarini sinxronlashda xatolik: ${botSyncErr.message}`);
         }
       }
 
-      this.logger.log(`✅ [15-Min Live Vote Sync] ${updatedCount}/${activeBots.length} ta bot ovozlari muvaffaqiyatli yangilandi.`);
-      return { success: true, updatedCount, totalBots: activeBots.length };
+      this.logger.log(`✅ [15-Min Live Vote Sync] ${results.length}/${activeBots.length} ta bot ovozlari yangilandi.`);
+      return { success: true, updatedCount: results.length, results };
     } catch (e: any) {
       this.logger.error('Vote sync error:', e);
-      return { success: false, error: e.message };
+      return { success: false, updatedCount: 0, results: [] };
     }
   }
 
@@ -1343,6 +1381,208 @@ export class OpenBudgetService {
       return { success: true, initiatives: [] };
     } catch (err: any) {
       return { success: false, error: err.message };
+    }
+  }
+
+  // In-memory initiative token cache (initiativeUuid -> { token, expiresAt })
+  private initiativeTokenCache = new Map<string, { token: string; expiresAt: number }>();
+  private captchaSessionMap = new Map<string, { cookies: string; sessionKey: string }>();
+  private initiativeVotesListCache = new Map<string, { votes: any[]; totalElements: number; totalPages: number; fetchedAt: number }>();
+
+  private getAccessCaptchaHeader(t: number = 12): string {
+    const a = (top: number = 10, bot: number = 5) => Math.floor(Math.random() * (top - bot) + bot);
+    const raw = `s${a(-3) * t}e${a(2, 19) * t}k${a(10, 5) * t}r${a(10, 4) * t}e${a(10, 220)}t`;
+    return Buffer.from(raw).toString('base64');
+  }
+
+  /**
+   * 📋 OpenBudget Rasmiy Saytidan Ovozlar Ro'yxatini olish (50 000 ta limit bilan to'liq ro'yxat)
+   */
+  async fetchOfficialInitiativeVotesList(
+    initiativeUuid: string,
+    page: number = 0,
+    size: number = 50000,
+  ): Promise<{ success: boolean; totalElements: number; totalPages: number; page: number; content: any[]; error?: string }> {
+    try {
+      // 1. Agar xotirada 15 minutlik to'liq ro'yxat keshda bo'lsa, tezkor qaytarish
+      const cachedList = this.initiativeVotesListCache.get(initiativeUuid);
+      if (cachedList && Date.now() - cachedList.fetchedAt < 15 * 60 * 1000 && cachedList.votes.length > 0) {
+        return {
+          success: true,
+          totalElements: cachedList.totalElements,
+          totalPages: cachedList.totalPages,
+          page,
+          content: size >= 50000 ? cachedList.votes : cachedList.votes.slice(page * 15, (page + 1) * 15),
+        };
+      }
+
+      let initToken = '';
+      const cached = this.initiativeTokenCache.get(initiativeUuid);
+      if (cached && cached.expiresAt > Date.now()) {
+        initToken = cached.token;
+      }
+
+      // 2. Agar token bo'lmasa, avtomatik OCR Tesseract orqali 100% avtomatik yechish
+      if (!initToken) {
+        for (let attempt = 1; attempt <= 8; attempt++) {
+          try {
+            const cap = await this.getOfficialInitiativeCaptcha(initiativeUuid);
+            if (!cap.success || !cap.image || !cap.captchaKey) continue;
+
+            const solveRes = await this.captchaSolver.solve(cap.image);
+            if (solveRes.success && solveRes.answer !== undefined) {
+              const numAns = typeof solveRes.answer === 'number' ? solveRes.answer : parseInt(String(solveRes.answer), 10);
+              if (!isNaN(numAns)) {
+                const sub = await this.submitOfficialInitiativeCaptcha(initiativeUuid, cap.captchaKey, numAns);
+                if (sub.success && sub.token) {
+                  initToken = sub.token;
+                  this.logger.log(`🎉 [Auto-OCR Official List Token] Muvaffaqiyatli avtomatik yechildi: ${solveRes.expression} = ${solveRes.answer}`);
+                  break;
+                }
+              }
+            }
+          } catch (solveErr: any) {
+            this.logger.debug(`Auto-solver attempt #${attempt} error: ${solveErr.message}`);
+          }
+        }
+      }
+
+      if (!initToken) {
+        return { success: false, totalElements: 0, totalPages: 0, page, content: [], error: 'OpenBudget token olinmadi' };
+      }
+
+      // Step 3: Fetch votes with 50 000 limit to pull entire registry at once
+      const votesRes = await this.proxyManager.requestWithRetry(async (client) => {
+        return client.get(`https://new.openbudget.uz/api/v2/info/votes/${initToken}`, {
+          params: { page, size: 50000, limit: 50000 },
+          headers: {
+            'hl': 'uz_lat',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            'Origin': 'https://new.openbudget.uz',
+            'Referer': 'https://new.openbudget.uz/uz/initiative-budget/active-initiatives/55/' + initiativeUuid,
+          },
+          timeout: 15000,
+        });
+      });
+
+      if (votesRes?.data) {
+        const content = votesRes.data.content || [];
+        const totalElements = votesRes.data.totalElements || content.length;
+        const totalPages = votesRes.data.totalPages || 1;
+
+        // Ro'yxatni 15 minutlik xotiraga saqlash
+        this.initiativeVotesListCache.set(initiativeUuid, {
+          votes: content,
+          totalElements,
+          totalPages,
+          fetchedAt: Date.now(),
+        });
+
+        return {
+          success: true,
+          totalElements,
+          totalPages,
+          page,
+          content: size >= 50000 ? content : content.slice(page * 15, (page + 1) * 15),
+        };
+      }
+
+      return { success: false, totalElements: 0, totalPages: 0, page, content: [] };
+    } catch (err: any) {
+      this.logger.error(`fetchOfficialInitiativeVotesList error: ${err.message}`);
+      return { success: false, totalElements: 0, totalPages: 0, page, content: [], error: err.message };
+    }
+  }
+
+  /**
+   * 🖼 OpenBudget Captcha olish (Rasmiy ro'yxatni ochish uchun)
+   */
+  async getOfficialInitiativeCaptcha(initiativeUuid?: string): Promise<{ success: boolean; captchaKey?: string; image?: string; error?: string }> {
+    try {
+      const sessionKey = `official_cap_${Date.now()}_${Math.random()}`;
+      const captchaRes = await this.proxyManager.requestWithRetry(async (client) => {
+        return client.get('https://new.openbudget.uz/api/v2/vote/captcha-2', {
+          headers: {
+            'Access-Captcha': this.getAccessCaptchaHeader(),
+            'hl': 'uz_lat',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            'Origin': 'https://new.openbudget.uz',
+            'Referer': 'https://new.openbudget.uz/uz/initiative-budget/active-initiatives/55/' + (initiativeUuid || ''),
+          },
+          timeout: 8000,
+        });
+      }, sessionKey);
+
+      const cookies = captchaRes?.headers?.['set-cookie']
+        ? (Array.isArray(captchaRes.headers['set-cookie']) ? captchaRes.headers['set-cookie'].join('; ') : String(captchaRes.headers['set-cookie']))
+        : '';
+
+      if (captchaRes?.data?.image && captchaRes?.data?.captchaKey) {
+        const captchaKey = captchaRes.data.captchaKey;
+        this.captchaSessionMap.set(captchaKey, { cookies, sessionKey });
+
+        return {
+          success: true,
+          captchaKey,
+          image: captchaRes.data.image,
+        };
+      }
+      return { success: false, error: 'Captcha olinmadi' };
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  /**
+   * 🔓 OpenBudget Captcha Javobini Yuborish va Ovozlar Ro'yxati Tokenini Keshga Saqlash
+   */
+  async submitOfficialInitiativeCaptcha(
+    initiativeUuid: string,
+    captchaKey: string,
+    captchaResult: number,
+  ): Promise<{ success: boolean; token?: string; error?: string }> {
+    try {
+      const numAns = typeof captchaResult === 'number' ? captchaResult : parseInt(String(captchaResult), 10);
+      if (isNaN(numAns) || !Number.isFinite(numAns)) {
+        return { success: false, error: "Noto'g'ri captcha javobi (Raqam emas)" };
+      }
+
+      const sessionData = this.captchaSessionMap.get(captchaKey);
+      const sessionKey = sessionData?.sessionKey;
+      const cookies = sessionData?.cookies;
+
+      const tokenRes = await this.proxyManager.requestWithRetry(async (client) => {
+        return client.post('https://new.openbudget.uz/api/v2/info/get-initiative-token', {
+          captchaKey,
+          captchaResult: numAns,
+          initiativeId: initiativeUuid,
+        }, {
+          headers: {
+            'Content-Type': 'application/json',
+            'hl': 'uz_lat',
+            'Access-Captcha': this.getAccessCaptchaHeader(),
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            'Origin': 'https://new.openbudget.uz',
+            'Referer': 'https://new.openbudget.uz/uz/initiative-budget/active-initiatives/55/' + initiativeUuid,
+            ...(cookies ? { Cookie: cookies } : {}),
+          },
+          timeout: 9000,
+        });
+      }, sessionKey);
+
+      if (tokenRes?.data?.token) {
+        const token = tokenRes.data.token;
+        this.initiativeTokenCache.set(initiativeUuid, {
+          token,
+          expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour cache
+        });
+        if (sessionKey) this.proxyManager.releaseSession(sessionKey);
+        this.captchaSessionMap.delete(captchaKey);
+        return { success: true, token };
+      }
+      return { success: false, error: 'Token olinmadi' };
+    } catch (e: any) {
+      return { success: false, error: e.response?.data?.message || e.message || 'Noto\'g\'ri captcha' };
     }
   }
 }
