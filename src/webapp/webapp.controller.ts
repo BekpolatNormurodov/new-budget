@@ -223,8 +223,11 @@ export class WebAppController {
     let getStatusCode = 0;
     let rateLimitMatch: RegExpMatchArray | null = null;
 
-    const sessionKey = (phoneQuery || '').replace(/[^0-9]/g, '') || tgIdQuery || 'default';
+    const rawPhone = (phoneQuery || '').replace(/[^0-9]/g, '');
+    const clean9Phone = rawPhone.slice(-9);
+    const sessionKey = clean9Phone || tgIdQuery || 'default';
     const proxy = this.proxyManager.getStickyProxy(sessionKey);
+    this.logger.log(`🌐 [GET captcha-page] Sticky Proxy: ${proxy?.host}:${proxy?.port} (user: ${proxy?.auth?.username}) | SessionKey: ${sessionKey}`);
 
     for (let attempt = 1; attempt <= MAX_PAGE_ATTEMPTS; attempt++) {
       const args: string[] = ['-s', '-i', '--connect-timeout', '5', '--max-time', '10'];
@@ -796,10 +799,12 @@ export class WebAppController {
     @Res() res?: any,
   ) {
     const logPhone = String(Array.isArray(body?.phoneNumber) ? (body.phoneNumber[body.phoneNumber.length - 1] || body.phoneNumber[0] || '') : (body?.phoneNumber || '')).replace(/[^0-9]/g, '');
-    this.logger.log(`📥 [mvc/captcha POST] So'rov qabul qilindi. Phone: +${logPhone}`);
+    const clean9 = logPhone.slice(-9);
+    this.logger.log(`📥 [mvc/captcha POST] So'rov qabul qilindi. Phone: +${clean9}`);
 
-    const sessionKey = logPhone || 'default';
+    const sessionKey = clean9 || 'default';
     const proxy = this.proxyManager.getStickyProxy(sessionKey);
+    this.logger.log(`🌐 [mvc/captcha POST] Sticky Proxy: ${proxy?.host}:${proxy?.port} (user: ${proxy?.auth?.username}) | SessionKey: ${sessionKey}`);
     const args: string[] = ['-s', '-i', '--connect-timeout', '5', '--max-time', '12', '-X', 'POST'];
 
     if (proxy) {
@@ -1435,8 +1440,9 @@ export class WebAppController {
     const clean12 = rawDigits.length >= 9 ? (rawDigits.length === 9 ? `998${rawDigits}` : (rawDigits.startsWith('998') ? rawDigits : `998${rawDigits.slice(-9)}`)) : '';
     const clean9 = clean12.slice(-9);
 
-    const sessionKey = clean12 || logPhone2 || 'default';
+    const sessionKey = clean9 || logPhone2.slice(-9) || 'default';
     const proxy = this.proxyManager.getStickyProxy(sessionKey);
+    this.logger.log(`🌐 [mvc/verify POST] Sticky Proxy: ${proxy?.host}:${proxy?.port} (user: ${proxy?.auth?.username}) | SessionKey: ${sessionKey}`);
     const args: string[] = ['-s', '-i', '--connect-timeout', '5', '--max-time', '12', '-X', 'POST'];
 
     if (proxy) {
