@@ -1827,12 +1827,10 @@ export class OpenBudgetService {
         cachedCount++;
 
         // AQLLI TO'XTASH: ro'yxat eng yangisidan eskisiga tartiblangan (yangi
-        // ovoz — birinchi qatorda). Amalda faqat SO'NGGI OVOZLAR kerak (qidiruv,
-        // tekshiruv) — undan eskisini yuklashning ma'nosi yo'q. DIQQAT: ovozlar
-        // real vaqtda juda tez kelayotgani uchun (4 soatlik chegara sinovda ~78
-        // sahifaga teng chiqdi — deyarli butun ro'yxat), chegara 1 soatga
-        // qisqartirildi — bu ancha kamroq sahifa va IP-blok devoriga kamroq
-        // uriladi, tezroq tugaydi.
+        // ovoz — birinchi qatorda). Ovozlar tasdiqlanishi o'rtacha ~2 soat
+        // davom etadi, shuning uchun tekshiruv/qidiruv uchun kamida shu
+        // muddatdan ortiqroq (3 soat) qamrov kerak — bundan qisqaroq chegara
+        // hali tasdiqlanmagan ovozlarni ko'rsatmay qoldirishi mumkin edi.
         const content = result.content || [];
         const oldestInPage = content[content.length - 1];
         if (oldestInPage?.voteDate) {
@@ -1840,9 +1838,9 @@ export class OpenBudgetService {
             ? oldestInPage.voteDate
             : String(oldestInPage.voteDate).replace(' ', 'T') + '+05:00';
           const oldestTs = new Date(formattedDateStr).getTime();
-          const ONE_HOUR_MS = 60 * 60 * 1000;
-          if (!isNaN(oldestTs) && Date.now() - oldestTs > ONE_HOUR_MS) {
-            this.logger.log(`⏹ [Prewarm] Sahifa ${p}dagi eng eski ovoz 1 soatdan eski (${oldestInPage.voteDate}) — bu yerda to'xtatilmoqda (keyingisi kerak emas).`);
+          const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+          if (!isNaN(oldestTs) && Date.now() - oldestTs > THREE_HOURS_MS) {
+            this.logger.log(`⏹ [Prewarm] Sahifa ${p}dagi eng eski ovoz 3 soatdan eski (${oldestInPage.voteDate}) — bu yerda to'xtatilmoqda (keyingisi kerak emas).`);
             break;
           }
         }
