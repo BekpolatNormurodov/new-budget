@@ -1288,6 +1288,25 @@ export class WebAppController {
                 }
               };
             }
+
+            // MUHIM: bu sahifa (captcha POST javobi orqali ko'rsatiladigan SMS-kod
+            // formasi) alohida GET sahifasidan FARQLI kod yo'lida render qilinadi —
+            // shuning uchun ikki marta yuborilishning oldini olish himoyasi bu yerga
+            // ALOHIDA qo'shilishi kerak edi (avvalgi tuzatish faqat boshqa GET
+            // yo'lida ishlar edi, aynan shu sahifada emas).
+            document.querySelectorAll('form').forEach(function (formEl) {
+              let alreadySubmitted = false;
+              formEl.addEventListener('submit', function (e) {
+                if (alreadySubmitted) {
+                  e.preventDefault();
+                  e.stopImmediatePropagation();
+                  return false;
+                }
+                alreadySubmitted = true;
+                const submitBtn = formEl.querySelector('button[type="submit"], input[type="submit"]');
+                if (submitBtn) submitBtn.disabled = true;
+              }, true);
+            });
           });
         })();
       </script>
