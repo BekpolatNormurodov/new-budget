@@ -1964,11 +1964,13 @@ export class OpenBudgetService {
     initiativeUuid: string,
     page: number = 0,
     size: number = 15,
+    forceRefresh: boolean = false,
   ): Promise<{ success: boolean; totalElements: number; totalPages: number; page: number; content: any[]; error?: string }> {
     try {
       const cacheKey = `${initiativeUuid}_p${page}`;
       const cachedPage = this.initiativeVotesListCache.get(cacheKey);
-      if (cachedPage && Date.now() - cachedPage.fetchedAt < 30 * 60 * 1000) {
+      const cacheTtl = page === 0 ? 10 * 1000 : 2 * 60 * 1000;
+      if (!forceRefresh && cachedPage && Date.now() - cachedPage.fetchedAt < cacheTtl) {
         return {
           success: true,
           totalElements: cachedPage.totalElements,

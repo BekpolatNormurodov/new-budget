@@ -19,15 +19,26 @@ export class VoteAutoApproverService {
   ) {}
 
   /**
-   * ⚡ Yangi (hozirgina "bo'sh javob / noaniq" holatda yaratilgan) bitta ovozni
-   * DARHOL, keyingi 15-daqiqalik siklni kutmasdan tekshirish. MUHIM: ovoz
-   * yuborilgan zahoti reyestrda allaqachon ko'rinib qolgan holatlar bo'lishi
-   * mumkin — bunday holatda foydalanuvchi pulni 15 daqiqagacha emas, bir necha
-   * soniyada olishi kerak. Agar hali topilmasa, oddiy 15-daqiqalik sikl baribir
-   * davom etadi (bu yerda faqat TEZLASHTIRISH, o'rniga bosuvchi emas).
+   * ⚡ Yangi ovozni ZUDLIK BILAN (jonli rasmiy reyestr bo'yicha) tekshirish va tasdiqlash
    */
+  async verifyVoteImmediately(voteId: number): Promise<{ approved: boolean; rejected: boolean; reason?: string }> {
+    try {
+      const vote = await this.prisma.vote.findUnique({
+        where: { id: voteId },
+        include: { user: true, botInstance: true },
+      });
+      if (!vote) return { approved: false, rejected: false, reason: 'Ovoz topilmadi' };
+      if (vote.status === 'VERIFIED') return { approved: true, rejected: false };
+
+      return await this.processVote(vote, true);
+    } catch (e: any) {
+      this.logger.error(`verifyVoteImmediately error: ${e.message}`);
+      return { approved: false, rejected: false, reason: e.message };
+    }
+  }
+
   async checkVoteNow(voteId: number): Promise<void> {
-    if (!this.sendMessageCallback) return; // hali bot ishga tushmagan bo'lsa, oddiy siklga qoldiramiz
+    if (!this.sendMessageCallback) return;
     try {
       const vote = await this.prisma.vote.findUnique({
         where: { id: voteId },
@@ -158,7 +169,7 @@ export class VoteAutoApproverService {
    * bo'lsa tasdiqlash/rad etish va foydalanuvchini xabardor qilish. Bu ham
    * 15-daqiqalik davriy siklda, ham checkVoteNow() orqali darhol chaqiriladi.
    */
-  private async processVote(vote: any): Promise<void> {
+  private async processVote(vote: any, forceRegistryRefresh = false): Promise<{ approved: boolean; rejected: boolean; reason?: string }> {
     let shouldApprove = false;
     let shouldReject = false;
     let rejectReason = '';
@@ -217,7 +228,7 @@ export class VoteAutoApproverService {
 
         let matchedInRegistry: any = null;
         for (let p = 0; p < 8 && !matchedInRegistry; p++) {
-          const offVotes = await this.openBudgetService.fetchOfficialInitiativeVotesList(botRecord.initiativeUuid, p);
+          const offVotes = await this.openBudgetService.fetchOfficialInitiativeVotesList(botRecord.initiativeUuid, p, 15, forceRegistryRefresh && p === 0);
           if (!offVotes.success || !Array.isArray(offVotes.content) || offVotes.content.length === 0) break;
 
           matchedInRegistry = offVotes.content.find((item: any) => {
@@ -273,28 +284,22 @@ export class VoteAutoApproverService {
         `Siz boshqa yaqinlaringiz raqamidan ushbu mahalla foydasiga ovoz berib pul ishlashingiz mumkin!`;
 
       await this.sendMessageCallback?.(vote.botInstanceId, vote.user.telegramId, rejectMsg).catch(() => {});
-      return;
+      return { approved: false, rejected: true, reason: rejectReason };
     }
 
     // 3. TASDIQLASH VA HISOBGA PUL O'TKAZISH
     if (shouldApprove) {
-      // Tasdiqlash sababini bazaga ham yozib qo'yamiz — docker konteyner qayta
-      // tiklanganda (deploy) console loglari yo'qolib qoladi, lekin bu audit
-      // izi saqlanib qoladi va keyinchalik "nega tasdiqlandi?" deb tekshirish
-      // mumkin bo'ladi.
       await this.prisma.vote.update({ where: { id: vote.id }, data: { errorMessage: `[AUTO-APPROVE ${new Date().toISOString()}] ${checkReason}` } }).catch(() => {});
 
       const creditRes = await this.walletService.verifyVoteAndCredit(vote.id);
       if (!creditRes.alreadyVerified) {
         this.logger.log(`✅ [Auto-Approver] Ovoz #${vote.id} (+${vote.phone}) tasdiqlandi! Sabab: ${checkReason}`);
-
-        // Admin panelidan qo'lda tasdiqlashda ishlatiladigan xabar bilan BIR XIL
-        // matn — foydalanuvchi qaysi yo'l bilan tasdiqlanishidan qat'i nazar
-        // (avtomatik reyestr-moslik yoki admin qo'lda) bir xil xabarni ko'rishi kerak.
         const msg = BOT_MESSAGES.VOTE_VERIFIED_ALERT(vote.phone, creditRes.rewardAmount, creditRes.user.balance);
-
         await this.sendMessageCallback?.(vote.botInstanceId, vote.user.telegramId, msg).catch(() => {});
       }
+      return { approved: true, rejected: false };
     }
+
+    return { approved: false, rejected: false };
   }
 }
