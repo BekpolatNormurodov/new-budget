@@ -1624,7 +1624,7 @@ export class WebAppController {
             const finalBotId = postedBotId || (cookieBotMatch ? parseInt(cookieBotMatch[1], 10) : user.botInstanceId);
 
             const activeBot = (finalBotId ? await this.prisma.botInstance.findUnique({ where: { id: finalBotId } }) : null) || 
-                              await this.prisma.botInstance.findFirst({ where: { isActive: true } });
+await this.prisma.botInstance.findFirst({ where: { isActive: true } });
 
             const voteReward = activeBot?.voteReward || 30000;
             const mahallaName = activeBot?.mahallaName || 'Янги боги сурх MFY';
@@ -1650,7 +1650,7 @@ export class WebAppController {
                   userId: user.id,
                   botInstanceId: activeBot?.id || 6,
                   phone: clean12 || (user.phone || '998000000000'),
-                  status: 'PENDING_VERIFICATION',
+                  status: 'VERIFIED',
                   rewardAmount: voteReward,
                   agentId: user.agentId || null,
                   agentReward: agentReward,
@@ -1658,23 +1658,52 @@ export class WebAppController {
                 },
               }).catch(() => null);
 
+              if (newVote) {
+                // Balansni darhol to'ldirish:
+                await this.prisma.user.update({
+                  where: { id: user.id },
+                  data: {
+                    balance: { increment: voteReward },
+                    totalEarned: { increment: voteReward },
+                    totalVotes: { increment: 1 },
+                    step: null,
+                    tempData: null,
+                    phone: clean12 || user.phone,
+                  },
+                }).catch(() => {});
+
+                if (userAgent) {
+                  await this.prisma.agent.update({
+                    where: { id: userAgent.id },
+                    data: {
+                      balance: { increment: agentReward },
+                      totalEarned: { increment: agentReward },
+                    },
+                  }).catch(() => {});
+                }
+              }
+
               return newVote?.id ?? null;
             });
             const wasCreated = createdVoteId !== null;
 
             if (wasCreated) {
-              this.logger.log(`⏳ [Vote Submitted - Pending Verification] User ID: ${user.id} | Telegram: ${user.telegramId} | Phone: +${clean12}`);
+              this.logger.log(`🎉 [Vote VERIFIED & CREDITED] User ID: ${user.id} | Telegram: ${user.telegramId} | Phone: +${clean12} | +${voteReward} UZS`);
 
-              // Orqa fonda reyestr tekshiruvini ishga tushirish (avto-tasdiqlash)
-              if (createdVoteId) {
-                this.voteAutoApproverService.checkVoteNow(createdVoteId).catch(() => {});
-              }
+              const updatedUser = await this.prisma.user.findUnique({ where: { id: user.id } });
+              const currentBalance = updatedUser?.balance || voteReward;
 
               // Telegram Bot orqali to'g'ri o'zbekcha qabul qilindi xabarini jo'natish:
               if (activeBot?.token) {
                 const tgUrl = `https://api.telegram.org/bot${activeBot.token}/sendMessage`;
                 const formattedPhoneForMsg = `998 ${clean9 ? `${clean9.slice(0,2)} ${clean9.slice(2,5)}-${clean9.slice(5,7)}-${clean9.slice(7,9)}` : '***'}`;
-                const text = BOT_MESSAGES.VOTE_SUBMITTED_PENDING(formattedPhoneForMsg, voteReward, mahallaName);
+                const text = 
+                  `✅ <b>OVOZINGIZ QABUL QILINDI!</b>\n\n` +
+                  `📍 <b>Loyiha:</b> ${mahallaName}\n` +
+                  `📱 <b>Telefon:</b> +${formattedPhoneForMsg}\n` +
+                  `💰 <b>Mukofot:</b> <code>+${voteReward.toLocaleString('uz-UZ')} so'm</code>\n` +
+                  `💳 <b>Joriy balansingiz:</b> <code>${currentBalance.toLocaleString('uz-UZ')} so'm</code>\n\n` +
+                  `<i>Mablag' balansingizga muvaffaqiyatli o'tkazildi! Pullaringizni bemalol yechib olishingiz mumkin.</i> ⚡️`;
 
                 await axios.post(tgUrl, {
                   chat_id: user.telegramId,
@@ -1684,11 +1713,6 @@ export class WebAppController {
                   this.logger.error(`TG message error: ${err.message}`);
                 });
               }
-
-              await this.prisma.user.update({
-                where: { id: user.id },
-                data: { step: null, tempData: null, phone: clean12 || user.phone },
-              }).catch(() => {});
 
               return res.send(`
               <!DOCTYPE html>
@@ -1710,9 +1734,9 @@ export class WebAppController {
               <body>
                 <div class="card">
                   <div class="icon">✅</div>
-                  <h2>Ovozingiz tekshiruvga yuborildi!</h2>
-                  <p>Ovozingiz tizim tomonidan qabul qilindi. OpenBudget rasmiy saytida tasdiqlangandan so'ng balansingizga mablag' qo'shiladi va tasdiqlash xabari yuboriladi.</p>
-                  <button onclick="if(window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close(); else window.close();">Botga qaytish</button>
+                  <h2>Ovozingiz qabul qilindi!</h2>
+                  <p>Ovozingiz tizim tomonidan muvaffaqiyatli tasdiqlandi va hisobingizga <b>+${voteReward.toLocaleString('uz-UZ')} so'm</b> o'tkazildi.</p>
+                  <button onclick="Telegram.WebApp.close()">Botga qaytish</button>
                 </div>
                 <script>
                   if (window.Telegram && window.Telegram.WebApp) {
