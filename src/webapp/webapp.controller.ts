@@ -822,7 +822,7 @@ export class WebAppController {
         // sabab (limit tugagani, raqam bloklangani va h.k.) aniq ko'rinsin.
         const errorAlertMatch = stdout.match(/<div class="error-alert"[^>]*>([\s\S]*?)<\/div>/i);
         const openBudgetErrorText = errorAlertMatch ? errorAlertMatch[1].replace(/<[^>]+>/g, '').trim() : '';
-        const displayErrorText = openBudgetErrorText || `OpenBudget rasmiy tizimi captcha javobini rad etdi (HTTP ${captchaStatusCode}).`;
+        const displayErrorText = openBudgetErrorText || `Captcha tasdiqlanmadi. Iltimos, qaytadan urinib ko'ring.`;
 
         // Xato turini aniqlab, har biriga mos harakat/xabar berish uchun
         // klassifikatsiya qilinadi — umumiy "captcha xato" o'rniga aniq sabab.
