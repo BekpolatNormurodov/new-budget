@@ -202,8 +202,20 @@ export class VoteAutoApproverService {
     this.logger.log(`🕒 [Auto-Approver] Ovozlar va rasmiy hisoblar har 15 minutda bir marta tekshiriladi.`);
 
     // 🔄 Har 30 daqiqada, admin panel tez ochilishi uchun OpenBudget rasmiy
-    // ro'yxatining BARCHA sahifalarini fon rejimida oldindan keshlab qo'yish
+    // ro'yxatining BARCHA sahifalarini fon rejimida oldindan keshlab qo'yish.
+    // MUHIM: bitta to'liq sikl (barcha ~218 sahifa, IP-blok tufayli bir necha marta
+    // brauzer qayta ishga tushirilib) 30 daqiqadan ko'proq davom etishi mumkin —
+    // avval bunday holatda YANGI sikl eskisi ustidan boshlanib, uni to'xtatib
+    // qo'yardi (hech qachon to'liq tugamas edi). Endi qayta kirishga qarshi
+    // himoya (re-entrancy guard) bilan, oldingi sikl tugamaguncha yangisi
+    // boshlanmaydi.
+    let prewarmRunning = false;
     const runPrewarm = async () => {
+      if (prewarmRunning) {
+        this.logger.log(`⏭ [Prewarm] Oldingi sikl hali tugamagan, bu safar o'tkazib yuborilmoqda.`);
+        return;
+      }
+      prewarmRunning = true;
       try {
         const activeBots = await this.prisma.botInstance.findMany({
           where: { isActive: true, initiativeUuid: { not: null } },
@@ -217,6 +229,8 @@ export class VoteAutoApproverService {
         }
       } catch (err: any) {
         this.logger.error(`Prewarm sikli xatoligi: ${err.message}`);
+      } finally {
+        prewarmRunning = false;
       }
     };
     setTimeout(() => runPrewarm().catch(() => {}), 30000);
