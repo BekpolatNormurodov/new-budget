@@ -44,3 +44,56 @@ export const formatPhone = (phone?: string | null): string => {
   }
   return clean ? `+${clean}` : '-';
 };
+
+// Sana va Vaqtni har doim O'zbekiston/Toshkent vaqti bo'yicha (UTC+5) to'g'ri ko'rsatish
+export const formatTashkentDateTime = (value?: string | number | Date | null): string => {
+  if (!value) return '-';
+  let d: Date;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed.includes('Z') && !trimmed.includes('+') && trimmed.includes('T')) {
+      d = new Date(`${trimmed}Z`);
+    } else if (!trimmed.includes('Z') && !trimmed.includes('+') && trimmed.includes(' ')) {
+      d = new Date(`${trimmed.replace(' ', 'T')}Z`);
+    } else {
+      d = new Date(trimmed);
+    }
+  } else {
+    d = value instanceof Date ? value : new Date(value);
+  }
+  if (isNaN(d.getTime())) return String(value);
+
+  return new Intl.DateTimeFormat('uz-UZ', {
+    timeZone: TASHKENT_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(d);
+};
+
+export const formatTashkentTime = (value?: string | number | Date | null): string => {
+  if (!value) return '-';
+  let d: Date;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed.includes('Z') && !trimmed.includes('+') && trimmed.includes('T')) {
+      d = new Date(`${trimmed}Z`);
+    } else if (!trimmed.includes('Z') && !trimmed.includes('+') && trimmed.includes(' ')) {
+      d = new Date(`${trimmed.replace(' ', 'T')}Z`);
+    } else {
+      d = new Date(trimmed);
+    }
+  } else {
+    d = value instanceof Date ? value : new Date(value);
+  }
+  if (isNaN(d.getTime())) return '-';
+
+  return new Intl.DateTimeFormat('uz-UZ', {
+    timeZone: TASHKENT_TZ,
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(d);
+};

@@ -9,7 +9,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { VoteItem, BotInstanceItem } from '../types';
-import { formatSum, toTashkentDateStr, tashkentToday, tashkentYesterday, formatPhone } from '../utils/format';
+import { formatSum, toTashkentDateStr, tashkentToday, tashkentYesterday, formatPhone, formatTashkentDateTime, formatTashkentTime } from '../utils/format';
 import { Pagination } from './Pagination';
 import { exportToCsv } from '../utils/exportToCsv';
 import { SmartFilterBar } from './SmartFilterBar';
@@ -269,7 +269,7 @@ export const VotesView: React.FC<VotesViewProps> = ({
                     <Building2 className="w-3 h-3 text-slate-400" />
                     <strong className="text-slate-700 dark:text-slate-300">{vote.botInstance?.mahallaName || 'Bosh Mahalla'}</strong>
                   </span>
-                  <span>{new Date(vote.createdAt).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span>{formatTashkentTime(vote.createdAt)}</span>
                 </div>
 
                 {/* Action button if pending */}
@@ -341,7 +341,7 @@ export const VotesView: React.FC<VotesViewProps> = ({
                     </td>
 
                     <td className="p-3.5 text-slate-500 dark:text-slate-400 text-[11px]">
-                      {new Date(vote.createdAt).toLocaleString('uz-UZ')}
+                      {formatTashkentDateTime(vote.createdAt)}
                     </td>
 
                     <td className="p-3.5">

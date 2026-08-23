@@ -10,7 +10,7 @@ import {
   FileCheck,
 } from 'lucide-react';
 import { WithdrawalItem, BotInstanceItem } from '../types';
-import { formatSum, toTashkentDateStr, tashkentToday, tashkentYesterday } from '../utils/format';
+import { formatSum, toTashkentDateStr, tashkentToday, tashkentYesterday, formatTashkentDateTime } from '../utils/format';
 import { Pagination } from './Pagination';
 import { exportToCsv } from '../utils/exportToCsv';
 import { ReceiptViewerModal } from './ReceiptViewerModal';
@@ -295,7 +295,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
 
                     {/* Time & Receipt Link */}
                     <div className="flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 pt-1 border-t border-slate-200 dark:border-slate-800/60">
-                      <span>{new Date(w.createdAt).toLocaleString('uz-UZ')}</span>
+                      <span>{formatTashkentDateTime(w.createdAt)}</span>
                       {w.receiptUrl && (
                         <button
                           onClick={() => setViewingReceipt(w)}
@@ -413,7 +413,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({
                       </td>
 
                       <td className="p-3.5 text-slate-500 dark:text-slate-400 text-[11px]">
-                        {new Date(w.createdAt).toLocaleString('uz-UZ')}
+                        {formatTashkentDateTime(w.createdAt)}
                       </td>
 
                       <td className="p-3.5">

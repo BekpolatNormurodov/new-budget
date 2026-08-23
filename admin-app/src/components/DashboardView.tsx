@@ -21,7 +21,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { DashboardStats, BotInstanceItem, VoteItem, WithdrawalItem } from '../types';
-import { formatSum } from '../utils/format';
+import { formatSum, formatTashkentTime } from '../utils/format';
 import { BotVotesModal } from './BotVotesModal';
 
 interface DashboardViewProps {
@@ -419,7 +419,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <div>
                     <p className="font-semibold text-slate-900 dark:text-white">+{vote.phone}</p>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      {vote.user?.firstName || vote.user?.username || 'Foydalanuvchi'} • {new Date(vote.createdAt).toLocaleTimeString('uz-UZ')}
+                      {vote.user?.firstName || vote.user?.username || 'Foydalanuvchi'} • {formatTashkentTime(vote.createdAt)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">

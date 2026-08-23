@@ -228,14 +228,14 @@ export class VoteAutoApproverService {
       try {
         const cleanPhone = vote.phone.replace(/\D/g, '');
         const clean9 = cleanPhone.slice(-9);
-        const operatorCode = clean9.slice(0, 2); // e.g. "95", "90", "99"
         const suffix2 = clean9.slice(-2); // e.g. "27"
         const suffix4 = clean9.slice(-4); // e.g. "2827"
+        const visible6 = clean9.length >= 9 ? clean9.slice(3) : suffix4; // e.g. "642827" for +998 95 064 28 27
         const voteTs = new Date(vote.createdAt).getTime();
-        const TWO_MINUTES_MS = 2 * 60 * 1000; // strictly [-2 minut : +2 minut]
+        const THIRTY_MINUTES_MS = 30 * 60 * 1000; // [-30 minut : +30 minut] Toshkent vaqti oynasi
 
         let matchedInRegistry: any = null;
-        for (let p = 0; p < 8 && !matchedInRegistry; p++) {
+        for (let p = 0; p < 10 && !matchedInRegistry; p++) {
           const offVotes = await this.openBudgetService.fetchOfficialInitiativeVotesList(botRecord.initiativeUuid, p, 15, forceRegistryRefresh && p === 0);
           if (!offVotes.success || !Array.isArray(offVotes.content) || offVotes.content.length === 0) break;
 
@@ -244,24 +244,20 @@ export class VoteAutoApproverService {
             const itemDigits = rawItemPhone.replace(/\D/g, '');
             if (!itemDigits) return false;
 
-            // 1) Suffix tekshiruvi (kamida oxirgi 2 ta raqam mos bo'lishi shart)
-            const isSuffixMatch = itemDigits.endsWith(suffix2);
-            if (!isSuffixMatch) return false;
+            // 1) Raqam mosligi: OpenBudget formati **-*64-28-27 bo'lib, oxirgi 6 yoki 4 ta raqami mos keladi
+            const isDigitMatch = (itemDigits === visible6) || itemDigits.endsWith(suffix4) || itemDigits.endsWith(suffix2);
+            if (!isDigitMatch) return false;
 
-            // 2) Operator kodi tekshiruvi (masalan "95", "90", "99")
-            const isOperatorMatch = rawItemPhone.includes(operatorCode) || itemDigits.includes(operatorCode);
-            if (!isOperatorMatch) return false;
-
-            // 3) Aniq vaqt tekshiruvi: [-2 daqiqa : +2 daqiqa] oralig'ida
+            // 2) Aniq vaqt tekshiruvi: Toshkent vaqti bo'yicha [-30 daqiqa : +30 daqiqa] oralig'ida
             if (item.voteDate) {
-              const formattedDateStr = item.voteDate.includes('+')
+              const formattedDateStr = String(item.voteDate).includes('+')
                 ? item.voteDate
-                : item.voteDate.replace(' ', 'T') + '+05:00';
+                : String(item.voteDate).replace(' ', 'T') + '+05:00';
               const itemTs = new Date(formattedDateStr).getTime();
               const diffMs = Math.abs(voteTs - itemTs);
-              return !isNaN(itemTs) && diffMs <= TWO_MINUTES_MS;
+              return !isNaN(itemTs) && diffMs <= THIRTY_MINUTES_MS;
             }
-            return false;
+            return isDigitMatch;
           }) || null;
 
           if (offVotes.totalPages && p >= offVotes.totalPages - 1) break;
@@ -269,7 +265,7 @@ export class VoteAutoApproverService {
 
         if (matchedInRegistry) {
           shouldApprove = true;
-          checkReason = `[OpenBudget Rasmiy Reyestridan tasdiqlandi (Operator ${operatorCode} + oxiri ${suffix2} + [-2m:+2m] vaqt mosligi): ${matchedInRegistry.phoneNumber} (${matchedInRegistry.voteDate})]`;
+          checkReason = `[OpenBudget Rasmiy Reyestridan tasdiqlandi (Raqam ${matchedInRegistry.phoneNumber}, Vaqt: ${matchedInRegistry.voteDate}) UTC+5]`;
         }
       } catch (regErr: any) {
         this.logger.debug(`Registry match error: ${regErr.message}`);
