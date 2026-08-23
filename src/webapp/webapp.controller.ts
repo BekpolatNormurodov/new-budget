@@ -791,7 +791,8 @@ export class WebAppController {
     const logPhone = String(Array.isArray(body?.phoneNumber) ? (body.phoneNumber[body.phoneNumber.length - 1] || body.phoneNumber[0] || '') : (body?.phoneNumber || '')).replace(/[^0-9]/g, '');
     this.logger.log(`📥 [mvc/captcha POST] So'rov qabul qilindi. Phone: +${logPhone}`);
 
-    const proxy = this.proxyManager.getNextProxy();
+    const sessionKey = logPhone || 'default';
+    const proxy = this.proxyManager.getStickyProxy(sessionKey);
     const args: string[] = ['-s', '-i', '--connect-timeout', '5', '--max-time', '12', '-X', 'POST'];
 
     if (proxy) {
@@ -799,10 +800,17 @@ export class WebAppController {
       args.push('-x', `http://${auth}${proxy.host}:${proxy.port}`);
     }
 
-    if (clientCookies) {
-      args.push('-H', `Cookie: ${clientCookies}`);
+    const obCookies = (clientCookies || '')
+      .split(';')
+      .map((c) => c.trim())
+      .filter((c) => c.startsWith('route=') || c.startsWith('OB-SESSION=') || c.startsWith('JSESSIONID='))
+      .join('; ');
+
+    if (obCookies) {
+      args.push('-H', `Cookie: ${obCookies}`);
     }
 
+    args.push('-H', 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
     args.push('-H', 'User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1');
     args.push('-H', 'Content-Type: application/x-www-form-urlencoded');
     args.push('-H', 'Origin: https://new.openbudget.uz');
@@ -1411,23 +1419,6 @@ export class WebAppController {
     }
     if (logPhone2 && otpVal) this.recentVerifyAttempts.set(dedupeKey, nowTs);
 
-    const proxy = this.proxyManager.getNextProxy();
-    const args: string[] = ['-s', '-i', '--connect-timeout', '5', '--max-time', '12', '-X', 'POST'];
-
-    if (proxy) {
-      const auth = proxy.auth ? `${proxy.auth.username}:${proxy.auth.password}@` : '';
-      args.push('-x', `http://${auth}${proxy.host}:${proxy.port}`);
-    }
-
-    if (clientCookies) {
-      args.push('-H', `Cookie: ${clientCookies}`);
-    }
-
-    args.push('-H', 'User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1');
-    args.push('-H', 'Content-Type: application/x-www-form-urlencoded');
-    args.push('-H', 'Origin: https://new.openbudget.uz');
-    args.push('-H', 'Referer: https://new.openbudget.uz/api/v2/vote/mvc/captcha');
-
     const cookiePhoneMatch = (clientCookies || '').match(/VOTE_PHONE=([0-9]+)/);
     const rawDigits = String(
       Array.isArray(body?.phoneNumber)
@@ -1436,6 +1427,31 @@ export class WebAppController {
     ).replace(/[^0-9]/g, '');
     const clean12 = rawDigits.length >= 9 ? (rawDigits.length === 9 ? `998${rawDigits}` : (rawDigits.startsWith('998') ? rawDigits : `998${rawDigits.slice(-9)}`)) : '';
     const clean9 = clean12.slice(-9);
+
+    const sessionKey = clean12 || logPhone2 || 'default';
+    const proxy = this.proxyManager.getStickyProxy(sessionKey);
+    const args: string[] = ['-s', '-i', '--connect-timeout', '5', '--max-time', '12', '-X', 'POST'];
+
+    if (proxy) {
+      const auth = proxy.auth ? `${proxy.auth.username}:${proxy.auth.password}@` : '';
+      args.push('-x', `http://${auth}${proxy.host}:${proxy.port}`);
+    }
+
+    const obCookies = (clientCookies || '')
+      .split(';')
+      .map((c) => c.trim())
+      .filter((c) => c.startsWith('route=') || c.startsWith('OB-SESSION=') || c.startsWith('JSESSIONID='))
+      .join('; ');
+
+    if (obCookies) {
+      args.push('-H', `Cookie: ${obCookies}`);
+    }
+
+    args.push('-H', 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+    args.push('-H', 'User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1');
+    args.push('-H', 'Content-Type: application/x-www-form-urlencoded');
+    args.push('-H', 'Origin: https://new.openbudget.uz');
+    args.push('-H', 'Referer: https://new.openbudget.uz/api/v2/vote/mvc/captcha');
 
     const grToken = String(Array.isArray(body?.grToken) ? body.grToken[0] : (body?.grToken ?? '')).trim();
 
