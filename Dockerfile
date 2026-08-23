@@ -25,7 +25,11 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Install Tesseract, OpenSSL, curl & Graphics libraries for CAPTCHA OCR & Ultra-Fast SOCKS5 Proxying
-RUN apk add --no-cache tesseract-ocr vips openssl libc6-compat curl
+# Chromium — OpenBudget WAF/anti-bot himoyasidan o'tish uchun headless brauzer (Puppeteer)
+RUN apk add --no-cache tesseract-ocr vips openssl libc6-compat curl \
+    chromium nss freetype harfbuzz ca-certificates ttf-freefont
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 COPY package*.json ./
 COPY prisma ./prisma/
