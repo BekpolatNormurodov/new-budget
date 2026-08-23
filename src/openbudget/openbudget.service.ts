@@ -1754,8 +1754,8 @@ export class OpenBudgetService {
       let totalPages = maxPages;
       let cachedCount = 0;
       let consecutiveFailures = 0;
-      let cooldownRoundsUsed = 0;
-      const MAX_COOLDOWN_ROUNDS = 4; // jami ~4 marta "sovutish pauzasi" beriladi
+      let tokenRefreshesUsed = 0;
+      const MAX_TOKEN_REFRESHES = 15; // 215 sahifa / ~20 tadan ~11 marta yangilash kifoya, zaxira bilan
 
       for (let p = 0; p < maxPages && p < totalPages; p++) {
         let result: any = null;
@@ -1779,22 +1779,26 @@ export class OpenBudgetService {
         if (!result) {
           consecutiveFailures++;
           this.logger.debug(`⚠️ [Prewarm] Sahifa ${p} bo'sh javob qaytardi (ketma-ket ${consecutiveFailures}-marta).`);
-          // OpenBudget ma'lum miqdordagi tez ketma-ket so'rovlardan keyin (taxminan
-          // ~20 sahifa) VAQTINCHA bo'sh javob qaytara boshlaydi (tezlik-asosidagi
-          // cheklov). Bu DOIMIY blok emas — biroz kutilsa, yana ochiladi. Shuning
-          // uchun darhol taslim bo'lish o'rniga, uzoqroq "sovutish pauzasi" berib,
-          // xuddi shu sahifadan davom etamiz (jami bir necha marta).
-          if (consecutiveFailures >= 8) {
-            if (cooldownRoundsUsed < MAX_COOLDOWN_ROUNDS) {
-              cooldownRoundsUsed++;
-              const cooldownMs = 20000 * cooldownRoundsUsed; // 20s, 40s, 60s, 80s
-              this.logger.warn(`⏸ [Prewarm] ${consecutiveFailures} marta ketma-ket bo'sh javob — ${cooldownMs / 1000}s sovutish pauzasi (${cooldownRoundsUsed}/${MAX_COOLDOWN_ROUNDS}), so'ng ${p}-sahifadan davom etiladi...`);
-              await new Promise((r) => setTimeout(r, cooldownMs));
-              consecutiveFailures = 0;
-              p--; // shu sahifani qayta urinish uchun
-              continue;
+          // ANIQLANDI: bu vaqt-asosidagi cheklov EMAS — 80 soniya kutish ham yordam
+          // bermadi. Aslida bitta TOKEN faqat cheklangan marta (taxminan ~20)
+          // ishlatilgandan so'ng, OpenBudget uni "tugatib" bo'sh javob qaytara
+          // boshlaydi. Yechim: kutish emas, balki captcha'ni qayta yechib, YANGI
+          // token bilan xuddi shu sahifadan davom etish.
+          if (consecutiveFailures >= 6) {
+            if (tokenRefreshesUsed < MAX_TOKEN_REFRESHES) {
+              tokenRefreshesUsed++;
+              this.logger.warn(`🔄 [Prewarm] Token ${consecutiveFailures} marta ketma-ket bo'sh javob berdi — yangi token olinmoqda (${tokenRefreshesUsed}/${MAX_TOKEN_REFRESHES}), so'ng ${p}-sahifadan davom etiladi...`);
+              const solved = await this.solveInitiativeTokenHeadless(initiativeUuid, 6);
+              if (solved.success && solved.token) {
+                initToken = solved.token;
+                consecutiveFailures = 0;
+                p--; // shu sahifani yangi token bilan qayta urinish uchun
+                continue;
+              }
+              this.logger.warn(`⚠️ [Prewarm] Yangi token olinmadi, to'xtatilmoqda (${cachedCount} sahifa keshlandi).`);
+              break;
             }
-            this.logger.warn(`⚠️ [Prewarm] Barcha sovutish pauzalaridan keyin ham javob yo'q — to'xtatilmoqda (${cachedCount} sahifa keshlandi).`);
+            this.logger.warn(`⚠️ [Prewarm] Token yangilash limiti tugadi — to'xtatilmoqda (${cachedCount} sahifa keshlandi).`);
             break;
           }
           continue;

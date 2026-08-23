@@ -210,6 +210,15 @@ export class WebAppController {
 
     try {
       const { stdout } = await execCurlWithRetry(args, 2, 'GET captcha-page');
+      const getStatusMatch = stdout.match(/HTTP\/(?:1\.[01]|2)\s+(\d{3})/g);
+      const getStatusCode = getStatusMatch ? parseInt(getStatusMatch[getStatusMatch.length - 1].match(/\d{3}/)![0], 10) : 0;
+      this.logger.log(`📤 [GET captcha-page] OpenBudget javobi: HTTP ${getStatusCode || "noma'lum"}`);
+      if (getStatusCode && getStatusCode !== 200) {
+        // "Жуда кўп сўровлар" (juda ko'p so'rov) kabi WAF/rate-limit sahifasi shu
+        // yerda kelishi mumkin — sahifa yuklanishning o'zida rad etiladi.
+        const rateLimitMatch = stdout.match(/Жуда\s*кўп\s*сўровлар|Juda\s*ko'p\s*so'rov/i);
+        this.logger.warn(`⚠️ [GET captcha-page] OpenBudget sahifa yuklashni RAD ETDI: HTTP ${getStatusCode}${rateLimitMatch ? ' | Tur: RATE_LIMIT (juda ko\'p so\'rov)' : ''}`);
+      }
 
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       res.setHeader('Pragma', 'no-cache');
