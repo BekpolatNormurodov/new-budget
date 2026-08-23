@@ -1347,14 +1347,18 @@ export class WebAppController {
       const isWrongCode = !isRealSuccess && !isEmptyAmbiguous && (isJsonError || hasErrorText || lastStatusCode === 400 || lastStatusCode === 500 || bodyRaw.includes('action="/api/v2/vote/mvc/verify"'));
       this.logger.log(`🔎 [mvc/verify POST] Natija tahlili: isRealSuccess=${isRealSuccess} isAlreadyVoted=${isAlreadyVoted} isWrongCode=${isWrongCode} isEmptyAmbiguous=${isEmptyAmbiguous} | Phone: +${logPhone2}`);
 
-      // OpenBudget javobini tahlil qilish uchun DB audit logiga saqlash:
+      // OpenBudget javobini tahlil qilish uchun DB audit logiga saqlash — headerlar
+      // VA tana (body) ikkalasi ham TO'LIQ xom curl chiqishi (stdout) sifatida
+      // saqlanadi, faqat ajratib olingan bodyRaw emas (headerlar yo'qolib qolmasligi
+      // uchun — masalan Set-Cookie, content-length kabi diagnostika uchun muhim
+      // ma'lumotlar shu yerda saqlanadi).
       this.prisma.openBudgetResponseLog.create({
         data: {
           endpoint: 'VERIFY_SMS',
           phone: clean12 || null,
           statusCode: lastStatusCode,
-          requestBody: JSON.stringify({ code: body?.code, phoneNumber: body?.phoneNumber }),
-          responseBody: bodyRaw.slice(0, 10000),
+          requestBody: params.toString(),
+          responseBody: stdout.slice(0, 10000),
           isSuccess: isRealSuccess,
         },
       }).catch(() => {});
