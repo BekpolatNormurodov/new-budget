@@ -1467,7 +1467,7 @@ export class OpenBudgetService {
    */
   private async solveInitiativeTokenHeadless(
     initiativeUuid: string,
-    maxAttempts: number = 6,
+    maxAttempts: number = 10,
   ): Promise<{ success: boolean; token?: string; error?: string }> {
     let page: any;
     try {

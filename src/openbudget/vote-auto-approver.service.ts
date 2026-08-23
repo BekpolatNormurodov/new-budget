@@ -107,37 +107,20 @@ export class VoteAutoApproverService {
       // edi. Endi faqat SystemHealthService orqali, bir marta ishga tushadi.
     };
 
-    function isUzbekistanNightTime(): boolean {
-      const now = new Date();
-      const utcHours = now.getUTCHours();
-      const uzbHours = (utcHours + 5) % 24;
-      return uzbHours >= 1 && uzbHours < 6; // 01:00 dan 06:00 gacha (00:00 - 01:00 oralig'ida ham faol ishlaydi)
-    }
-
-    // Server ko'tarilishi bilan 5 soniyadan so'ng 1-marta tekshirish (agar kechasi bo'lmasa)
+    // Server ko'tarilishi bilan 5 soniyadan so'ng 1-marta tekshirish
     setTimeout(() => {
-      if (!isUzbekistanNightTime()) {
-        runCheck().catch(() => {});
-      }
+      runCheck().catch(() => {});
     }, 5000);
 
-    // Keyin har 1 soatda (60 * 60 * 1000 ms) fon rejimida tekshirish (Tungi rejimda uxlaydi)
+    // Keyin har 1 soatda (60 * 60 * 1000 ms) fon rejimida tekshirish (24/7 uzluksiz)
     const ONE_HOUR_MS = 60 * 60 * 1000;
     this.checkInterval = setInterval(() => {
-      if (isUzbekistanNightTime()) {
-        this.logger.log('🌙 [Tungi Rejim: 00:00 - 06:00] Auto-Approver va ovozlar sinxroni uyquda. Soat 06:00 da davom etadi.');
-        return;
-      }
       runCheck().catch(() => {});
     }, ONE_HOUR_MS);
-    this.logger.log(`🕒 [Auto-Approver] Ovozlar va rasmiy hisoblar har 1 soatda bir marta tekshiriladi (Tungi 00:00-06:00 oralig'ida uyquda).`);
+    this.logger.log(`🕒 [Auto-Approver] Ovozlar va rasmiy hisoblar har 1 soatda 24/7 uzluksiz tekshiriladi.`);
 
     let prewarmRunning = false;
     const runPrewarm = async () => {
-      if (isUzbekistanNightTime()) {
-        this.logger.log('🌙 [Tungi Rejim: 00:00 - 06:00] Prewarm kesh sikli uyquda. Soat 06:00 da davom etadi.');
-        return;
-      }
       if (prewarmRunning) {
         this.logger.log(`⏭ [Prewarm] Oldingi sikl hali tugamagan, bu safar o'tkazib yuborilmoqda.`);
         return;
@@ -167,7 +150,7 @@ export class VoteAutoApproverService {
       }
     };
     setTimeout(() => {
-      if (!isUzbekistanNightTime()) runPrewarm().catch(() => {});
+      runPrewarm().catch(() => {});
     }, 30000);
     setInterval(runPrewarm, 60 * 60 * 1000);
   }

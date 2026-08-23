@@ -67,18 +67,12 @@ export class SystemHealthService implements OnModuleInit, OnModuleDestroy {
       });
     }, intervalMs);
 
-    // Har 1 soatlik Jonli Ovozlar Sinxronizatsiyasi (Tungi 00:00-06:00 da uyquda)
+    // Har 1 soatlik Jonli Ovozlar Sinxronizatsiyasi (24/7 uzluksiz)
     setTimeout(() => {
-      if (!isUzbekistanNightTime()) {
-        this.openBudgetService.syncAllBotVotes().catch(() => {});
-      }
+      this.openBudgetService.syncAllBotVotes().catch(() => {});
     }, 10000);
 
     const syncVotesInterval = setInterval(() => {
-      if (isUzbekistanNightTime()) {
-        this.logger.log('🌙 [Tungi Rejim: 00:00 - 06:00] Ovozlar sinxronlash uyquda. Soat 06:00 da davom etadi.');
-        return;
-      }
       this.openBudgetService.syncAllBotVotes().catch((err) => {
         this.logger.error(`1 soatlik ovozlar sinxronlashda xatolik: ${err.message}`);
       });
