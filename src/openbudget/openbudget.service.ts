@@ -1388,6 +1388,14 @@ export class OpenBudgetService {
   private initiativeTokenCache = new Map<string, { token: string; expiresAt: number }>();
   private captchaSessionMap = new Map<string, { cookies: string; sessionKey: string; page?: any }>();
   private initiativeVotesListCache = new Map<string, { votes: any[]; totalElements: number; totalPages: number; fetchedAt: number }>();
+  // Har bir prewarm siklidan keyin HAQIQIY qamrov holatini saqlaydi (UI'da
+  // ko'rsatish uchun) — chunki cheklov (rate-limit) tufayli erta to'xtagan
+  // holatda kesh "3 soat qamrab olindi" deb NOTO'G'RI da'vo qilmasligi kerak.
+  private prewarmStatus = new Map<string, { cachedPages: number; totalPages: number; coverageMinutes: number; reachedFullCutoff: boolean; finishedAt: number }>();
+
+  getPrewarmStatus(initiativeUuid: string) {
+    return this.prewarmStatus.get(initiativeUuid) || null;
+  }
 
   // 🌐 Haqiqiy Chrome brauzer orqali OpenBudget WAF/anti-bot himoyasidan o'tish uchun (headless)
   private headlessBrowser: any = null;
@@ -1755,6 +1763,8 @@ export class OpenBudgetService {
       let cachedCount = 0;
       let consecutiveFailures = 0;
       let tokenRefreshesUsed = 0;
+      let oldestCoveredTs: number | null = null;
+      let reachedFullCutoff = false;
       const MAX_TOKEN_REFRESHES = 15; // 215 sahifa / ~20 tadan ~11 marta yangilash kifoya, zaxira bilan
 
       for (let p = 0; p < maxPages && p < totalPages; p++) {
@@ -1838,9 +1848,11 @@ export class OpenBudgetService {
             ? oldestInPage.voteDate
             : String(oldestInPage.voteDate).replace(' ', 'T') + '+05:00';
           const oldestTs = new Date(formattedDateStr).getTime();
+          if (!isNaN(oldestTs)) oldestCoveredTs = oldestTs;
           const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
           if (!isNaN(oldestTs) && Date.now() - oldestTs > THREE_HOURS_MS) {
             this.logger.log(`⏹ [Prewarm] Sahifa ${p}dagi eng eski ovoz 3 soatdan eski (${oldestInPage.voteDate}) — bu yerda to'xtatilmoqda (keyingisi kerak emas).`);
+            reachedFullCutoff = true;
             break;
           }
         }
@@ -1851,7 +1863,27 @@ export class OpenBudgetService {
       }
 
       await browserPage.close().catch(() => {});
-      this.logger.log(`✅ [Prewarm] OpenBudget ro'yxati keshlandi: ${cachedCount}/${totalPages} sahifa (so'nggi ~4 soat qamrab olindi).`);
+
+      // MUHIM: bu yerda "3 soat qamrab olindi" deb hech qachon QOTIB QOLGAN
+      // (hardcoded) matn yozilmaydi — chunki agar tsikl vaqt-chegarasiga
+      // yetmasdan (masalan IP/limit tugab) erta to'xtagan bo'lsa, bu HAQIQATDA
+      // qamrab olingan muddat 3 soatdan ANCHA KAM bo'lishi mumkin. Shuning uchun
+      // haqiqiy qamrov (oldestCoveredTs orqali) hisoblanadi va admin panelga
+      // ko'rsatish uchun saqlanadi.
+      const coverageMinutes = oldestCoveredTs ? Math.round((Date.now() - oldestCoveredTs) / 60000) : 0;
+      this.prewarmStatus.set(initiativeUuid, {
+        cachedPages: cachedCount,
+        totalPages,
+        coverageMinutes,
+        reachedFullCutoff,
+        finishedAt: Date.now(),
+      });
+
+      if (reachedFullCutoff) {
+        this.logger.log(`✅ [Prewarm] OpenBudget ro'yxati keshlandi: ${cachedCount}/${totalPages} sahifa (so'nggi ~3 soat to'liq qamrab olindi).`);
+      } else {
+        this.logger.warn(`⚠️ [Prewarm] TO'LIQ EMAS: ${cachedCount}/${totalPages} sahifa keshlandi, lekin faqat so'nggi ~${coverageMinutes} daqiqa qamrab olindi (limit/tarmoq tufayli erta to'xtadi).`);
+      }
     } catch (e: any) {
       if (browserPage) await browserPage.close().catch(() => {});
       this.logger.error(`❌ [Prewarm] Xatolik: ${e.message}`);

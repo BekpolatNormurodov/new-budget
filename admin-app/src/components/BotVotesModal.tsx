@@ -68,6 +68,18 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
   const [obSearchNotFound, setObSearchNotFound] = useState(false);
   const [obSearchCoverage, setObSearchCoverage] = useState<{ scannedPages: number; totalPages: number } | null>(null);
 
+  // Fon rejimidagi tez-kesh (prewarm) qamrovi — bu FAQAT sahifalash (list) uchun
+  // tezlashtirish maqsadida, qidiruv (search) esa har doim butun ro'yxatni
+  // ko'radi (quyida alohida ko'rsatiladi). Bu holat aniq ko'rsatilmasa, admin
+  // "3 soatdan eski ovoz yo'q" deb noto'g'ri xulosaga kelishi mumkin edi.
+  const [prewarmStatus, setPrewarmStatus] = useState<{
+    cachedPages: number;
+    totalPages: number;
+    coverageMinutes: number;
+    reachedFullCutoff: boolean;
+    finishedAt: number;
+  } | null>(null);
+
   useEffect(() => {
     const tailDigits = search.replace(/\D/g, '');
     if (activeTab !== 'OPENBUDGET' || tailDigits.length < 5 || !bot) {
@@ -127,6 +139,7 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
     try {
       const res = await fetch(`/api/admin/bots/${bot.id}/official-votes-list?page=${targetPage}`);
       const data = await res.json();
+      setPrewarmStatus(data.prewarmStatus || null);
       if (data.success && data.content?.length > 0) {
         setObVotes(data.content || []);
         setObTotalElements(data.totalElements || 0);
@@ -263,6 +276,12 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
   // oxirgi 5 ta (yoki qisqaroq kiritilgan bo'lsa, shuncha) ko'rinadigan raqam bo'yicha
   // solishtiriladi.
   const TAIL_MATCH_LEN = 5;
+  const formatCoverage = (minutes: number) => {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    if (h <= 0) return `${m} daqiqa`;
+    return m > 0 ? `${h}s ${m}d` : `${h} soat`;
+  };
   const searchDigits = search.replace(/\D/g, '');
   // 5+ raqam kiritilsa, butun ro'yxat bo'yicha serverdan qidirilgan natija ko'rsatiladi;
   // aks holda joriy sahifadagi ma'lumot bo'yicha (tezkor, lokal) filtrlanadi.
@@ -475,6 +494,30 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
               </div>
             )}
           </div>
+
+          {/* Tez-kesh (prewarm) qamrovi haqida shaffof ma'lumot — bu FAQAT tezkor
+              sahifalashga tegishli; "Raqam yoki vaqt" qidiruvi (yuqorida) har doim
+              butun rasmiy ro'yxatni jonli tekshiradi, shuning uchun eski ovozlar
+              qidiruvda "yo'q" ko'rinib qolmaydi. */}
+          {activeTab === 'OPENBUDGET' && !needCaptcha && prewarmStatus && (
+            <div
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-semibold border ${
+                prewarmStatus.reachedFullCutoff
+                  ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                  : 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-500/20 text-amber-700 dark:text-amber-400'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5 shrink-0" />
+              {prewarmStatus.reachedFullCutoff ? (
+                <span>Tez kesh so'nggi 3 soatni to'liq qamrab oldi ({prewarmStatus.cachedPages} sahifa) — bu oraliqdagi sahifalash bir zumda ochiladi.</span>
+              ) : (
+                <span>
+                  Tez kesh hozircha faqat so'nggi ~{formatCoverage(prewarmStatus.coverageMinutes)}ni qamrab oldi (tarmoq/limit tufayli to'liq 3 soatga yetmadi) —
+                  eski sahifalar sekinroq (jonli) yuklanadi. Qidiruv bunga qaramay har doim butun ro'yxatni tekshiradi.
+                </span>
+              )}
+            </div>
+          )}
 
           {/* TABLE: OPENBUDGET OFFICIAL LIST */}
           {activeTab === 'OPENBUDGET' ? (

@@ -1004,6 +1004,7 @@ export class AdminService {
       ...res,
       botId,
       mahallaName: bot.mahallaName,
+      prewarmStatus: uuid ? this.openBudgetService.getPrewarmStatus(uuid) : null,
     };
   }
 
