@@ -182,13 +182,15 @@ export class VoteAutoApproverService {
       } catch (err: any) {
         this.logger.error(`LiveVoteChecker xatoligi: ${err.message}`);
       }
-
-      // Har 15 minutlik siklda va startupda OpenBudget rasmiy saytidagi umumiy ovozlarni ham yangilab olish
-      try {
-        await this.openBudgetService.syncAllBotVotes();
-      } catch (syncErr: any) {
-        this.logger.warn(`syncAllBotVotes xatoligi: ${syncErr.message}`);
-      }
+      // MUHIM: `syncAllBotVotes()` bu yerda ILGARI ham chaqirilar edi — lekin
+      // `SystemHealthService`'da AYNAN shu funksiya uchun ALOHIDA, o'zining
+      // mustaqil 15-daqiqalik rejalashtiruvchisi allaqachon bor edi. Ikkalasi
+      // ham dastur ishga tushishi bilan bir necha soniya farq bilan boshlanib,
+      // 15 daqiqalik interval bir xil bo'lgani uchun HAR DOIM deyarli bir vaqtda
+      // (soniya farqi bilan) ishga tushib, og'ir (headless-brauzer + butun
+      // reyestrni qayta yuklovchi) ishni behuda IKKI MARTA bajarardi — bu esa
+      // botning vaqtincha "qotib qolgan"dek sezilishiga sabab bo'lishi mumkin
+      // edi. Endi faqat SystemHealthService orqali, bir marta ishga tushadi.
     };
 
     // Server ko'tarilishi bilan 5 soniyadan so'ng 1-marta tekshirish va to'liq sinxronlash
