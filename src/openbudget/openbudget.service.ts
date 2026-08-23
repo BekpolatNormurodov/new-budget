@@ -1649,19 +1649,32 @@ export class OpenBudgetService {
       );
 
       const matches: any[] = [];
-      let totalPages = 1;
+      // Haqiqiy totalPages birinchi muvaffaqiyatli javobdan aniqlanguncha, maxPages'gacha
+      // urinib ko'riladi (aks holda 1-sahifa vaqtincha xato bersa, qidiruv darhol to'xtab qolardi).
+      let totalPages = maxPages;
 
       for (let p = 0; p < maxPages && p < totalPages; p++) {
-        const result = await browserPage.evaluate(
-          async (token: string, page: number) => {
-            const res = await fetch(`/api/v2/info/votes/${token}?page=${page}&size=15&limit=15`, { credentials: 'include' });
-            return res.json();
-          },
-          initToken,
-          p,
-        );
-        if (!result) break;
-        totalPages = result.totalPages || 1;
+        let result: any = null;
+        // Vaqtinchalik (WAF/tarmoq) xatoliklarda shu sahifani 2 marta qayta urinib ko'rish
+        for (let retry = 0; retry < 2 && !result; retry++) {
+          try {
+            result = await browserPage.evaluate(
+              async (token: string, page: number) => {
+                const res = await fetch(`/api/v2/info/votes/${token}?page=${page}&size=15&limit=15`, { credentials: 'include' });
+                const text = await res.text();
+                if (!text) return null;
+                try { return JSON.parse(text); } catch { return null; }
+              },
+              initToken,
+              p,
+            );
+          } catch {
+            result = null;
+          }
+          if (!result) await new Promise((r) => setTimeout(r, 300));
+        }
+        if (!result) continue; // shu sahifa o'tkazib yuboriladi, qidiruv davom etadi
+        totalPages = result.totalPages || totalPages;
         const content = result.content || [];
         for (const v of content) {
           const digits = String(v.phoneNumber || '').replace(/\D/g, '');
