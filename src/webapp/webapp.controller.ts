@@ -713,12 +713,18 @@ export class WebAppController {
       }).catch(() => {});
 
       if (captchaStatusCode && captchaStatusCode !== 200) {
-        // Captcha bosqichining o'zi rad etilgan (masalan noto'g'ri nuqtalar bosilgan) —
-        // bu holatda verify bosqichi baribir HTTP 200 qaytarishi mumkin (OpenBudget
-        // ba'zan bo'sh 200 bilan javob beradi), shuning uchun bu yerning o'zida
-        // to'xtatamiz va foydalanuvchiga ANIQ xato ko'rsatamiz — "muvaffaqiyat"
-        // sahifasiga soxta o'tib ketmasligi uchun.
-        this.logger.warn(`⚠️ [mvc/captcha POST] OpenBudget CAPTCHA'ni RAD ETDI: HTTP ${captchaStatusCode} | Phone: +${logPhone}`);
+        // Captcha bosqichining o'zi rad etilgan. OpenBudget buning ANIQ sababini
+        // <div class="error-alert" id="error-alert">...</div> ichida yuboradi —
+        // masalan "950642827 ushbu raqamga bugungi urinishlar soni tugadi!" (kunlik
+        // limit) yoki boshqa sabab. Buni chiqarib olib, foydalanuvchiga aynan
+        // O'SHA matnni ko'rsatamiz — umumiy "captcha noto'g'ri" emas, balki haqiqiy
+        // sabab (limit tugagani, raqam bloklangani va h.k.) aniq ko'rinsin.
+        const errorAlertMatch = stdout.match(/<div class="error-alert"[^>]*>([\s\S]*?)<\/div>/i);
+        const openBudgetErrorText = errorAlertMatch ? errorAlertMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+        const displayErrorText = openBudgetErrorText || `OpenBudget rasmiy tizimi captcha javobini rad etdi (HTTP ${captchaStatusCode}).`;
+
+        this.logger.warn(`⚠️ [mvc/captcha POST] OpenBudget CAPTCHA'ni RAD ETDI: HTTP ${captchaStatusCode} | Phone: +${logPhone} | Sabab: "${openBudgetErrorText || 'matn topilmadi'}"`);
+
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(200).send(`
           <!DOCTYPE html>
@@ -735,8 +741,8 @@ export class WebAppController {
           <body>
             <div class="card">
               <div class="icon">⚠️</div>
-              <h2>Captcha noto'g'ri!</h2>
-              <p>OpenBudget rasmiy tizimi captcha javobini rad etdi (nuqtalar noto'g'ri bosilgan bo'lishi mumkin). Iltimos, botga qaytib, qaytadan urinib ko'ring.</p>
+              <h2>Ovoz qabul qilinmadi!</h2>
+              <p>${displayErrorText}</p>
               <button onclick="if(window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close(); else window.close();">Botga qaytish</button>
             </div>
             <script>if (window.Telegram && window.Telegram.WebApp) { window.Telegram.WebApp.ready(); window.Telegram.WebApp.expand(); }</script>
