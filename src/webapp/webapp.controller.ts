@@ -553,6 +553,18 @@ export class WebAppController {
         .progress, .progress-bar, .progress-bar-timer {
           display: none !important;
         }
+
+        /* MUHIM: OpenBudget'ning o'z rasmi 345px bilan cheklangan (kichik,
+           sichqoncha uchun mo'ljallangan). Mobil ekranda barmoq bilan aniq
+           bosish qiyin bo'lgani uchun, rasmni ekran kengligiga qarab
+           kattaroq ko'rsatamiz — koordinata hisob-kitobi (345x230 asl
+           o'lchamga nisbatan) allaqachon istalgan ko'rsatilgan o'lchamga
+           moslashadi, shuning uchun bu faqat ko'rinishni kattalashtiradi,
+           yuborilgan koordinatalarga ta'sir qilmaydi. */
+        .img-lazy, #imgLazy, #imageB {
+          width: 100% !important;
+          max-width: 480px !important;
+        }
       </style>
       <script>
         (function() {
@@ -1222,6 +1234,18 @@ export class WebAppController {
 
         .progress, .progress-bar, .progress-bar-timer {
           display: none !important;
+        }
+
+        /* MUHIM: OpenBudget'ning o'z rasmi 345px bilan cheklangan (kichik,
+           sichqoncha uchun mo'ljallangan). Mobil ekranda barmoq bilan aniq
+           bosish qiyin bo'lgani uchun, rasmni ekran kengligiga qarab
+           kattaroq ko'rsatamiz — koordinata hisob-kitobi (345x230 asl
+           o'lchamga nisbatan) allaqachon istalgan ko'rsatilgan o'lchamga
+           moslashadi, shuning uchun bu faqat ko'rinishni kattalashtiradi,
+           yuborilgan koordinatalarga ta'sir qilmaydi. */
+        .img-lazy, #imgLazy, #imageB {
+          width: 100% !important;
+          max-width: 480px !important;
         }
       </style>
       <script>
