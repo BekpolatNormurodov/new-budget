@@ -1646,8 +1646,8 @@ export class WebAppController {
               <body>
                 <div class="card">
                   <div class="icon">✅</div>
-                  <h2>Ovozingiz qabul qilindi!</h2>
-                  <p>Ovozingiz tizim tomonidan qabul qilindi. OpenBudget rasmiy reyestridan o'tgandan so'ng balansingizga mablag' qo'shiladi va tasdiqlash xabari yuboriladi.</p>
+                  <h2>Ovozingiz tekshiruvga yuborildi!</h2>
+                  <p>Ovozingiz tizim tomonidan qabul qilindi. OpenBudget rasmiy saytida tasdiqlangandan so'ng balansingizga mablag' qo'shiladi va tasdiqlash xabari yuboriladi.</p>
                   <button onclick="if(window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close(); else window.close();">Botga qaytish</button>
                 </div>
                 <script>

@@ -29,11 +29,11 @@ export const BOT_MESSAGES = {
     `Kodni quyida yozib yuboring (Masalan: <code>123456</code>) 👇`,
 
   VOTE_SUBMITTED_PENDING: (phone: string, reward: number = 30000, mahallaName?: string) =>
-    `✅ <b>OVOZINGIZ QABUL QILINDI!</b>\n\n` +
+    `✅ <b>Ovozingiz tekshiruvga yuborildi!</b>\n\n` +
     (mahallaName ? `📍 <b>Loyiha:</b> ${mahallaName}\n` : '') +
     `📱 <b>Telefon:</b> +${phone}\n` +
-    `💰 <b>Mukofot:</b> <code>+${formatSum(reward)} so'm</code>\n\n` +
-    `ℹ️ <i>Ovozingiz OpenBudget rasmiy reyestridan (telefon raqami va berilgan vaqti bo'yicha) o'tgandan so'ng balansingizga mablag' qo'shiladi va tasdiqlash xabari yuboriladi!</i> ⚡️`,
+    `💰 <b>Kutilayotgan mukofot:</b> <code>+${formatSum(reward)} so'm</code>\n\n` +
+    `ℹ️ <i>Ovozingiz OpenBudget rasmiy saytida tasdiqlangandan so'ng balansingizga mablag' qo'shiladi va tasdiqlash xabari yuboriladi!</i> ⚡️`,
 
 
   VOTE_VERIFIED_ALERT: (phone: string, reward: number, balance: number) => 
