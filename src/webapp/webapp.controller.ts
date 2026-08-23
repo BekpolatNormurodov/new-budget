@@ -63,6 +63,33 @@ export class WebAppController {
     private readonly voteAutoApproverService: VoteAutoApproverService,
   ) {}
 
+  private setProxyCookies(res: any, stdout: string, extraCookies?: Record<string, string>) {
+    if (!res) return;
+    const cookieMatches = stdout.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
+    const cookiesToSend: string[] = [];
+
+    for (const c of cookieMatches) {
+      let val = c.replace(/^set-cookie:\s*/i, '').trim();
+      val = val.replace(/Domain=[^;]+;?/gi, '').trim();
+      if (!/path=/i.test(val)) {
+        val += '; Path=/';
+      }
+      cookiesToSend.push(val);
+    }
+
+    if (extraCookies) {
+      for (const [k, v] of Object.entries(extraCookies)) {
+        if (v) {
+          cookiesToSend.push(`${k}=${encodeURIComponent(v)}; Max-Age=1800; Path=/`);
+        }
+      }
+    }
+
+    if (cookiesToSend.length > 0) {
+      res.setHeader('Set-Cookie', cookiesToSend);
+    }
+  }
+
   @Get('user')
   async getUserProfile(@Query('telegramId') telegramId: string) {
     if (!telegramId) throw new BadRequestException('telegramId talab qilinadi');
@@ -269,19 +296,12 @@ export class WebAppController {
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
 
-      // Cookie larni mijozga uzatish
-      const cookieMatches = stdout.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
-      for (const c of cookieMatches) {
-        const val = c.replace(/^set-cookie:\s*/i, '');
-        res.setHeader('Set-Cookie', val);
-      }
-
-      if (tgIdQuery) {
-        res.cookie('VOTE_TG_ID', tgIdQuery, { maxAge: 1800000, httpOnly: false });
-      }
-      if (botIdQuery) {
-        res.cookie('VOTE_BOT_ID', botIdQuery, { maxAge: 1800000, httpOnly: false });
-      }
+      const cleanPhone = phoneQuery ? phoneQuery.replace(/[^0-9]/g, '').slice(-9) : '';
+      this.setProxyCookies(res, stdout, {
+        VOTE_TG_ID: tgIdQuery || '',
+        VOTE_BOT_ID: botIdQuery || '',
+        VOTE_PHONE: cleanPhone,
+      });
 
       const htmlStart = stdout.indexOf('<!DOCTYPE html>') !== -1 ? stdout.indexOf('<!DOCTYPE html>') : stdout.indexOf('<html');
       let bodyRaw = htmlStart !== -1 ? stdout.slice(htmlStart) : stdout;
@@ -293,13 +313,6 @@ export class WebAppController {
       // 2. OpenBudget ichki form action manzillarini bizning proxy endpointga moslash
       bodyRaw = bodyRaw.replace(/action="\/api\/v2\/vote\/mvc\/captcha"/g, 'action="/api/v2/vote/mvc/captcha"');
       bodyRaw = bodyRaw.replace(/action="\/api\/v2\/vote\/mvc\/verify"/g, 'action="/api/v2/vote/mvc/verify"');
-
-      // 3. Agar telefon raqam yoki telegram ma'lumotlari bo'lsa
-      const cleanPhone = phoneQuery ? phoneQuery.replace(/[^0-9]/g, '').slice(-9) : '';
-
-      if (tgIdQuery || botIdQuery) {
-        bodyRaw = bodyRaw.replace(/(<form[^>]*>)/i, `$1<input type="hidden" name="tg_id" value="${tgIdQuery || ''}" /><input type="hidden" name="botId" value="${botIdQuery || ''}" />`);
-      }
 
       const modalDesign = `
       <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -894,36 +907,23 @@ export class WebAppController {
         `);
       }
 
-      const cookieMatches = stdout.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
-      for (const c of cookieMatches) {
-        const val = c.replace(/^set-cookie:\s*/i, '');
-        res.setHeader('Set-Cookie', val);
-      }
-
-      const htmlStart = stdout.indexOf('<!DOCTYPE html>') !== -1 ? stdout.indexOf('<!DOCTYPE html>') : stdout.indexOf('<html');
-      let bodyRaw = htmlStart !== -1 ? stdout.slice(htmlStart) : stdout;
-
       const postedPhone = String(Array.isArray(body?.phoneNumber) ? (body.phoneNumber[body.phoneNumber.length - 1] || body.phoneNumber[0] || '') : (body?.phoneNumber || '')).replace(/[^0-9]/g, '');
       const postedTgId = String(body?.tg_id || body?.telegramId || '').trim();
       const postedBotId = String(body?.botId || body?.bot_id || '').trim();
 
-      if (postedPhone.length >= 9) {
-        res.cookie('VOTE_PHONE', postedPhone, { maxAge: 1800000, httpOnly: false });
-      }
-      if (postedTgId) {
-        res.cookie('VOTE_TG_ID', postedTgId, { maxAge: 1800000, httpOnly: false });
-      }
-      if (postedBotId) {
-        res.cookie('VOTE_BOT_ID', postedBotId, { maxAge: 1800000, httpOnly: false });
-      }
+      this.setProxyCookies(res, stdout, {
+        VOTE_PHONE: postedPhone,
+        VOTE_TG_ID: postedTgId,
+        VOTE_BOT_ID: postedBotId,
+      });
+
+      const htmlStart = stdout.indexOf('<!DOCTYPE html>') !== -1 ? stdout.indexOf('<!DOCTYPE html>') : stdout.indexOf('<html');
+      let bodyRaw = htmlStart !== -1 ? stdout.slice(htmlStart) : stdout;
 
       bodyRaw = bodyRaw.replace(/eval\s*\(\s*function\s*\([a-z,\s]+\)[\s\S]*?\.split\(['"][|]['"][\s\S]*?\)\s*\)/gi, '/* iframe blocker removed */');
       bodyRaw = bodyRaw.replace(/window\.location\.href\s*=\s*['"]https:\/\/openbudget\.uz['"]/gi, '/* redirect removed */');
       bodyRaw = bodyRaw.replace(/action="\/api\/v2\/vote\/mvc\/captcha"/g, 'action="/api/v2/vote/mvc/captcha"');
       bodyRaw = bodyRaw.replace(/action="\/api\/v2\/vote\/mvc\/verify"/g, 'action="/api/v2/vote/mvc/verify"');
-
-      // Inject hidden phoneNumber, telegramId, botId input into verify form so proxyVerifyPost ALWAYS has them!
-      bodyRaw = bodyRaw.replace(/(<form[^>]*>)/i, `$1<input type="hidden" name="phoneNumber" value="${postedPhone}" /><input type="hidden" name="telegramId" value="${postedTgId}" /><input type="hidden" name="botId" value="${postedBotId}" />`);
 
       const modalDesign = `
       <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -1357,46 +1357,6 @@ export class WebAppController {
                   }
                 }
               };
-            }
-
-            // MUHIM: bu sahifa (captcha POST javobi orqali ko'rsatiladigan SMS-kod
-            // formasi) alohida GET sahifasidan FARQLI kod yo'lida render qilinadi —
-            // shuning uchun ikki marta yuborilishning oldini olish himoyasi bu yerga
-            // ALOHIDA qo'shilishi kerak edi (avvalgi tuzatish faqat boshqa GET
-            // yo'lida ishlar edi, aynan shu sahifada emas).
-            //
-            // ILDIZ SABABI (aynan shu SMS-kod sahifasida): OpenBudget'ning o'z
-            // skripti mobil klaviaturaning "Go"/Enter tugmasi bosilganda formani
-            // keydown handleri orqali TO'G'RIDAN-TO'G'RI form.submit() bilan
-            // yuboradi — bu esa "submit" HODISASINI ishga tushirmaydi, shuning
-            // uchun pastdagi oddiy hodisa-tinglagichi buni tutib qololmasdi. Shu
-            // sabab bitta "Go" bosilganda ham serverga ikki so'rov ketardi. To'g'ri
-            // yechim — formaning .submit() metodini o'zini almashtirish orqali,
-            // uni QANDAY chaqirishidan qat'i nazar (klaviatura, tugma, OpenBudget
-            // skripti) faqat bitta haqiqiy yuborilishni kafolatlash.
-            (function () {
-              var origSubmit = HTMLFormElement.prototype.submit;
-              HTMLFormElement.prototype.submit = function () {
-                if (this.__obAlreadySubmitted) return;
-                this.__obAlreadySubmitted = true;
-                var submitBtn = this.querySelector('button[type="submit"], input[type="submit"]');
-                if (submitBtn) submitBtn.disabled = true;
-                return origSubmit.call(this);
-              };
-            })();
-            document.querySelectorAll('form').forEach(function (formEl) {
-              let alreadySubmitted = false;
-              formEl.addEventListener('submit', function (e) {
-                if (alreadySubmitted) {
-                  e.preventDefault();
-                  e.stopImmediatePropagation();
-                  return false;
-                }
-                alreadySubmitted = true;
-                const submitBtn = formEl.querySelector('button[type="submit"], input[type="submit"]');
-                if (submitBtn) submitBtn.disabled = true;
-              }, true);
-            });
           });
         })();
       </script>
@@ -1468,18 +1428,11 @@ export class WebAppController {
     args.push('-H', 'Origin: https://new.openbudget.uz');
     args.push('-H', 'Referer: https://new.openbudget.uz/api/v2/vote/mvc/captcha');
 
+    const grToken = String(Array.isArray(body?.grToken) ? body.grToken[0] : (body?.grToken ?? '')).trim();
+
     const params = new URLSearchParams();
-    for (const [k, v] of Object.entries(body || {})) {
-      let val: string;
-      if (Array.isArray(v)) {
-        val = String(v.filter(Boolean).pop() || '');
-      } else if (typeof v === 'object' && v !== null) {
-        val = JSON.stringify(v);
-      } else {
-        val = String(v ?? '');
-      }
-      params.set(k, val);
-    }
+    params.set('otpCode', otpVal);
+    params.set('grToken', grToken);
     args.push('--data', params.toString());
     args.push('https://new.openbudget.uz/api/v2/vote/mvc/verify');
 
@@ -1488,11 +1441,7 @@ export class WebAppController {
     try {
       const { stdout } = await execCurlWithRetry(args, 2, `POST mvc/verify (+${logPhone2})`);
 
-      const cookieMatches = stdout.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
-      for (const c of cookieMatches) {
-        const val = c.replace(/^set-cookie:\s*/i, '');
-        res.setHeader('Set-Cookie', val);
-      }
+      this.setProxyCookies(res, stdout);
 
       // HTTP sarlavhalardan eng oxirgi real status kodni aniqlash:
       const statusMatches = [...stdout.matchAll(/HTTP\/(?:1\.[01]|2)\s+(\d{3})/g)];
