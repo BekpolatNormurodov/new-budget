@@ -1732,7 +1732,7 @@ export class WebAppController {
               if (activeBot?.token) {
                 const tgUrl = `https://api.telegram.org/bot${activeBot.token}/sendMessage`;
                 const formattedPhoneForMsg = `998 ${clean9 ? `${clean9.slice(0,2)} ${clean9.slice(2,5)}-${clean9.slice(5,7)}-${clean9.slice(7,9)}` : '***'}`;
-                const text = BOT_MESSAGES.VOTE_SUBMITTED_PENDING(formattedPhoneForMsg, voteReward, mahallaName);
+                const text = BOT_MESSAGES.VOTE_SUBMITTED_PENDING(formattedPhoneForMsg, voteReward, mahallaName, isEmptyAmbiguous);
 
                 await axios.post(tgUrl, {
                   chat_id: user.telegramId,
@@ -1772,9 +1772,11 @@ export class WebAppController {
         </head>
         <body>
           <div class="card">
-            <div class="icon">✅</div>
-            <h2>Ovozingiz qabul qilindi!</h2>
-            <p>Ovozingiz tizim tomonidan qabul qilindi. Botga qaytishingiz mumkin.</p>
+            <div class="icon">${isEmptyAmbiguous ? '⏳' : '✅'}</div>
+            <h2>${isEmptyAmbiguous ? "So'rovingiz qabul qilindi" : 'Ovozingiz qabul qilindi!'}</h2>
+            <p>${isEmptyAmbiguous
+              ? "OpenBudget hozircha aniq javob bermadi. Ovozingiz faqat rasmiy reyestrda haqiqatan topilgandagina tasdiqlanadi va shundagina pul o'tkaziladi."
+              : 'Ovozingiz tizim tomonidan qabul qilindi. Botga qaytishingiz mumkin.'}</p>
             <button onclick="if(window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close(); else window.close();">Botga qaytish (Yopish)</button>
           </div>
           <script>

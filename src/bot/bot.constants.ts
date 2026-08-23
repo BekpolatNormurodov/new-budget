@@ -28,13 +28,25 @@ export const BOT_MESSAGES = {
     `<b>+${phone}</b> raqamingizga 6 xonali tasdiqlash kodi yuborildi.\n\n` +
     `Kodni quyida yozib yuboring (Masalan: <code>123456</code>) 👇`,
 
-  VOTE_SUBMITTED_PENDING: (phone: string, reward: number = 30000, mahallaName?: string) =>
-    `✅ <b>OVOZINGIZ MUVAFFAQIYATLI QABUL QILINDI!</b>\n\n` +
+  // MUHIM: `isAmbiguous=true` bo'lganda sarlavha ATAYLAB kamroq qat'iy —
+  // OpenBudget SMS-kod bosqichida ba'zan hech qanday matn qaytarmaydi (bo'sh
+  // javob), va bu holatda biz kodning haqiqatan to'g'ri kiritilganini HALI
+  // bilmaymiz — faqat keyingi rasmiy reyestr-tekshiruvi buni hal qiladi.
+  // "MUVAFFAQIYATLI QABUL QILINDI" deb qat'iy aytish, hatto foydalanuvchi
+  // ataylab xato kod kiritgan taqdirda ham, chalg'ituvchi/yolg'on tuyulishi
+  // mumkin edi — shuning uchun bu holatda "so'rovingiz qabul qilindi,
+  // tekshirilmoqda" kabi ochiqroq, haqiqatga mos matn ishlatiladi.
+  VOTE_SUBMITTED_PENDING: (phone: string, reward: number = 30000, mahallaName?: string, isAmbiguous: boolean = false) =>
+    (isAmbiguous
+      ? `⏳ <b>SO'ROVINGIZ QABUL QILINDI — TEKSHIRILMOQDA</b>\n\n`
+      : `✅ <b>OVOZINGIZ MUVAFFAQIYATLI QABUL QILINDI!</b>\n\n`) +
     (mahallaName ? `📍 <b>Loyiha:</b> ${mahallaName}\n` : '') +
     `📱 <b>Telefon:</b> +${phone}\n` +
     `⏳ <b>Holati:</b> Tekshiruvda\n` +
-    `💰 <b>Mukofot:</b> <code>+${formatSum(reward)} so'm</code>\n\n` +
-    `ℹ️ Ovozingiz OpenBudget rasmiy reyestrida tasdiqlangach, hisobingizga avtomatik mablag' o'tkaziladi va sizga alohida xabar yuboriladi. Odatda bu bir necha daqiqa ichida amalga oshadi. ⚡️`,
+    `💰 <b>Mukofot (tasdiqlangach):</b> <code>+${formatSum(reward)} so'm</code>\n\n` +
+    (isAmbiguous
+      ? `ℹ️ OpenBudget hozircha aniq javob bermadi. Ovozingiz FAQAT rasmiy reyestrda haqiqatan topilgandagina tasdiqlanadi va pul o'sha payt o'tkaziladi — bu bir necha daqiqadan bir necha soatgacha davom etishi mumkin.`
+      : `ℹ️ Ovozingiz OpenBudget rasmiy reyestrida tasdiqlangach, hisobingizga avtomatik mablag' o'tkaziladi va sizga alohida xabar yuboriladi. Odatda bu bir necha daqiqa ichida amalga oshadi. ⚡️`),
 
   VOTE_VERIFIED_ALERT: (phone: string, reward: number, balance: number) => 
     `🎉 <b>TABRIKLAYMIZ! OVOZINGIZ TASDIQLANDI!</b>\n\n` +
