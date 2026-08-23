@@ -1599,105 +1599,66 @@ export class WebAppController {
             const wasCreated = createdVoteId !== null;
 
             if (wasCreated) {
-              this.logger.log(`⏳ [Vote Submitted - Checking Registry] User ID: ${user.id} | Telegram: ${user.telegramId} | Phone: +${clean12}`);
+              this.logger.log(`⏳ [Vote Submitted - Pending Verification] User ID: ${user.id} | Telegram: ${user.telegramId} | Phone: +${clean12}`);
 
-              // OpenBudget navbatiga 2 soniya berib, jonli rasmiy reyestrdan tekshirish
-              await new Promise((r) => setTimeout(r, 2000));
-              const verifyRes = await this.voteAutoApproverService.verifyVoteImmediately(createdVoteId);
-
-              if (verifyRes.approved) {
-                this.logger.log(`🎉 [Instant Auto-Approve] Ovoz #${createdVoteId} (+${clean12}) reyestrdan tasdiqlandi!`);
-                await this.prisma.user.update({
-                  where: { id: user.id },
-                  data: { step: null, tempData: null, phone: clean12 || user.phone },
-                }).catch(() => {});
-
-                return res.send(`
-                <!DOCTYPE html>
-                <html>
-                <head>
-                  <meta charset="UTF-8">
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-                  <title>Ovoz tasdiqlandi</title>
-                  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-                  <style>
-                    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f8fafc; margin: 0; padding: 20px; display: flex; align-items: center; justify-content: center; min-height: 90vh; }
-                    .card { background: #fff; border-radius: 20px; padding: 26px 20px; text-align: center; max-width: 360px; box-shadow: 0 10px 25px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
-                    .icon { width: 68px; height: 68px; background: #ecfdf5; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 36px; color: #079455; }
-                    h2 { color: #0f172a; margin: 0 0 8px; font-size: 19px; font-weight: 700; }
-                    p { color: #475569; font-size: 14px; line-height: 1.5; margin: 0 0 20px; }
-                    button { width: 100%; height: 50px; background: #079455; color: #fff; border: none; border-radius: 12px; font-weight: 700; font-size: 16px; cursor: pointer; box-shadow: 0 4px 14px rgba(7, 148, 85, 0.3); }
-                  </style>
-                </head>
-                <body>
-                  <div class="card">
-                    <div class="icon">✅</div>
-                    <h2>Ovozingiz tasdiqlandi!</h2>
-                    <p>Ovozingiz OpenBudget rasmiy reyestridan muvaffaqiyatli o'tdi va balansingizga <b>+${voteReward.toLocaleString('uz-UZ')} so'm</b> qo'shildi.</p>
-                    <button onclick="if(window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close(); else window.close();">Botga qaytish</button>
-                  </div>
-                  <script>
-                    if (window.Telegram && window.Telegram.WebApp) {
-                      window.Telegram.WebApp.ready();
-                      window.Telegram.WebApp.expand();
-                    }
-                  </script>
-                </body>
-                </html>
-                `);
-              } else {
-                // Ovoz reyestrda topilmadi (SMS kod xato kiritilgan bo'lishi mumkin)
-                this.logger.warn(`❌ [Instant Check Failed] Ovoz #${createdVoteId} (+${clean12}) reyestrda topilmadi — bekor qilinmoqda.`);
-
-                await this.prisma.vote.delete({ where: { id: createdVoteId } }).catch(() => {});
-
-                if (activeBot?.token) {
-                  const tgUrl = `https://api.telegram.org/bot${activeBot.token}/sendMessage`;
-                  const errText = `❌ <b>OVOZ QABUL QILINMADI!</b>\n\n` +
-                    `📱 <b>Telefon:</b> +${clean12}\n\n` +
-                    `⚠️ <i>Kiritilgan SMS kod noto'g'ri yoki OpenBudget tomonidan tasdiqlanmadi. Iltimos, telefoningizga kelgan to'g'ri SMS kodni kiriting!</i>`;
-
-                  await axios.post(tgUrl, {
-                    chat_id: user.telegramId,
-                    text: errText,
-                    parse_mode: 'HTML',
-                  }).catch(() => {});
-                }
-
-                return res.send(`
-                <!DOCTYPE html>
-                <html>
-                <head>
-                  <meta charset="UTF-8">
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-                  <title>SMS kod noto'g'ri</title>
-                  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-                  <style>
-                    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f8fafc; margin: 0; padding: 20px; display: flex; align-items: center; justify-content: center; min-height: 90vh; }
-                    .card { background: #fff; border-radius: 20px; padding: 26px 20px; text-align: center; max-width: 360px; box-shadow: 0 10px 25px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
-                    .icon { width: 68px; height: 68px; background: #fef2f2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 36px; color: #dc2626; }
-                    h2 { color: #0f172a; margin: 0 0 8px; font-size: 19px; font-weight: 700; }
-                    p { color: #475569; font-size: 14px; line-height: 1.5; margin: 0 0 20px; }
-                    button { width: 100%; height: 50px; background: #dc2626; color: #fff; border: none; border-radius: 12px; font-weight: 700; font-size: 16px; cursor: pointer; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.3); }
-                  </style>
-                </head>
-                <body>
-                  <div class="card">
-                    <div class="icon">❌</div>
-                    <h2>SMS kod tasdiqlanmadi!</h2>
-                    <p>Kiritilgan kod noto'g'ri yoki OpenBudget tomonidan qabul qilinmadi. Iltimos, to'g'ri SMS kodni kiriting.</p>
-                    <button onclick="if(window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close(); else window.close();">Botga qaytish</button>
-                  </div>
-                  <script>
-                    if (window.Telegram && window.Telegram.WebApp) {
-                      window.Telegram.WebApp.ready();
-                      window.Telegram.WebApp.expand();
-                    }
-                  </script>
-                </body>
-                </html>
-                `);
+              // Orqa fonda reyestr tekshiruvini ishga tushirish (avto-tasdiqlash)
+              if (createdVoteId) {
+                this.voteAutoApproverService.checkVoteNow(createdVoteId).catch(() => {});
               }
+
+              // Telegram Bot orqali to'g'ri o'zbekcha qabul qilindi xabarini jo'natish:
+              if (activeBot?.token) {
+                const tgUrl = `https://api.telegram.org/bot${activeBot.token}/sendMessage`;
+                const formattedPhoneForMsg = `998 ${clean9 ? `${clean9.slice(0,2)} ${clean9.slice(2,5)}-${clean9.slice(5,7)}-${clean9.slice(7,9)}` : '***'}`;
+                const text = BOT_MESSAGES.VOTE_SUBMITTED_PENDING(formattedPhoneForMsg, voteReward, mahallaName);
+
+                await axios.post(tgUrl, {
+                  chat_id: user.telegramId,
+                  text: text,
+                  parse_mode: 'HTML',
+                }).catch((err) => {
+                  this.logger.error(`TG message error: ${err.message}`);
+                });
+              }
+
+              await this.prisma.user.update({
+                where: { id: user.id },
+                data: { step: null, tempData: null, phone: clean12 || user.phone },
+              }).catch(() => {});
+
+              return res.send(`
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+                <title>Ovoz qabul qilindi</title>
+                <script src="https://telegram.org/js/telegram-web-app.js"></script>
+                <style>
+                  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f8fafc; margin: 0; padding: 20px; display: flex; align-items: center; justify-content: center; min-height: 90vh; }
+                  .card { background: #fff; border-radius: 20px; padding: 26px 20px; text-align: center; max-width: 360px; box-shadow: 0 10px 25px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+                  .icon { width: 68px; height: 68px; background: #ecfdf5; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 36px; color: #079455; }
+                  h2 { color: #0f172a; margin: 0 0 8px; font-size: 19px; font-weight: 700; }
+                  p { color: #475569; font-size: 14px; line-height: 1.5; margin: 0 0 20px; }
+                  button { width: 100%; height: 50px; background: #079455; color: #fff; border: none; border-radius: 12px; font-weight: 700; font-size: 16px; cursor: pointer; box-shadow: 0 4px 14px rgba(7, 148, 85, 0.3); }
+                </style>
+              </head>
+              <body>
+                <div class="card">
+                  <div class="icon">✅</div>
+                  <h2>Ovozingiz qabul qilindi!</h2>
+                  <p>Ovozingiz tizim tomonidan qabul qilindi. OpenBudget rasmiy reyestridan o'tgandan so'ng balansingizga mablag' qo'shiladi va tasdiqlash xabari yuboriladi.</p>
+                  <button onclick="if(window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close(); else window.close();">Botga qaytish</button>
+                </div>
+                <script>
+                  if (window.Telegram && window.Telegram.WebApp) {
+                    window.Telegram.WebApp.ready();
+                    window.Telegram.WebApp.expand();
+                  }
+                </script>
+              </body>
+              </html>
+              `);
             }
           }
         } catch (e: any) {
