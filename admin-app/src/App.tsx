@@ -55,10 +55,12 @@ export function App() {
   const VALID_TABS: TabType[] = ['bots', 'agents', 'votes', 'withdrawals', 'users', 'health'];
 
   const getInitialTab = (): TabType => {
-    const path = window.location.pathname.replace(/^\/+/, '').split('/')[0].trim() as TabType;
-    if (VALID_TABS.includes(path)) return path;
+    const segments = window.location.pathname.replace(/^\/+|\/+$/g, '').split('/');
+    for (const seg of segments) {
+      if (VALID_TABS.includes(seg as TabType)) return seg as TabType;
+    }
 
-    const hash = window.location.hash.replace('#', '').trim() as TabType;
+    const hash = window.location.hash.replace(/^[#/]+/, '').trim() as TabType;
     if (VALID_TABS.includes(hash)) return hash;
 
     const saved = localStorage.getItem('ob_admin_tab') as TabType;
@@ -71,22 +73,34 @@ export function App() {
 
   const setActiveTab = (tab: TabType) => {
     setActiveTabState(tab);
-    window.history.pushState(null, '', `/${tab}`);
+    if (window.location.pathname !== `/${tab}`) {
+      window.history.pushState(null, '', `/${tab}`);
+    }
     localStorage.setItem('ob_admin_tab', tab);
   };
 
   useEffect(() => {
     const handlePopState = () => {
-      const path = window.location.pathname.replace(/^\/+/, '').split('/')[0].trim() as TabType;
-      if (VALID_TABS.includes(path)) {
-        setActiveTabState(path);
-        localStorage.setItem('ob_admin_tab', path);
+      const segments = window.location.pathname.replace(/^\/+|\/+$/g, '').split('/');
+      for (const seg of segments) {
+        if (VALID_TABS.includes(seg as TabType)) {
+          setActiveTabState(seg as TabType);
+          localStorage.setItem('ob_admin_tab', seg);
+          return;
+        }
       }
     };
     window.addEventListener('popstate', handlePopState);
 
-    const curPath = window.location.pathname.replace(/^\/+/, '').split('/')[0].trim() as TabType;
-    if (!VALID_TABS.includes(curPath)) {
+    const segments = window.location.pathname.replace(/^\/+|\/+$/g, '').split('/');
+    let matched = false;
+    for (const seg of segments) {
+      if (VALID_TABS.includes(seg as TabType)) {
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
       window.history.replaceState(null, '', `/${activeTab}`);
     }
 
