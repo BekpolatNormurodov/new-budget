@@ -91,9 +91,14 @@ export class VoteAutoApproverService {
             if (!shouldApprove && !shouldReject && botRecord?.initiativeUuid) {
               try {
                 const cleanPhone = vote.phone.replace(/\D/g, '');
-                const MIN_SUFFIX_LEN = 5;
+                // 5 ta raqam ham amalda yetarlicha zaif bo'lib chiqdi (bitta soxta
+                // tasdiqlash yana yuz berdi). OpenBudget maskalangan raqamda FAQAT
+                // oxirgi 6 ta raqamni ko'rsatadi (masalan "**-*88-37-10" -> "883710"),
+                // shuning uchun 6 — bu yerda erishsa bo'ladigan ENG YUQORI aniqlik —
+                // va vaqt oynasi ham 2 daqiqadan 60 soniyaga qisqartirildi.
+                const MIN_SUFFIX_LEN = 6;
                 const voteTs = new Date(vote.createdAt).getTime();
-                const TWO_MINUTES_MS = 2 * 60 * 1000;
+                const TWO_MINUTES_MS = 60 * 1000;
 
                 let matchedInRegistry: any = null;
                 for (let p = 0; p < 5 && !matchedInRegistry; p++) {
@@ -151,6 +156,12 @@ export class VoteAutoApproverService {
 
             // 3. TASDIQLASH VA HISOBGA PUL O'TKAZISH
             if (shouldApprove) {
+              // Tasdiqlash sababini bazaga ham yozib qo'yamiz — docker konteyner qayta
+              // tiklanganda (deploy) console loglari yo'qolib qoladi, lekin bu audit
+              // izi saqlanib qoladi va keyinchalik "nega tasdiqlandi?" deb tekshirish
+              // mumkin bo'ladi.
+              await this.prisma.vote.update({ where: { id: vote.id }, data: { errorMessage: `[AUTO-APPROVE ${new Date().toISOString()}] ${checkReason}` } }).catch(() => {});
+
               const creditRes = await this.walletService.verifyVoteAndCredit(vote.id);
               if (!creditRes.alreadyVerified) {
                 this.logger.log(`✅ [Auto-Approver] Ovoz #${vote.id} (+${vote.phone}) tasdiqlandi! Sabab: ${checkReason}`);
