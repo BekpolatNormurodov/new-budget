@@ -242,9 +242,6 @@ export class WebAppController {
 
       // 3. Agar telefon raqam yoki telegram ma'lumotlari bo'lsa
       const cleanPhone = phoneQuery ? phoneQuery.replace(/[^0-9]/g, '').slice(-9) : '';
-      const formattedPhone = cleanPhone.length === 9 
-        ? `${cleanPhone.slice(0,2)} ${cleanPhone.slice(2,5)}-${cleanPhone.slice(5,7)}-${cleanPhone.slice(7,9)}`
-        : '';
 
       if (tgIdQuery || botIdQuery) {
         bodyRaw = bodyRaw.replace(/(<form[^>]*>)/i, `$1<input type="hidden" name="tg_id" value="${tgIdQuery || ''}" /><input type="hidden" name="botId" value="${botIdQuery || ''}" />`);
@@ -557,8 +554,13 @@ export class WebAppController {
             }
 
             // Pre-fill phone if provided
+            // MUHIM: OpenBudget'ga faqat XOM (formatlanmagan, probel/tiresiz) 9 xonali
+            // raqam yuboriladi — avval bu yerda "95 064-28-27" kabi FAQAT KO'RSATISH
+            // uchun formatlangan matn to'g'ridan-to'g'ri forma qiymati sifatida
+            // yuborilardi, va OpenBudget buni haqiqiy raqam sifatida tanimay HTTP 400
+            // bilan captcha'ni rad etardi (ovoz hech qachon hisoblanmasdi).
             const phoneInput = document.getElementById('phone');
-            const prefilledPhone = "${formattedPhone}";
+            const prefilledPhone = "${cleanPhone}";
             if (phoneInput && prefilledPhone) {
               phoneInput.value = prefilledPhone;
               phoneInput.readOnly = true;
