@@ -1825,13 +1825,34 @@ export class OpenBudgetService {
           fetchedAt: Date.now(),
         });
         cachedCount++;
+
+        // AQLLI TO'XTASH: ro'yxat eng yangisidan eskisiga tartiblangan (yangi
+        // ovoz — birinchi qatorda). Amalda faqat SO'NGGI ~4 SOATLIK ovozlar kerak
+        // (qidiruv, tekshiruv) — undan eskisini yuklashning ma'nosi yo'q va
+        // aynan shu "hammasini yuklashga urinish" IP-blokka tez-tez tiqilib
+        // qolishning asosiy sababi edi. Shu sahifadagi ENG ESKI yozuv 4 soatdan
+        // eski bo'lsa, bu yerda to'xtaymiz — qolgan ~150+ sahifani yuklamaymiz.
+        const content = result.content || [];
+        const oldestInPage = content[content.length - 1];
+        if (oldestInPage?.voteDate) {
+          const formattedDateStr = String(oldestInPage.voteDate).includes('+')
+            ? oldestInPage.voteDate
+            : String(oldestInPage.voteDate).replace(' ', 'T') + '+05:00';
+          const oldestTs = new Date(formattedDateStr).getTime();
+          const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+          if (!isNaN(oldestTs) && Date.now() - oldestTs > FOUR_HOURS_MS) {
+            this.logger.log(`⏹ [Prewarm] Sahifa ${p}dagi eng eski ovoz 4 soatdan eski (${oldestInPage.voteDate}) — bu yerda to'xtatilmoqda (keyingisi kerak emas).`);
+            break;
+          }
+        }
+
         // Har sahifadan keyin kichik pauza — so'rov tezligini pasaytirib,
         // OpenBudget'ning tezlik-asosidagi cheklovidan qochish uchun.
         await new Promise((r) => setTimeout(r, 700));
       }
 
       await browserPage.close().catch(() => {});
-      this.logger.log(`✅ [Prewarm] OpenBudget ro'yxati keshlandi: ${cachedCount}/${totalPages} sahifa.`);
+      this.logger.log(`✅ [Prewarm] OpenBudget ro'yxati keshlandi: ${cachedCount}/${totalPages} sahifa (so'nggi ~4 soat qamrab olindi).`);
     } catch (e: any) {
       if (browserPage) await browserPage.close().catch(() => {});
       this.logger.error(`❌ [Prewarm] Xatolik: ${e.message}`);
