@@ -646,6 +646,7 @@ export class WebAppController {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.send(bodyRaw);
     } catch (err: any) {
+      this.logger.error(`❌ [GET captcha-page] Xatolik (barcha qayta urinishlardan keyin ham): ${err.message}`);
       return res.status(500).send(`<h3>Captcha yuklashda xatolik: ${err.message}</h3>`);
     }
   }
@@ -1160,6 +1161,7 @@ export class WebAppController {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.send(bodyRaw);
     } catch (err: any) {
+      this.logger.error(`❌ [mvc/captcha POST] Xatolik (barcha qayta urinishlardan keyin ham): ${err.message} | Phone: +${logPhone}`);
       return res.status(500).send(`<h3>SMS so'rashda xatolik: ${err.message}</h3>`);
     }
   }
@@ -1495,7 +1497,9 @@ export class WebAppController {
               }
             }
           }
-        } catch (e: any) {}
+        } catch (e: any) {
+          this.logger.warn(`⚠️ [mvc/verify POST] Xato-holat xabarini yuborishda muammo: ${e.message}`);
+        }
 
         // Foydalanuvchiga Mini App ichida aniq va chiroyli tushuntirish berish:
         let title = "SMS kod noto'g'ri!";
@@ -1566,6 +1570,7 @@ export class WebAppController {
       }
       return res.send(bodyRaw);
     } catch (err: any) {
+      this.logger.error(`❌ [mvc/verify POST] Xatolik (barcha qayta urinishlardan keyin ham): ${err.message} | Phone: +${logPhone2}`);
       return res.status(500).send(`<h3>SMS tasdiqlashda xatolik: ${err.message}</h3>`);
     }
   }
