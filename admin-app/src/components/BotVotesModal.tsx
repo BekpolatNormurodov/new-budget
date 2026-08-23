@@ -497,28 +497,6 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
 
           {/* Tez-kesh (prewarm) qamrovi haqida shaffof ma'lumot — bu FAQAT tezkor
               sahifalashga tegishli; "Raqam yoki vaqt" qidiruvi (yuqorida) har doim
-              butun rasmiy ro'yxatni jonli tekshiradi, shuning uchun eski ovozlar
-              qidiruvda "yo'q" ko'rinib qolmaydi. */}
-          {activeTab === 'OPENBUDGET' && !needCaptcha && prewarmStatus && (
-            <div
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-semibold border ${
-                prewarmStatus.reachedFullCutoff
-                  ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
-                  : 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-500/20 text-amber-700 dark:text-amber-400'
-              }`}
-            >
-              <Clock className="w-3.5 h-3.5 shrink-0" />
-              {prewarmStatus.reachedFullCutoff ? (
-                <span>Tez kesh so'nggi 3 soatni to'liq qamrab oldi ({prewarmStatus.cachedPages} sahifa) — bu oraliqdagi sahifalash bir zumda ochiladi.</span>
-              ) : (
-                <span>
-                  Tez kesh hozircha faqat so'nggi ~{formatCoverage(prewarmStatus.coverageMinutes)}ni qamrab oldi (tarmoq/limit tufayli to'liq 3 soatga yetmadi) —
-                  eski sahifalar sekinroq (jonli) yuklanadi. Qidiruv bunga qaramay har doim butun ro'yxatni tekshiradi.
-                </span>
-              )}
-            </div>
-          )}
-
           {/* TABLE: OPENBUDGET OFFICIAL LIST */}
           {activeTab === 'OPENBUDGET' ? (
             needCaptcha ? (
