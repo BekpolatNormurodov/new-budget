@@ -206,16 +206,25 @@ export class VoteAutoApproverService {
       }
     }
 
-    // 1.5. RASMIY OCHIQ BUDJET REYESTRIDAN TEKSHIRISH (Operator + Suffix & Timestamp strictly [-2 min : +2 min])
+    // 1.5. RASMIY OCHIQ BUDJET REYESTRIDAN TEKSHIRISH
+    //
+    // MUHIM XAVFSIZLIK TUZATISHI: bu blok "suffix2" (faqat OXIRGI 2 TA RAQAM)
+    // ni ALOHIDA yetarli mezon sifatida qabul qilar edi (OR orqali), vaqt
+    // oynasi esa ±3 daqiqagacha kengaytirilgan edi. Bu — aynan shu sessiyada
+    // ERTA (3 marta ketma-ket) SOXTA PUL TASDIQLASHGA sabab bo'lgan mezonning
+    // O'ZI (boshqa odamning ovozi tasodifan oxirgi 2 raqami va vaqt oynasi mos
+    // kelib qolganda, bizning foydalanuvchimiz HAQIQATDA ovoz bermagan bo'lsa
+    // ham "tasdiqlangan" deb hisoblanardi). `visible6` (OpenBudget maskalangan
+    // raqamda ko'rinadigan TO'LIQ 6 ta raqam) — bu yerda yetarlicha aniq va
+    // yagona mezon sifatida qoldirilgan; zaif suffix4/suffix2 zaxira variantlari
+    // OLIB TASHLANDI. Vaqt oynasi ham 60 soniyagacha qisqartirildi.
     if (!shouldApprove && !shouldReject && botRecord?.initiativeUuid) {
       try {
         const cleanPhone = vote.phone.replace(/\D/g, '');
         const clean9 = cleanPhone.slice(-9);
-        const suffix2 = clean9.slice(-2); // e.g. "27"
-        const suffix4 = clean9.slice(-4); // e.g. "2827"
-        const visible6 = clean9.length >= 9 ? clean9.slice(3) : suffix4; // e.g. "642827" for +998 95 064 28 27
+        const visible6 = clean9.length >= 9 ? clean9.slice(3) : clean9.slice(-6); // e.g. "642827" for +998 95 064 28 27
         const voteTs = new Date(vote.createdAt).getTime();
-        const THREE_MINUTES_MS = 3 * 60 * 1000; // Aniq [-3 minut : +3 minut] oralig'i
+        const SIXTY_SECONDS_MS = 60 * 1000; // Aniq [-60s : +60s] oralig'i
 
         let matchedInRegistry: any = null;
         for (let p = 0; p < 10 && !matchedInRegistry; p++) {
@@ -225,20 +234,20 @@ export class VoteAutoApproverService {
           matchedInRegistry = offVotes.content.find((item: any) => {
             const rawItemPhone = String(item.phoneNumber || '');
             const itemDigits = rawItemPhone.replace(/\D/g, '');
-            if (!itemDigits) return false;
+            if (!itemDigits || visible6.length < 6) return false;
 
-            // 1) Raqam mosligi: OpenBudget formati **-*64-28-27 bo'lib, oxirgi 6 yoki 4 ta raqami mos keladi
-            const isDigitMatch = (itemDigits === visible6) || itemDigits.endsWith(suffix4) || itemDigits.endsWith(suffix2);
+            // 1) Raqam mosligi: FAQAT aniq, to'liq ko'rinadigan 6 ta raqam mos kelsa
+            const isDigitMatch = itemDigits.endsWith(visible6);
             if (!isDigitMatch) return false;
 
-            // 2) Aniq vaqt tekshiruvi: Ovoz berilgan vaqt bilan strictly [-3 daqiqa : +3 daqiqa] oralig'ida
+            // 2) Aniq vaqt tekshiruvi: Ovoz berilgan vaqt bilan strictly [-60s : +60s] oralig'ida
             if (item.voteDate) {
               const formattedDateStr = String(item.voteDate).includes('+')
                 ? item.voteDate
                 : String(item.voteDate).replace(' ', 'T') + '+05:00';
               const itemTs = new Date(formattedDateStr).getTime();
               const diffMs = Math.abs(voteTs - itemTs);
-              return !isNaN(itemTs) && diffMs <= THREE_MINUTES_MS;
+              return !isNaN(itemTs) && diffMs <= SIXTY_SECONDS_MS;
             }
             return false;
           }) || null;
