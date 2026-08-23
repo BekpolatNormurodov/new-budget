@@ -1428,9 +1428,19 @@ export class WebAppController {
     args.push('-H', 'Origin: https://new.openbudget.uz');
     args.push('-H', 'Referer: https://new.openbudget.uz/api/v2/vote/mvc/captcha');
 
+    const cookiePhoneMatch = (clientCookies || '').match(/VOTE_PHONE=([0-9]+)/);
+    const rawDigits = String(
+      Array.isArray(body?.phoneNumber)
+        ? (body.phoneNumber[body.phoneNumber.length - 1] || body.phoneNumber[0] || '')
+        : (body?.phoneNumber || body?.phone || (cookiePhoneMatch ? cookiePhoneMatch[1] : ''))
+    ).replace(/[^0-9]/g, '');
+    const clean12 = rawDigits.length >= 9 ? (rawDigits.length === 9 ? `998${rawDigits}` : (rawDigits.startsWith('998') ? rawDigits : `998${rawDigits.slice(-9)}`)) : '';
+    const clean9 = clean12.slice(-9);
+
     const grToken = String(Array.isArray(body?.grToken) ? body.grToken[0] : (body?.grToken ?? '')).trim();
 
     const params = new URLSearchParams();
+    if (clean9) params.set('phoneNumber', clean9);
     params.set('otpCode', otpVal);
     params.set('grToken', grToken);
     args.push('--data', params.toString());
@@ -1439,7 +1449,7 @@ export class WebAppController {
     this.logger.log(`📦 [mvc/verify POST] So'rov tanasi (request body): ${params.toString()}`);
 
     try {
-      const { stdout } = await execCurlWithRetry(args, 2, `POST mvc/verify (+${logPhone2})`);
+      const { stdout } = await execCurlWithRetry(args, 2, `POST mvc/verify (+${clean12 || logPhone2})`);
 
       this.setProxyCookies(res, stdout);
 
@@ -1468,11 +1478,6 @@ export class WebAppController {
         bodyRaw = '';
       }
 
-      // 1. Telefon raqamini aniqlash va formatlash:
-      const cookiePhoneMatch = (clientCookies || '').match(/VOTE_PHONE=([0-9]+)/);
-      const rawDigits = String(Array.isArray(body?.phoneNumber) ? (body.phoneNumber[body.phoneNumber.length - 1] || body.phoneNumber[0] || '') : (body?.phoneNumber || (cookiePhoneMatch ? cookiePhoneMatch[1] : ''))).replace(/[^0-9]/g, '');
-      const clean12 = rawDigits.length >= 9 ? (rawDigits.length === 9 ? `998${rawDigits}` : (rawDigits.startsWith('998') ? rawDigits : `998${rawDigits.slice(-9)}`)) : '';
-      const clean9 = clean12.slice(-9);
 
       // 2. Kengaytirilgan muvaffaqiyat va xatolik matnlarini tekshirish (Kirill, Lotin, Rus tillarida):
       const lowerBody = (bodyRaw || '').toLowerCase();
