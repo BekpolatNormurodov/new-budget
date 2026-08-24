@@ -20,6 +20,12 @@ export const ReceiptViewerModal: React.FC<ReceiptViewerModalProps> = ({
   userName,
   card,
 }) => {
+  const [imgError, setImgError] = React.useState(false);
+
+  React.useEffect(() => {
+    setImgError(false);
+  }, [receiptUrl]);
+
   if (!isOpen || !receiptUrl) return null;
 
   const fullUrl = receiptUrl.startsWith('http') || receiptUrl.startsWith('data:')
@@ -66,11 +72,26 @@ export const ReceiptViewerModal: React.FC<ReceiptViewerModalProps> = ({
         </div>
       }
     >
-      <img
-        src={fullUrl}
-        alt="To'lov cheki"
-        className="max-w-full max-h-[60vh] object-contain rounded-xl border border-slate-200 dark:border-slate-800 shadow-lg"
-      />
+      {imgError ? (
+        <div className="p-8 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto">
+            <FileCheck className="w-6 h-6" />
+          </div>
+          <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+            Chek rasmi topilmadi
+          </p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
+            Ushbu to'lov cheki server qayta ishga tushirilishidan oldin yuklangan bo'lishi mumkin. To'lovni qayta tasdiqlab chekni biriktirishingiz mumkin.
+          </p>
+        </div>
+      ) : (
+        <img
+          src={fullUrl}
+          alt="To'lov cheki"
+          onError={() => setImgError(true)}
+          className="max-w-full max-h-[60vh] object-contain rounded-xl border border-slate-200 dark:border-slate-800 shadow-lg"
+        />
+      )}
     </Modal>
   );
 };

@@ -68,6 +68,8 @@ services:
       PROXY_LIST: ${PROXY_LIST:-}
     volumes:
       - app_logs:/app/logs
+      - app_receipts:/app/public/receipts
+      - app_avatars:/app/public/avatars
     network_mode: "host"
 
 # =========================================================================
