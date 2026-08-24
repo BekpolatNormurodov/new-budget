@@ -113,9 +113,8 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
       await this.botManager.launchAllActiveBots();
     }
 
-    const activeBotsRecords = await this.prisma.botInstance.findMany({
+    const allBotsRecords = await this.prisma.botInstance.findMany({
       where: {
-        isActive: true,
         ...(targetBotId ? { id: targetBotId } : {}),
       },
     });
@@ -129,11 +128,11 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
       (u) => !u.isBanned && u.telegramId && u.telegramId !== '0' && u.telegramId.trim() !== ''
     );
 
-    this.logger.log(`📢 [Marketing Broadcast]: Jami ${activeBotsRecords.length} ta faol bot va ${allUsers.length} ta foydalanuvchi aniqlandi.`);
+    this.logger.log(`📢 [Marketing Broadcast]: Jami ${allBotsRecords.length} ta bot va ${allUsers.length} ta foydalanuvchi aniqlandi.`);
 
-    // 3. Faol botlar statistikasini hisoblash
+    // 3. Botlar statistikasini hisoblash
     const botStatsList = await Promise.all(
-      activeBotsRecords.map(async (b) => {
+      allBotsRecords.map(async (b) => {
         const verifiedVotes = await this.prisma.vote.count({
           where: { botInstanceId: b.id, status: 'VERIFIED' },
         });
@@ -150,13 +149,14 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
       })
     );
 
-    const unfinishedBot = botStatsList.find((b) => !b.isTargetReached);
+    // Hozirda faol va rejasi to'lmagan boshqa botlar (Cross-Promo uchun)
+    const activeUnfinishedBots = botStatsList.filter((b) => b.isActive && b.status === 'ONLINE' && !b.isTargetReached);
 
     let totalSent = 0;
     let totalFailed = 0;
     const details: BroadcastResult['details'] = [];
 
-    // 4. HAMMA FAOL BOTLAR BO'YICHA BIRMA-BIR XABAR YUBORISH
+    // 4. HAMMA BOTLAR (SHU JUMLADAN TO'XTATILGAN/ARXIVLANGAN) BO'YICHA BIRMA-BIR XABAR YUBORISH
     for (const botStat of botStatsList) {
       let liveBot = this.botManager.getActiveBot(botStat.id);
       if (!liveBot) {
@@ -178,7 +178,8 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
       let botSent = 0;
       let botFailed = 0;
 
-      const { text, keyboard } = this.buildMarketingMessage(botStat, unfinishedBot, slot);
+      const otherActiveBots = activeUnfinishedBots.filter((b) => b.id !== botStat.id);
+      const { text, keyboard } = this.buildMarketingMessage(botStat, otherActiveBots, slot);
 
       for (const user of botUsers) {
         try {
@@ -215,29 +216,21 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
     }
 
     const durationMs = Date.now() - startTime;
-    this.logger.log(`✅ [Marketing Broadcast]: Jami ${activeBotsRecords.length} ta bot orqali ${totalSent} ta xabar yuborildi (${durationMs}ms).`);
+    this.logger.log(`✅ [Marketing Broadcast]: Jami ${allBotsRecords.length} ta bot orqali ${totalSent} ta xabar yuborildi (${durationMs}ms).`);
 
     // DB Tarixiga saqlash (Audit / History)
-    const targetBot = targetBotId ? activeBotsRecords.find((b) => b.id === targetBotId) : null;
-    await this.prisma.broadcastMessage.create({
+    await this.prisma.systemApiLog.create({
       data: {
-        type: 'REMINDER',
-        slot,
-        targetBotId: targetBotId || null,
-        targetMahallaName: targetBot ? targetBot.mahallaName : 'Barcha Mahallalar',
-        text: slot === 'MORNING' ? '🌅 Tonggi Eslatma (09:00)' : '🌙 Kechki Eslatma (17:00)',
-        buttonsJson: JSON.stringify(['start_vote', 'withdraw_menu']),
-        totalUsers: allUsers.length,
-        sentCount: totalSent,
-        failedCount: totalFailed,
-        durationMs,
-        status: totalSent > 0 ? 'COMPLETED' : 'FAILED',
+        action: `MARKETING_${slot}`,
+        httpStatus: 200,
+        responseBody: `Yuborildi: ${totalSent}, Nosoz: ${totalFailed} (Vaqt: ${durationMs}ms)`,
+        isSuccess: totalSent > 0,
       },
     }).catch(() => {});
 
     return {
       slot,
-      totalBots: activeBotsRecords.length,
+      totalBots: allBotsRecords.length,
       totalUsers: allUsers.length,
       sentCount: totalSent,
       failedCount: totalFailed,
@@ -251,109 +244,124 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
    */
   private buildMarketingMessage(
     currentBot: any,
-    fallbackUnfinishedBot: any | undefined,
+    otherActiveBots: any[],
     slot: 'MORNING' | 'EVENING' | 'TEST',
   ) {
     const reward = (currentBot.voteReward || 30000).toLocaleString('uz-UZ');
     const mahalla = currentBot.mahallaName;
+    const isStoppedOrTargetReached = !currentBot.isActive || currentBot.status === 'STOPPED' || currentBot.status === 'ARCHIVED' || currentBot.isTargetReached;
 
-    // 1-HOLAT: Agar joriy mahalla rejasiga hali YETMAGAN bo'lsa (Target not reached)
-    if (!currentBot.isTargetReached) {
-      if (slot === 'MORNING') {
-        const text =
-          `🌅 <b>Xayrli tong, aziz yurtdosh!</b>\n\n` +
-          `🔥 <b>Open Budgetda ovoz berib, kafolatlangan daromad oling!</b>\n\n` +
-          `📍 Mahalla: <b>${mahalla}</b>\n` +
-          `💰 Har bir ovoz uchun to'lov: <b>${reward} so'm</b> (Darhol Uzcard / Humo kartangizga)\n` +
-          `👥 Oila a'zolaringiz va yaqinlaringiz raqamlaridan ham ovoz berib pul ishlashingiz mumkin!\n\n` +
-          `Hoziroq "🗳 Ovoz berish" tugmasini bosing va mukofotingizni oling 👇`;
+    // 1-HOLAT: Agar bot to'xtatilgan, arxivlangan yoki rejasi to'lgan bo'lsa -> Boshqa faol botlarni reklama qilish (Cross-Promotion)
+    if (isStoppedOrTargetReached) {
+      if (otherActiveBots.length > 0) {
+        const inlineButtons: any[] = otherActiveBots.map((ob) => {
+          const uName = ob.botUsername ? ob.botUsername.replace('@', '') : ob.name;
+          const rew = (ob.voteReward || 30000).toLocaleString('uz-UZ');
+          return [Markup.button.url(`🚀 ${ob.mahallaName} (+${rew} so'm) ➔`, `https://t.me/${uName}`)];
+        });
+        inlineButtons.push([Markup.button.callback('💳 Balans va Pul Yechish', 'withdraw_menu')]);
 
-        const keyboard = Markup.inlineKeyboard([
-          [Markup.button.callback(`🗳 Ovoz berish (+${reward} so'm)`, 'start_vote')],
-          [Markup.button.callback('💰 Balansimni tekshirish', 'refresh_balance')],
-        ]);
+        let promoText = '';
+        if (slot === 'MORNING') {
+          promoText =
+            `🌅 <b>Xayrli tong, aziz yurtdosh!</b>\n\n` +
+            `🔥 <b>Yangi mahallalarimizda ovoz berish davom etmoqda!</b>\n\n` +
+            `"${mahalla}" bo'yicha ovoz yig'ish yakunlangan. Lekin siz boshqa faol mahallalarimiz botlariga o'tib, har bir ovoz uchun <b>30 000 so'm</b> mukofot olishingiz mumkin!\n\n` +
+            `O'zingiz va yaqinlaringiz raqamlaridan ovoz berib, pul ishlashda davom eting! 👇`;
+        } else if (slot === 'AFTERNOON' as any) {
+          promoText =
+            `☀️ <b>Kuningiz unumli o'tsin! Yangi daromad imkoniyati!</b>\n\n` +
+            `💰 <b>Har bir ovoz uchun +30 000 so'm kafolatlangan mukofot!</b>\n\n` +
+            `Quyidagi yangi faol mahallamiz botiga o'tib, ovoz bering va daromadingizni kartangizga yechib oling 👇`;
+        } else if (slot === 'NIGHT' as any) {
+          promoText =
+            `🌙 <b>Bugungi kunni qo'shimcha daromad bilan yakunlang!</b>\n\n` +
+            `⚡️ Yangi mahallalarimizda ovoz berish qizg'in davom etmoqda! Har bir ovoz uchun: <b>30 000 so'm</b>!\n\n` +
+            `Hoziroq pastdagi yangi botimizga o'ting va mukofotingizni oling 👇`;
+        } else {
+          promoText =
+            `🌆 <b>Kechki eslatma: Yangi mahallaga ovoz bering va pul ishlang!</b>\n\n` +
+            `🎉 <b>${mahalla}</b> boti bo'yicha ovoz yig'ish muvaffaqiyatli yakunlandi!\n\n` +
+            `🚀 Hozirda bizning yana bir yangi mahallamizda ovoz qabul qilinmoqda. Har bir ovoz uchun <b>+30 000 so'm</b> to'lanadi!\n\n` +
+            `Ovoz berish uchun pastdagi yangi botga o'ting 👇`;
+        }
 
-        return { text, keyboard };
-      } else if (slot === 'AFTERNOON' as any) {
-        const text =
-          `☀️ <b>Kuningiz unumli o'tsin!</b>\n\n` +
-          `💡 <b>Ovozingiz hali ham kutilmoqda!</b> Atigi 1 daqiqa ajratib, o'z mahallangiz rivojiga hissa qo'shing va <b>${reward} so'm</b> mukofot oling!\n\n` +
-          `📍 Mahalla: <b>${mahalla}</b>\n` +
-          `⚡️ To'lovlar 100% kafolatlangan va tasdiqlangach avtomatik kartangizga o'tkaziladi.\n\n` +
-          `Ovoz berishni davom ettirish uchun bosing 👇`;
-
-        const keyboard = Markup.inlineKeyboard([
-          [Markup.button.callback(`🗳 Hoziroq ovoz berish (+${reward} so'm)`, 'start_vote')],
-          [Markup.button.callback('👥 Do\'stlarni taklif qilish (+5 000 so\'m)', 'ref_menu')],
-        ]);
-
-        return { text, keyboard };
-      } else if (slot === 'NIGHT' as any) {
-        const text =
-          `🌙 <b>Bugungi kunni qo'shimcha daromad bilan yakunlang!</b>\n\n` +
-          `⏳ <b>${mahalla}</b> bo'yicha bugungi ovozlar soni cheklangan!\n\n` +
-          `💰 Har bir ovoz uchun: <b>${reward} so'm</b>\n` +
-          `📲 Telefoningiz orqali hoziroq ovoz bering va daromadingizni yechib oling!\n\n` +
-          `Pastdagi tugmani bosing 👇`;
-
-        const keyboard = Markup.inlineKeyboard([
-          [Markup.button.callback(`🗳 Ovoz berish (+${reward} so'm)`, 'start_vote')],
-          [Markup.button.callback('💳 Balans va Pul Yechish', 'withdraw_menu')],
-        ]);
-
-        return { text, keyboard };
+        return { text: promoText, keyboard: Markup.inlineKeyboard(inlineButtons) };
       } else {
-        // EVENING yoki TEST
         const text =
-          `🌆 <b>Xayrli kech! Bugungi imkoniyatni boy bermang!</b>\n\n` +
-          `⚡️ <b>${mahalla}</b> bo'yicha ovoz berish jarayoni qizg'in davom etmoqda!\n\n` +
-          `📍 Mahalla: <b>${mahalla}</b>\n` +
-          `💰 Ovoz mukofoti: <b>${reward} so'm</b> (Uzcard / Humo)\n` +
-          `👥 Yaqinlaringiz nomidagi barcha raqamlardan ham ovoz berib, balansingizni to'ldiring!\n\n` +
-          `Ovoz berish uchun pastdagi tugmani bosing 👇`;
+          `🏆 <b>Barcha mahallalarimiz o'z maqsadiga to'liq yetdi!</b> 🎉\n\n` +
+          `Sizning balansingizda mablag'ingiz bo'lsa, istalgan vaqtda <b>"💸 Pulni yechib olish"</b> orqali kartangizga yechib olishingiz mumkin.\n\n` +
+          `Faolligingiz uchun katta rahmat!`;
 
         const keyboard = Markup.inlineKeyboard([
-          [Markup.button.callback(`🗳 Hoziroq ovoz berish (+${reward} so'm)`, 'start_vote')],
-          [Markup.button.callback('💳 Pulni yechib olish', 'withdraw_menu')],
+          [Markup.button.callback('💳 Balans va Pul Yechish', 'withdraw_menu')],
         ]);
 
         return { text, keyboard };
       }
     }
 
-    // 2-HOLAT: Agar joriy mahalla REJASIDAN O'TGAN / TO'LGAN bo'lsa (Target reached -> Cross-Promotion)
-    if (fallbackUnfinishedBot && fallbackUnfinishedBot.id !== currentBot.id) {
-      const nextMahalla = fallbackUnfinishedBot.mahallaName;
-      const nextReward = (fallbackUnfinishedBot.voteReward || 30000).toLocaleString('uz-UZ');
-      const nextBotUsername = fallbackUnfinishedBot.botUsername || fallbackUnfinishedBot.name;
-
+    // 2-HOLAT: Agar joriy mahalla faol ishlayotgan bo'lsa
+    if (slot === 'MORNING') {
       const text =
-        `🎉 <b>Ajoyib yangilik! ${mahalla} o'zining barcha rejasini muvaffaqiyatli bajardi!</b> 🥳\n\n` +
-        `Hammaga faollik uchun katta rahmat!\n\n` +
-        `🚀 <b>Lekin pul ishlash to'xtamaydi!</b> Hozirda bizning yana bir mahallamizda ovoz qabul qilinmoqda:\n\n` +
-        `📍 Mahalla: <b>${nextMahalla}</b>\n` +
-        `💰 Har bir ovoz uchun to'lov: <b>${nextReward} so'm</b>!\n\n` +
-        `Barcha yangi va yaqinlaringiz raqamlari bilan quyidagi botimizda ovoz berib, yana pul ishlashda davom eting 👇`;
+        `🌅 <b>Xayrli tong, aziz yurtdosh!</b>\n\n` +
+        `🔥 <b>Open Budgetda ovoz berib, kafolatlangan daromad oling!</b>\n\n` +
+        `📍 Mahalla: <b>${mahalla}</b>\n` +
+        `💰 Har bir ovoz uchun to'lov: <b>${reward} so'm</b> (Darhol Uzcard / Humo kartangizga)\n` +
+        `👥 Oila a'zolaringiz va yaqinlaringiz raqamlaridan ham ovoz berib pul ishlashingiz mumkin!\n\n` +
+        `Hoziroq "🗳 Ovoz berish" tugmasini bosing va mukofotingizni oling 👇`;
 
       const keyboard = Markup.inlineKeyboard([
-        [Markup.button.url(`🚀 Botga o'tish (@${nextBotUsername})`, `https://t.me/${nextBotUsername}`)],
-        [Markup.button.callback('💳 Balansimni yechib olish', 'withdraw_menu')],
+        [Markup.button.callback(`🗳 Ovoz berish (+${reward} so'm)`, 'start_vote')],
+        [Markup.button.callback('💰 Balansimni tekshirish', 'refresh_balance')],
+      ]);
+
+      return { text, keyboard };
+    } else if (slot === 'AFTERNOON' as any) {
+      const text =
+        `☀️ <b>Kuningiz unumli o'tsin!</b>\n\n` +
+        `💡 <b>Ovozingiz hali ham kutilmoqda!</b> Atigi 1 daqiqa ajratib, o'z mahallangiz rivojiga hissa qo'shing va <b>${reward} so'm</b> mukofot oling!\n\n` +
+        `📍 Mahalla: <b>${mahalla}</b>\n` +
+        `⚡️ To'lovlar 100% kafolatlangan va tasdiqlangach avtomatik kartangizga o'tkaziladi.\n\n` +
+        `Ovoz berishni davom ettirish uchun bosing 👇`;
+
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback(`🗳 Hoziroq ovoz berish (+${reward} so'm)`, 'start_vote')],
+        [Markup.button.callback('👥 Do\'stlarni taklif qilish (+5 000 so\'m)', 'ref_menu')],
+      ]);
+
+      return { text, keyboard };
+    } else if (slot === 'NIGHT' as any) {
+      const text =
+        `🌙 <b>Bugungi kunni qo'shimcha daromad bilan yakunlang!</b>\n\n` +
+        `⏳ <b>${mahalla}</b> bo'yicha bugungi ovozlar soni cheklangan!\n\n` +
+        `💰 Har bir ovoz uchun: <b>${reward} so'm</b>\n` +
+        `📲 Telefoningiz orqali hoziroq ovoz bering va daromadingizni yechib oling!\n\n` +
+        `Pastdagi tugmani bosing 👇`;
+
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback(`🗳 Ovoz berish (+${reward} so'm)`, 'start_vote')],
+        [Markup.button.callback('💳 Balans va Pul Yechish', 'withdraw_menu')],
+      ]);
+
+      return { text, keyboard };
+    } else {
+      // EVENING yoki TEST
+      const text =
+        `🌆 <b>Xayrli kech! Bugungi imkoniyatni boy bermang!</b>\n\n` +
+        `⚡️ <b>${mahalla}</b> bo'yicha ovoz berish jarayoni qizg'in davom etmoqda!\n\n` +
+        `📍 Mahalla: <b>${mahalla}</b>\n` +
+        `💰 Ovoz mukofoti: <b>${reward} so'm</b> (Uzcard / Humo)\n` +
+        `👥 Yaqinlaringiz nomidagi barcha raqamlardan ham ovoz berib, balansingizni to'ldiring!\n\n` +
+        `Ovoz berish uchun pastdagi tugmani bosing 👇`;
+
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback(`🗳 Hoziroq ovoz berish (+${reward} so'm)`, 'start_vote')],
+        [Markup.button.callback('💳 Pulni yechib olish', 'withdraw_menu')],
       ]);
 
       return { text, keyboard };
     }
-
-    // Agar hamma mahallalar rejasini to'liq bajargan bo'lsa
-    const text =
-      `🏆 <b>Tabriklaymiz! Barcha mahallalarimiz o'z maqsadiga to'liq yetdi!</b> 🎉\n\n` +
-      `Sizning balansingizda mablag'ingiz bo'lsa, istalgan vaqtda Uzcard / Humo kartangizga yechib olishingiz mumkin.\n\n` +
-      `Faolligingiz uchun minnatdormiz!`;
-
-    const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('💰 Balans va Pul Yechish', 'refresh_balance')],
-    ]);
-
-    return { text, keyboard };
   }
 
   /**
