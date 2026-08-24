@@ -97,3 +97,38 @@ export const formatTashkentTime = (value?: string | number | Date | null): strin
     minute: '2-digit',
   }).format(d);
 };
+
+// Ixcham format: "20:22  23/08"
+export const formatShortDateTime = (value?: string | number | Date | null): string => {
+  if (!value) return '-';
+  let d: Date;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed.includes('Z') && !trimmed.includes('+') && trimmed.includes('T')) {
+      d = new Date(`${trimmed}Z`);
+    } else if (!trimmed.includes('Z') && !trimmed.includes('+') && trimmed.includes(' ')) {
+      d = new Date(`${trimmed.replace(' ', 'T')}Z`);
+    } else {
+      d = new Date(trimmed);
+    }
+  } else {
+    d = value instanceof Date ? value : new Date(value);
+  }
+  if (isNaN(d.getTime())) return '-';
+
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: TASHKENT_TZ,
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+
+  const hour = parts.find((p) => p.type === 'hour')?.value || '00';
+  const minute = parts.find((p) => p.type === 'minute')?.value || '00';
+  const day = parts.find((p) => p.type === 'day')?.value || '01';
+  const month = parts.find((p) => p.type === 'month')?.value || '01';
+
+  return `${hour}:${minute}  ${day}/${month}`;
+};

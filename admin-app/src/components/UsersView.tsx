@@ -11,7 +11,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { UserItem, BotInstanceItem } from '../types';
-import { formatSum, formatTashkentDateTime, toTashkentDateStr, tashkentToday, tashkentYesterday } from '../utils/format';
+import { formatSum, formatShortDateTime, formatTashkentDateTime, toTashkentDateStr, tashkentToday, tashkentYesterday } from '../utils/format';
 import { Pagination } from './Pagination';
 import { exportToCsv } from '../utils/exportToCsv';
 import { EditUserBalanceModal } from './EditUserBalanceModal';
@@ -236,14 +236,13 @@ export const UsersView: React.FC<UsersViewProps> = ({
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                       <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                         {u.username ? `@${u.username}` : `TG: ${u.telegramId}`}
                       </span>
                       <span className="text-slate-300 dark:text-slate-700">•</span>
-                      <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono flex items-center gap-1">
-                        <Clock className="w-2.5 h-2.5 text-indigo-400" />
-                        {formatTashkentDateTime(u.createdAt)}
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
+                        {formatShortDateTime(u.createdAt)}
                       </span>
                     </div>
                   </div>
@@ -359,16 +358,10 @@ export const UsersView: React.FC<UsersViewProps> = ({
                       </span>
                     </td>
 
-                    <td className="p-3.5">
-                      <div className="flex flex-col">
-                        <span className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">
-                          {formatTashkentDateTime(u.createdAt)}
-                        </span>
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                          <Clock className="w-2.5 h-2.5 text-indigo-500" />
-                          /start bosilgan
-                        </span>
-                      </div>
+                    <td className="p-3.5 whitespace-nowrap">
+                      <span className="font-mono text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        {formatShortDateTime(u.createdAt)}
+                      </span>
                     </td>
 
                     <td className="p-3.5">
