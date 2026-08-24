@@ -93,20 +93,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {isMobileOpen && (
         <div
           onClick={() => setIsMobileOpen(false)}
-          className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm lg:hidden animate-in fade-in duration-200"
+          className="fixed inset-0 z-40 bg-black/60 dark:bg-black/80 backdrop-blur-sm lg:hidden animate-in fade-in duration-200"
         />
       )}
 
       {/* Sidebar Drawer Container */}
       <aside
-        className={`fixed top-0 left-0 z-50 h-screen transition-all duration-300 ease-in-out bg-white/98 dark:bg-slate-900/98 lg:bg-white/95 lg:dark:bg-slate-900/95 backdrop-blur-2xl border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between ${
-          isMobileOpen ? 'translate-x-0 w-72 shadow-2xl' : '-translate-x-full lg:translate-x-0'
+        className={`fixed top-0 left-0 z-50 h-screen transition-all duration-300 ease-in-out bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between shadow-2xl ${
+          isMobileOpen ? 'translate-x-0 w-72' : '-translate-x-full lg:translate-x-0'
         } ${isCollapsed ? 'lg:w-20' : 'lg:w-64'}`}
       >
         {/* Top Header & Navigation */}
         <div className="flex flex-col flex-1 overflow-hidden">
           {/* Brand Header */}
-          <div className={`flex items-center p-4 border-b border-slate-200 dark:border-slate-800 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+          <div className={`flex items-center p-4 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50/80 dark:bg-slate-950/60 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
             <div className="flex items-center gap-3 overflow-hidden">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 flex-shrink-0">
                 <Zap className="w-5 h-5 fill-current" />
@@ -155,7 +155,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {/* Navigation Menu */}
-          <nav className="p-3 space-y-1.5 overflow-y-auto flex-1">
+          <nav className="p-3 space-y-1.5 overflow-y-auto flex-1 bg-white dark:bg-slate-900">
             {menuItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -164,12 +164,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   key={item.id}
                   onClick={() => handleSelectTab(item.id)}
-                  className={`w-full flex items-center p-3 rounded-xl text-xs font-semibold transition-all group cursor-pointer ${
+                  className={`w-full flex items-center p-3 rounded-xl text-xs font-bold transition-all group cursor-pointer ${
                     isCollapsed ? 'justify-center' : 'justify-between'
                   } ${
                     isActive
                       ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-md shadow-indigo-600/30'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/70'
+                      : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80'
                   }`}
                   title={isCollapsed ? item.label : undefined}
                 >
@@ -198,7 +198,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Bottom Section: 1m Live Health Widget & Admin Profile */}
-        <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-2">
+        <div className="p-3 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/60 space-y-2">
           {/* 1-Minute Live Health Status Widget */}
           <button
             onClick={() => handleSelectTab('health')}
@@ -232,7 +232,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
 
           {/* Profile & Controls */}
-          <div className={`flex items-center p-2 rounded-xl bg-slate-100/80 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800/80 ${
+          <div className={`flex items-center p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 ${
             isCollapsed ? 'justify-center flex-col gap-2' : 'justify-between'
           }`}>
             <div className={`flex items-center gap-2 overflow-hidden ${isCollapsed ? 'justify-center' : ''}`}>
@@ -251,7 +251,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {onToggleTheme && (
                 <button
                   onClick={onToggleTheme}
-                  className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-200 dark:hover:bg-slate-700/60 transition-colors flex-shrink-0 cursor-pointer"
+                  className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex-shrink-0 cursor-pointer"
                   title={theme === 'dark' ? "Yorug' rejim" : "Qorong'i rejim"}
                 >
                   {theme === 'dark' ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-indigo-600" />}
