@@ -30,7 +30,7 @@ export const VotesView: React.FC<VotesViewProps> = ({
   onApproveAll,
 }) => {
   const [search, setSearch] = useState('');
-  const [statusTab, setStatusTab] = useState<'PENDING' | 'VERIFIED' | 'ALL'>('PENDING');
+  const [statusTab, setStatusTab] = useState<'PENDING' | 'VERIFIED' | 'REJECTED' | 'ALL'>('ALL');
   const [selectedBotId, setSelectedBotId] = useState<string>('ALL');
   const [activePreset, setActivePreset] = useState<string>('ALL');
   const [startDate, setStartDate] = useState<string>('');
@@ -90,17 +90,20 @@ export const VotesView: React.FC<VotesViewProps> = ({
   const statusCounts = useMemo(() => {
     let pending = 0;
     let verified = 0;
+    let rejected = 0;
     for (const v of baseFiltered) {
       if (v.status === 'PENDING_VERIFICATION') pending++;
       else if (v.status === 'VERIFIED') verified++;
+      else if (v.status === 'REJECTED') rejected++;
     }
-    return { pending, verified, all: baseFiltered.length };
+    return { pending, verified, rejected, all: baseFiltered.length };
   }, [baseFiltered]);
 
   // Status tabi qo'llangan yakuniy ro'yxat
   const filteredVotes = useMemo(() => {
     if (statusTab === 'PENDING') return baseFiltered.filter((v) => v.status === 'PENDING_VERIFICATION');
     if (statusTab === 'VERIFIED') return baseFiltered.filter((v) => v.status === 'VERIFIED');
+    if (statusTab === 'REJECTED') return baseFiltered.filter((v) => v.status === 'REJECTED');
     return baseFiltered;
   }, [baseFiltered, statusTab]);
 
@@ -149,14 +152,14 @@ export const VotesView: React.FC<VotesViewProps> = ({
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800 flex-wrap w-full sm:w-auto">
             <button
-              onClick={() => { setStatusTab('PENDING'); setCurrentPage(1); }}
+              onClick={() => { setStatusTab('ALL'); setCurrentPage(1); }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1 sm:flex-none cursor-pointer ${
-                statusTab === 'PENDING'
-                  ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 shadow-sm'
+                statusTab === 'ALL'
+                  ? 'bg-slate-800 text-white border border-slate-700 shadow-sm'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              ⏳ Kutilmoqda ({statusCounts.pending})
+              Barchasi ({statusCounts.all})
             </button>
             <button
               onClick={() => { setStatusTab('VERIFIED'); setCurrentPage(1); }}
@@ -169,15 +172,27 @@ export const VotesView: React.FC<VotesViewProps> = ({
               ✅ Tasdiqlangan ({statusCounts.verified})
             </button>
             <button
-              onClick={() => { setStatusTab('ALL'); setCurrentPage(1); }}
+              onClick={() => { setStatusTab('PENDING'); setCurrentPage(1); }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1 sm:flex-none cursor-pointer ${
-                statusTab === 'ALL'
-                  ? 'bg-slate-800 text-white border border-slate-700'
+                statusTab === 'PENDING'
+                  ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 shadow-sm'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              Barchasi ({statusCounts.all})
+              ⏳ Kutilmoqda ({statusCounts.pending})
             </button>
+            {statusCounts.rejected > 0 && (
+              <button
+                onClick={() => { setStatusTab('REJECTED'); setCurrentPage(1); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1 sm:flex-none cursor-pointer ${
+                  statusTab === 'REJECTED'
+                    ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30 shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                🚫 Rad etilgan ({statusCounts.rejected})
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
@@ -238,10 +253,12 @@ export const VotesView: React.FC<VotesViewProps> = ({
                     className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                       vote.status === 'VERIFIED'
                         ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                        : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                        : vote.status === 'REJECTED'
+                          ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
+                          : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
                     }`}
                   >
-                    {vote.status === 'VERIFIED' ? '✅ Tasdiqlangan' : '⏳ Kutilmoqda'}
+                    {vote.status === 'VERIFIED' ? '✅ Tasdiqlangan' : vote.status === 'REJECTED' ? '🚫 Rad etilgan' : '⏳ Kutilmoqda'}
                   </span>
                 </div>
 
@@ -259,7 +276,9 @@ export const VotesView: React.FC<VotesViewProps> = ({
 
                   <div>
                     <span className="text-[9px] text-slate-400 dark:text-slate-500 block">Mukofot:</span>
-                    <span className="font-bold text-emerald-600 dark:text-emerald-400 text-xs">+{formatSum(vote.rewardAmount || 30000)} so'm</span>
+                    <span className={`font-bold text-xs ${vote.status === 'REJECTED' ? 'text-slate-400 dark:text-slate-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                      {vote.status === 'REJECTED' ? "0 so'm" : `+${formatSum(vote.rewardAmount ?? 30000)} so'm`}
+                    </span>
                   </div>
                 </div>
 
@@ -273,7 +292,7 @@ export const VotesView: React.FC<VotesViewProps> = ({
                 </div>
 
                 {/* Action button if pending */}
-                {vote.status !== 'VERIFIED' && (
+                {vote.status === 'PENDING_VERIFICATION' && (
                   <button
                     onClick={() => onApproveVote(vote.id)}
                     className="w-full flex items-center justify-center gap-1.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-sm transition-colors cursor-pointer"
@@ -337,7 +356,9 @@ export const VotesView: React.FC<VotesViewProps> = ({
                     </td>
 
                     <td className="p-3.5">
-                      <span className="font-bold text-emerald-600 dark:text-emerald-400">+{formatSum(vote.rewardAmount || 30000)} so'm</span>
+                      <span className={`font-bold ${vote.status === 'REJECTED' ? 'text-slate-400 dark:text-slate-500 text-xs' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        {vote.status === 'REJECTED' ? "0 so'm" : `+${formatSum(vote.rewardAmount ?? 30000)} so'm`}
+                      </span>
                     </td>
 
                     <td className="p-3.5 whitespace-nowrap">
@@ -351,10 +372,12 @@ export const VotesView: React.FC<VotesViewProps> = ({
                         className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                           vote.status === 'VERIFIED'
                             ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                            : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                            : vote.status === 'REJECTED'
+                              ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
+                              : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
                         }`}
                       >
-                        {vote.status === 'VERIFIED' ? '✅ Tasdiqlangan' : '⏳ Kutilmoqda'}
+                        {vote.status === 'VERIFIED' ? '✅ Tasdiqlangan' : vote.status === 'REJECTED' ? '🚫 Rad etilgan' : '⏳ Kutilmoqda'}
                       </span>
                     </td>
 
@@ -362,6 +385,10 @@ export const VotesView: React.FC<VotesViewProps> = ({
                       {vote.status === 'VERIFIED' ? (
                         <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">
                           <span>✓ Tasdiqlangan</span>
+                        </span>
+                      ) : vote.status === 'REJECTED' ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-lg border border-rose-500/20" title={vote.errorMessage || 'Rad etilgan'}>
+                          <span>🚫 Qabul qilinmadi</span>
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20">

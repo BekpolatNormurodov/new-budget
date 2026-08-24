@@ -42,6 +42,7 @@ export interface VoteItem {
   phone: string;
   status: string;
   rewardAmount: number;
+  errorMessage?: string;
   createdAt: string;
   user?: {
     id?: number;
