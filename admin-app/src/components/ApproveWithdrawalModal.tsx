@@ -81,9 +81,9 @@ export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
           <ModalCancelButton onClick={onClose} />
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !receiptImage}
             className={`px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:opacity-95 text-white rounded-xl font-bold text-xs shadow-lg cursor-pointer transition flex items-center gap-1.5 ${
-              isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+              isSubmitting || !receiptImage ? 'opacity-50 cursor-not-allowed' : ''
             }`}
           >
             <CheckCircle className="w-4 h-4" />
