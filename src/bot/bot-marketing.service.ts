@@ -281,8 +281,8 @@ export class BotMarketingService implements OnModuleInit, OnModuleDestroy {
         } else {
           promoText =
             `🌆 <b>Kechki eslatma: Yangi mahallaga ovoz bering va pul ishlang!</b>\n\n` +
-            `🎉 <b>${mahalla}</b> boti bo'yicha ovoz yig'ish muvaffaqiyatli yakunlandi!\n\n` +
-            `🚀 Hozirda bizning yana bir yangi mahallamizda ovoz qabul qilinmoqda. Har bir ovoz uchun <b>+30 000 so'm</b> to'lanadi!\n\n` +
+            `📌 <b>${mahalla}</b> boti bo'yicha ovoz qabul qilish yakunlandi.\n\n` +
+            `🚀 Hozirda yangi mahallamizda ovoz qabul qilinmoqda. Har bir ovoz uchun <b>+30 000 so'm</b> to'lanadi!\n\n` +
             `Ovoz berish uchun pastdagi yangi botga o'ting 👇`;
         }
 

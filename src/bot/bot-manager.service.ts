@@ -845,29 +845,28 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     if (reason === 'TARGET_REACHED') {
       const target = currentBotRecord.targetVotes || 5000;
       messageText =
-        `🎉 <b>TABRIKLAYMIZ! "${currentBotRecord.mahallaName}" boti bo'yicha belgilangan reja (${formatSum(target)} ta ovoz) 100% to'ldi!</b> 🏆\n\n` +
-        `Ushbu mahalla loyihasi g'olib bo'lishi uchun hissa qo'shgan barcha fuqarolarimizga katta minnatdorchilik bildiramiz!\n\n`;
+        `🏁 <b>"${currentBotRecord.mahallaName}" bo'yicha ovozlar limiti (${formatSum(target)} ta) to'ldi va qabul qilish yakunlandi.</b>\n\n`;
 
       if (otherActiveBots.length > 0) {
         messageText +=
-          `💰 <b>Siz boshqa faol mahallalarimiz botlariga o'tib, ovoz berib pul ishlashda davom etishingiz mumkin!</b>\n\n` +
-          `Quyidagi faol botlarimizdan birini tanlang: 👇`;
+          `💰 <b>Siz boshqa faol mahallalarimiz botlariga o'tib, ovoz berib pul ishlashingiz mumkin!</b>\n\n` +
+          `Quyidagi faol botga o'ting va ovoz bering: 👇`;
       } else {
         messageText +=
-          `💰 <i>Yig'ilgan balansingizni <b>"💸 Pulni yechib olish"</b> bo'limi orqali istalgan vaqt kartangizga yechib olishingiz mumkin.</i>`;
+          `💰 <i>Yig'ilgan balansingizni <b>"💸 Pulni yechib olish"</b> bo'limi orqali kartangizga yechib olishingiz mumkin.</i>`;
       }
     } else {
-      // STOPPED
+      // STOPPED / ARCHIVED
       messageText =
-        `⚠️ <b>Ushbu mahalla ("${currentBotRecord.mahallaName}") uchun ovoz yig'ish vaqtincha to'xtatilgan.</b>\n\n`;
+        `⚠️ <b>"${currentBotRecord.mahallaName}" bo'yicha ovoz yig'ish to'xtatildi.</b>\n\n`;
 
       if (otherActiveBots.length > 0) {
         messageText +=
-          `💰 <b>Lekin siz boshqa faol mahallalarimiz botlariga o'tib, ovoz berib pul ishlashingiz mumkin!</b>\n\n` +
-          `Quyidagi faol botlarimizdan birini tanlang va ovoz bering: 👇`;
+          `💰 <b>Boshqa faol mahallalarimiz botlariga o'tib, ovoz berib pul ishlashingiz mumkin!</b>\n\n` +
+          `Quyidagi botga o'ting va ovoz bering: 👇`;
       } else {
         messageText +=
-          `ℹ️ <i>Bot tez orada qayta faollashtiriladi. Hozirda yig'ilgan balansingizni tekshirishingiz yoki pul yechib olishingiz mumkin.</i>`;
+          `ℹ️ <i>Hozirda yig'ilgan balansingizni tekshirishingiz yoki pul yechib olishingiz mumkin.</i>`;
       }
     }
 
