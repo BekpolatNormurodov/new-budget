@@ -22,6 +22,7 @@ export interface SmartFilterBarProps {
   // Bot/Mahalla dropdown'ni ko'rsatish. Ma'lumotda mahalla bog'lanishi
   // bo'lmagan sahifalarda (masalan Withdrawals) false qilinadi.
   showBotFilter?: boolean;
+  dailyCounts?: Record<string, number>;
 }
 
 // Open Budget 2026: Aniq 10 kunlik ovoz berish davri (22-avgustdan 31-avgustgacha)
@@ -49,6 +50,7 @@ export const SmartFilterBar: React.FC<SmartFilterBarProps> = ({
   totalFilteredCount,
   totalFilteredLabel = 'Jami',
   showBotFilter = true,
+  dailyCounts,
 }) => {
   const handleApplyPreset = (preset: string) => {
     const todayStr = tashkentToday();
@@ -60,16 +62,17 @@ export const SmartFilterBar: React.FC<SmartFilterBarProps> = ({
       onDateChange(todayStr, todayStr, 'TODAY');
     } else if (preset === 'YESTERDAY') {
       onDateChange(yesterdayStr, yesterdayStr, 'YESTERDAY');
-    } else if (preset === 'SEASON') {
-      onDateChange('2026-08-22', '2026-08-31', 'SEASON');
+    } else {
+      onDateChange(startDate, endDate, preset);
     }
   };
 
   const handleSelectDay = (dateStr: string) => {
+    // Agar allaqachon shu kun tanlangan bo'lsa, bosilganda tozalaymiz (toggle)
     if (startDate === dateStr && endDate === dateStr) {
       onDateChange('', '', 'ALL');
     } else {
-      onDateChange(dateStr, dateStr, `DAY_${dateStr}`);
+      onDateChange(dateStr, dateStr, 'CUSTOM');
     }
   };
 
@@ -78,93 +81,102 @@ export const SmartFilterBar: React.FC<SmartFilterBarProps> = ({
     onDateChange('', '', 'ALL');
   };
 
-  const isSeasonActive =
-    activePreset === 'SEASON' || (startDate === '2026-08-22' && endDate === '2026-08-31');
-
-  // Build options for custom ProDropdown
+  // Bot Tanlash Options
   const botOptions: ProDropdownOption[] = [
     {
       value: 'ALL',
-      label: 'Barcha Botlar & Mahallalar',
-      sublabel: `Jami ${bots.length} ta faol bot`,
-      badge: `${bots.length} ta`,
+      label: 'Barcha Mahallalar',
+      sublabel: `${bots.length} ta mahalla boti`,
+      badge: 'Barchasi',
+      icon: <Building2 className="w-4 h-4 text-indigo-500" />,
     },
     ...bots.map((b) => ({
       value: String(b.id),
-      label: `${b.mahallaName} (${b.name})`,
-      sublabel: `#${b.id} • Mahalla ID: ${b.mahallaId}`,
-      badge: `${b.currentVotes} ovoz`,
+      label: b.mahallaName,
+      sublabel: b.botUsername ? `@${b.botUsername}` : b.name,
+      badge: `${b.currentVotes || 0} ta`,
     })),
   ];
 
   return (
-    <div className="p-3 sm:p-4 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200 dark:border-slate-800/90 shadow-xl dark:shadow-2xl space-y-3 transition-colors">
-      {/* Top Controls: Pro UI Dropdown for Bot + Preset Chips */}
+    <div className="p-3 sm:p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-md dark:shadow-xl space-y-3 transition-colors">
+      {/* Top Filter Controls */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-        {/* 1. Custom Pro Dropdown */}
-        {showBotFilter && (
-          <div className="flex-1 sm:max-w-xs">
+        {/* Left Side: Bot Selection */}
+        {showBotFilter ? (
+          <div className="w-full sm:w-64">
             <ProDropdown
               options={botOptions}
               value={selectedBotId}
               onChange={onSelectBotId}
-              icon={<Building2 className="w-3.5 h-3.5" />}
+              placeholder="Mahallani tanlang..."
             />
           </div>
+        ) : (
+          <div />
         )}
 
-        {/* 2. Quick Preset Chips */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-          <button
-            type="button"
-            onClick={() => handleApplyPreset('ALL')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              activePreset === 'ALL' && !startDate && !endDate
-                ? 'bg-slate-800 dark:bg-slate-700 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/40'
-            }`}
-          >
-            Barchasi
-          </button>
+        {/* Right Side: Date Presets & Custom Pickers */}
+        <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap justify-end w-full sm:w-auto">
+          {/* Quick Date Presets */}
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => handleApplyPreset('TODAY')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activePreset === 'TODAY'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Bugun
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApplyPreset('YESTERDAY')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activePreset === 'YESTERDAY'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Kecha
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApplyPreset('ALL')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activePreset === 'ALL' && !startDate && !endDate
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <span className="flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-amber-500" />
+                <span>Barchasi</span>
+              </span>
+            </button>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => handleApplyPreset('TODAY')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              activePreset === 'TODAY'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/40'
-            }`}
-          >
-            🟢 Bugun
-          </button>
+          {/* Custom Date Inputs */}
+          <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-950/60 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => onDateChange(e.target.value, endDate, 'CUSTOM')}
+              className="px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[11px] focus:outline-none focus:border-indigo-500"
+            />
+            <span className="text-slate-400 text-xs">—</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => onDateChange(startDate, e.target.value, 'CUSTOM')}
+              className="px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[11px] focus:outline-none focus:border-indigo-500"
+            />
+          </div>
 
-          <button
-            type="button"
-            onClick={() => handleApplyPreset('YESTERDAY')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              activePreset === 'YESTERDAY'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/40'
-            }`}
-          >
-            Kecha
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleApplyPreset('SEASON')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1 transition-all cursor-pointer ${
-              isSeasonActive
-                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-orange-500/25 ring-1 ring-amber-400/50'
-                : 'bg-amber-500/10 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/20'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Mavsum (22–31-Avg)</span>
-          </button>
-
-          {(selectedBotId !== 'ALL' || startDate || endDate) && (
+          {/* Reset All Filters */}
+          {(selectedBotId !== 'ALL' || startDate || endDate || activePreset !== 'ALL') && (
             <button
               type="button"
               onClick={handleReset}
@@ -195,6 +207,7 @@ export const SmartFilterBar: React.FC<SmartFilterBarProps> = ({
         <div className="grid grid-cols-5 sm:grid-cols-10 gap-1 sm:gap-1.5">
           {SEASON_DAYS.map((day) => {
             const isSelected = startDate === day.date && endDate === day.date;
+            const count = dailyCounts?.[day.date];
 
             return (
               <button
@@ -210,8 +223,16 @@ export const SmartFilterBar: React.FC<SmartFilterBarProps> = ({
                 <span className={`text-[11px] font-bold ${isSelected ? 'text-white' : 'text-slate-800 dark:text-slate-300'}`}>
                   {day.label}
                 </span>
-                <span className={`text-[9px] font-mono ${isSelected ? 'text-indigo-200' : 'text-slate-400 dark:text-slate-500'}`}>
-                  {day.dayNum}
+                <span
+                  className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-md transition-colors ${
+                    isSelected
+                      ? 'bg-white/20 text-white'
+                      : count !== undefined && count > 0
+                        ? 'bg-indigo-500/15 dark:bg-indigo-500/25 text-indigo-700 dark:text-indigo-300 font-extrabold'
+                        : 'text-slate-400 dark:text-slate-500'
+                  }`}
+                >
+                  {count !== undefined ? `${count} ta` : day.dayNum}
                 </span>
               </button>
             );

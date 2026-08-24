@@ -107,6 +107,37 @@ export const VotesView: React.FC<VotesViewProps> = ({
     return baseFiltered;
   }, [baseFiltered, statusTab]);
 
+  // Har bir mavsum kuni bo'yicha ovozlar soni (Joriy tanlangan mahalla, status va qidiruv bo'yicha)
+  const dailyCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const v of combinedVotes) {
+      // Mahalla/Bot filter
+      if (selectedBotId !== 'ALL') {
+        const bot = bots.find((b) => String(b.id) === selectedBotId);
+        if (bot && v.botInstance?.mahallaName !== bot.mahallaName) continue;
+      }
+      // Status filter
+      if (statusTab === 'PENDING' && v.status !== 'PENDING_VERIFICATION') continue;
+      if (statusTab === 'VERIFIED' && v.status !== 'VERIFIED') continue;
+      if (statusTab === 'REJECTED' && v.status !== 'REJECTED') continue;
+
+      // Universal Search
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const phoneMatch = v.phone.includes(q);
+        const nameMatch = v.user?.firstName?.toLowerCase().includes(q);
+        const userMatch = v.user?.username?.toLowerCase().includes(q);
+        const mahallaMatch = v.botInstance?.mahallaName?.toLowerCase().includes(q);
+        const idMatch = String(v.id).includes(q) || String(v.userId).includes(q);
+        if (!phoneMatch && !nameMatch && !userMatch && !mahallaMatch && !idMatch) continue;
+      }
+
+      const vDate = toTashkentDateStr(v.createdAt);
+      counts[vDate] = (counts[vDate] || 0) + 1;
+    }
+    return counts;
+  }, [combinedVotes, selectedBotId, statusTab, search, bots]);
+
   // Paginated records
   const paginatedVotes = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
@@ -144,6 +175,7 @@ export const VotesView: React.FC<VotesViewProps> = ({
         activePreset={activePreset}
         totalFilteredCount={filteredVotes.length}
         totalFilteredLabel="Filtrlangan Ovozlar"
+        dailyCounts={dailyCounts}
       />
 
       {/* 2. Controls & Search Bar */}

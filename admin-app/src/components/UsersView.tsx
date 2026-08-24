@@ -102,6 +102,36 @@ export const UsersView: React.FC<UsersViewProps> = ({
     });
   }, [baseFiltered, statusFilter]);
 
+  // Har bir mavsum kuni bo'yicha yangi qo'shilgan foydalanuvchilar soni
+  const dailyCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const u of users) {
+      // Mahalla/Bot filter
+      if (selectedBotId !== 'ALL') {
+        const bot = bots.find((b) => String(b.id) === selectedBotId);
+        if (bot && u.botInstance?.mahallaName !== bot.mahallaName) continue;
+      }
+      // Status filter
+      if (statusFilter === 'ACTIVE' && (u.isBanned || u.role === 'ADMIN')) continue;
+      if (statusFilter === 'BANNED' && !u.isBanned) continue;
+      if (statusFilter === 'ADMIN' && u.role !== 'ADMIN') continue;
+
+      // Universal Search
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const nameMatch = u.firstName?.toLowerCase().includes(q) || u.lastName?.toLowerCase().includes(q);
+        const userMatch = u.username?.toLowerCase().includes(q);
+        const phoneMatch = u.phone?.includes(q);
+        const idMatch = String(u.id).includes(q) || String(u.telegramId).includes(q);
+        if (!nameMatch && !userMatch && !phoneMatch && !idMatch) continue;
+      }
+
+      const uDate = toTashkentDateStr(u.createdAt);
+      counts[uDate] = (counts[uDate] || 0) + 1;
+    }
+    return counts;
+  }, [users, selectedBotId, statusFilter, search, bots]);
+
   const paginatedUsers = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredUsers.slice(start, start + pageSize);
@@ -141,6 +171,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
         activePreset={activePreset}
         totalFilteredCount={filteredUsers.length}
         totalFilteredLabel="Mijozlar"
+        dailyCounts={dailyCounts}
       />
 
       {/* 2. Status Filters and Search Bar */}
