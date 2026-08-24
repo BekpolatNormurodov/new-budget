@@ -158,23 +158,6 @@ export const SmartFilterBar: React.FC<SmartFilterBarProps> = ({
             </button>
           </div>
 
-          {/* Custom Date Inputs */}
-          <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-950/60 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => onDateChange(e.target.value, endDate, 'CUSTOM')}
-              className="px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[11px] focus:outline-none focus:border-indigo-500"
-            />
-            <span className="text-slate-400 text-xs">—</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => onDateChange(startDate, e.target.value, 'CUSTOM')}
-              className="px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[11px] focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-
           {/* Reset All Filters */}
           {(selectedBotId !== 'ALL' || startDate || endDate || activePreset !== 'ALL') && (
             <button
@@ -207,7 +190,7 @@ export const SmartFilterBar: React.FC<SmartFilterBarProps> = ({
         <div className="grid grid-cols-5 sm:grid-cols-10 gap-1 sm:gap-1.5">
           {SEASON_DAYS.map((day) => {
             const isSelected = startDate === day.date && endDate === day.date;
-            const count = dailyCounts?.[day.date];
+            const count = dailyCounts?.[day.date] ?? 0;
 
             return (
               <button
@@ -224,15 +207,15 @@ export const SmartFilterBar: React.FC<SmartFilterBarProps> = ({
                   {day.label}
                 </span>
                 <span
-                  className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-md transition-colors ${
+                  className={`text-[9px] font-mono font-bold mt-0.5 px-1.5 py-0.2 rounded-md transition-colors ${
                     isSelected
                       ? 'bg-white/20 text-white'
-                      : count !== undefined && count > 0
-                        ? 'bg-indigo-500/15 dark:bg-indigo-500/25 text-indigo-700 dark:text-indigo-300 font-extrabold'
+                      : count > 0
+                        ? 'bg-indigo-500/15 dark:bg-indigo-500/25 text-indigo-600 dark:text-indigo-400 font-extrabold'
                         : 'text-slate-400 dark:text-slate-500'
                   }`}
                 >
-                  {count !== undefined ? `${count} ta` : day.dayNum}
+                  {count} ta
                 </span>
               </button>
             );

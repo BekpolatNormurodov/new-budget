@@ -16,8 +16,21 @@ const TASHKENT_TZ = 'Asia/Tashkent';
 // ISO timestamp (yoki Date) -> "YYYY-MM-DD" Toshkent vaqti bo'yicha.
 export const toTashkentDateStr = (value?: string | number | Date | null): string => {
   if (!value) return '';
-  const d = value instanceof Date ? value : new Date(value);
+  let d: Date;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed.includes('Z') && !trimmed.includes('+') && trimmed.includes('T')) {
+      d = new Date(`${trimmed}Z`);
+    } else if (!trimmed.includes('Z') && !trimmed.includes('+') && trimmed.includes(' ')) {
+      d = new Date(`${trimmed.replace(' ', 'T')}Z`);
+    } else {
+      d = new Date(trimmed);
+    }
+  } else {
+    d = value instanceof Date ? value : new Date(value);
+  }
   if (isNaN(d.getTime())) return '';
+
   // en-CA locale YYYY-MM-DD formatini beradi
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: TASHKENT_TZ,
