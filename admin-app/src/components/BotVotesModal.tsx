@@ -101,10 +101,11 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
       return;
     }
     const cleanSearch = search.trim();
-    if (cleanSearch.length < 3) {
+    if (cleanSearch.length < 2) {
       setObSearchResults(null);
       setObSearchNotFound(false);
       setObSearchCoverage(null);
+      setIsObSearching(false);
       return;
     }
 
@@ -127,7 +128,7 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
       } finally {
         setIsObSearching(false);
       }
-    }, 350);
+    }, 250);
     return () => clearTimeout(timer);
   }, [search, activeTab, bot?.id]);
 
@@ -338,18 +339,17 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
     if (h <= 0) return `${m} daqiqa`;
     return m > 0 ? `${h}s ${m}d` : `${h} soat`;
   };
-  const searchDigits = search.replace(/\D/g, '');
-
   const filteredObVotes = obSearchResults !== null
     ? obSearchResults
     : obVotes.filter((v) => {
-        if (!search) return true;
+        if (!search.trim()) return true;
+        const queryClean = search.trim().toLowerCase();
+        const queryDigits = queryClean.replace(/\D/g, '');
         const phoneDigits = (v.phoneNumber || '').replace(/\D/g, '');
-        if (searchDigits && phoneDigits) {
-          const len = Math.min(TAIL_MATCH_LEN, searchDigits.length, phoneDigits.length);
-          if (len > 0 && searchDigits.slice(-len) === phoneDigits.slice(-len)) return true;
-        }
-        return (v.voteDate || '').toLowerCase().includes(search.toLowerCase());
+        if (queryDigits && phoneDigits.includes(queryDigits)) return true;
+        if ((v.phoneNumber || '').toLowerCase().includes(queryClean)) return true;
+        if ((v.voteDate || '').toLowerCase().includes(queryClean)) return true;
+        return false;
       });
 
   const filteredOurVotes = ourVotes;
@@ -623,15 +623,33 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
                     </div>
                   ) : filteredObVotes.length === 0 ? (
                     <div className="py-12 text-center text-slate-400 p-4">
-                      <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-slate-700" />
-                      <p className="font-semibold text-slate-700 dark:text-slate-300">Rasmiy reyestr ro'yxati hozircha bo'sh</p>
-                      <button
-                        type="button"
-                        onClick={reloadCaptcha}
-                        className="mt-2 text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
-                      >
-                        🔑 Qayta yuklash (Captcha bilan)
-                      </button>
+                      {search.trim() ? (
+                        <div className="space-y-2">
+                          <Search className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-700" />
+                          <p className="font-semibold text-slate-700 dark:text-slate-300">
+                            "{search}" bo'yicha hech qanday ovoz topilmadi
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setSearch('')}
+                            className="text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
+                          >
+                            Qidiruvni tozalash
+                          </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-slate-700" />
+                          <p className="font-semibold text-slate-700 dark:text-slate-300">Rasmiy reyestr ro'yxati hozircha bo'sh</p>
+                          <button
+                            type="button"
+                            onClick={reloadCaptcha}
+                            className="mt-2 text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
+                          >
+                            🔑 Qayta yuklash (Captcha bilan)
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     filteredObVotes.map((v, idx) => {
@@ -715,15 +733,33 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
                       ) : filteredObVotes.length === 0 ? (
                         <tr>
                           <td colSpan={4} className="py-12 text-center text-slate-400">
-                            <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-slate-700" />
-                            <p className="font-semibold text-slate-700 dark:text-slate-300">Rasmiy reyestr ro'yxati hozircha bo'sh</p>
-                            <button
-                              type="button"
-                              onClick={reloadCaptcha}
-                              className="mt-2 text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
-                            >
-                              🔑 Qayta yuklash (Captcha bilan)
-                            </button>
+                            {search.trim() ? (
+                              <div className="space-y-2">
+                                <Search className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-700" />
+                                <p className="font-semibold text-slate-700 dark:text-slate-300">
+                                  "{search}" bo'yicha hech qanday ovoz topilmadi
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => setSearch('')}
+                                  className="text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
+                                >
+                                  Qidiruvni tozalash
+                                </button>
+                              </div>
+                            ) : (
+                              <div>
+                                <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-slate-700" />
+                                <p className="font-semibold text-slate-700 dark:text-slate-300">Rasmiy reyestr ro'yxati hozircha bo'sh</p>
+                                <button
+                                  type="button"
+                                  onClick={reloadCaptcha}
+                                  className="mt-2 text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
+                                >
+                                  🔑 Qayta yuklash (Captcha bilan)
+                                </button>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       ) : (

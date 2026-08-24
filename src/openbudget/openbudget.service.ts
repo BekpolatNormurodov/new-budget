@@ -1687,11 +1687,8 @@ export class OpenBudgetService {
           const voteDate = String(v.voteDate || '').toLowerCase();
 
           let isMatch = false;
-          if (cleanTail.length >= 3 && digits.length >= 3) {
-            const len = Math.min(cleanTail.length, digits.length);
-            if (digits.slice(-len) === cleanTail.slice(-len)) {
-              isMatch = true;
-            }
+          if (cleanTail.length >= 2 && digits.includes(cleanTail)) {
+            isMatch = true;
           }
           if (!isMatch && (voteDate.includes(rawSearch) || String(v.phoneNumber || '').toLowerCase().includes(rawSearch))) {
             isMatch = true;
@@ -1785,9 +1782,8 @@ export class OpenBudgetService {
             const digits = String(v.phoneNumber || '').replace(/\D/g, '');
             const voteDate = String(v.voteDate || '').toLowerCase();
             let isMatch = false;
-            if (cleanTail.length >= 3 && digits.length >= 3) {
-              const len = Math.min(cleanTail.length, digits.length);
-              if (digits.slice(-len) === cleanTail.slice(-len)) isMatch = true;
+            if (cleanTail.length >= 2 && digits.includes(cleanTail)) {
+              isMatch = true;
             }
             if (!isMatch && (voteDate.includes(rawSearch) || String(v.phoneNumber || '').toLowerCase().includes(rawSearch))) {
               isMatch = true;
