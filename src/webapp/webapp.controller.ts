@@ -260,15 +260,18 @@ export class WebAppController {
         }
 
         this.logger.warn(`⚠️ [GET captcha-page] ${attempt}/${MAX_PAGE_ATTEMPTS}-urinish rad etildi: HTTP ${getStatusCode}${rateLimitMatch ? ' | Tur: RATE_LIMIT' : ''}`);
+        if (currentProxy) this.proxyManager.markProxyFailure(currentProxy);
+        this.proxyManager.releaseSession(sessionKey);
+        currentProxy = this.proxyManager.getNextProxy();
       } catch (err: any) {
         this.logger.warn(`⚠️ [GET captcha-page] ${attempt}-urinishda proxy xatosi (${currentProxy?.auth?.username}): ${err?.message || err}`);
         if (currentProxy) this.proxyManager.markProxyFailure(currentProxy);
         this.proxyManager.releaseSession(sessionKey);
-        currentProxy = this.proxyManager.getStickyProxy(sessionKey);
+        currentProxy = this.proxyManager.getNextProxy();
       }
 
       if (attempt < MAX_PAGE_ATTEMPTS) {
-        await new Promise((r) => setTimeout(r, 400 * attempt));
+        await new Promise((r) => setTimeout(r, 200 * attempt));
       }
     }
 
