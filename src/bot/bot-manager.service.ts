@@ -1819,16 +1819,20 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     // 3. GLOBAL TEKSHIRUV: Barcha 10-15 ta botlar bo'yicha yagona bazadan tekshirish
     const globalExistingVote = await this.prisma.vote.findFirst({
       where: {
-        phone: clean12,
-        status: { in: ['VERIFIED', 'PENDING_VERIFICATION'] },
+        OR: [
+          { phone: clean12 },
+          { phone: clean9 },
+        ],
+        status: { in: ['VERIFIED', 'PENDING_VERIFICATION', 'REJECTED'] },
       },
       include: { botInstance: true },
     });
 
     if (globalExistingVote) {
-      const mahalla = globalExistingVote.botInstance?.mahallaName || 'boshqa';
       return ctx.reply(
-        `⚠️ <b>Ushbu telefon raqam (+${clean12}) orqali allaqachon "${mahalla}" mahallasiga ovoz berilgan!</b>\n\n📌 <b>Ochiq Budjet qoidasi:</b> Bitta fuqaro (pasport) yoki telefon raqam nomidan bir mavsumda faqat 1 marta ovoz berish mumkin.\n\nSiz boshqa yaqinlaringiz nomidagi telefon raqamlaridan ovoz berib pul ishlashingiz mumkin!`,
+        `⚠️ <b>Ushbu telefon raqam (+${clean12}) orqali ushbu mavsumda allaqachon ovoz berilgan!</b>\n\n` +
+        `📌 <b>Ochiq Budjet qoidasi:</b> Bitta fuqaro (pasport) yoki telefon raqam nomidan bir mavsumda faqat 1 marta ovoz berish mumkin.\n\n` +
+        `💡 <i>Iltimos, boshqa yaqinlaringiz (boshqa pasport egasi) nomidagi telefon raqamidan ovoz bering!</i>`,
         { parse_mode: 'HTML', ...BotKeyboards.phoneRequestKeyboard() }
       );
     }

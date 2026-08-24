@@ -939,6 +939,25 @@ export class WebAppController {
                 }).catch((err) => this.logger.error(`TG xabarni yuborishda xatolik: ${err.message}`));
                 this.logger.log(`📬 [mvc/captcha POST] Xatolik xabari Telegramga yuborildi (TG ID: ${targetTgId}, Tel: +${clean9})`);
               }
+
+              // Raqamni bazada REJECTED qilib saqlash (qayta-qayta urinishlarning oldini olish uchun)
+              if (user && isPassportDuplicate) {
+                await this.prisma.vote.create({
+                  data: {
+                    userId: user.id,
+                    botInstanceId: botIdNum || user.botInstanceId,
+                    phone: `998${clean9}`,
+                    status: 'REJECTED',
+                    errorMessage: displayErrorText,
+                    rewardAmount: 0,
+                  },
+                }).catch(() => {});
+
+                await this.prisma.user.update({
+                  where: { id: user.id },
+                  data: { step: null, tempData: null },
+                }).catch(() => {});
+              }
             }
           } catch (e: any) {
             this.logger.error(`Captcha xato xabarini yuborishda muammo: ${e.message}`);
