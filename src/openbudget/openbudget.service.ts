@@ -1867,45 +1867,46 @@ export class OpenBudgetService {
       let consecutiveFailures = 0;
       let tokenRefreshesUsed = 0;
       let oldestCoveredTs: number | null = null;
-      let reachedFullCutoff = true;
+      // Yuqori tezlikdagi 20-sahifalik parallel partiyalar (Promise.all):
+      // Brauzer ichida parallel HTTP/2 orqali bir vaqtning o'zida 20 tadan sahifa olinadi (~150ms)
+      const BATCH_SIZE = 20;
+      for (let batchStart = 0; batchStart < totalPages && batchStart < maxPages; batchStart += BATCH_SIZE) {
+        const pageNumbers: number[] = [];
+        for (let i = 0; i < BATCH_SIZE && (batchStart + i) < totalPages && (batchStart + i) < maxPages; i++) {
+          pageNumbers.push(batchStart + i);
+        }
+        if (pageNumbers.length === 0) break;
 
-      // Yuqori tezlikdagi 10-sahifalik partiyalar (batching):
-      // Brauzer ichidagi fetch bir zumda (har biri ~30-50ms) ishlaydi va bir necha soniyada
-      // butun ro'yxatni (50-100+ sahifani) xotiraga yuklab oladi.
-      for (let batchStart = 0; batchStart < totalPages && batchStart < maxPages; batchStart += 10) {
-        let batchResults: any = null;
+        let batchResults: any[] | null = null;
         for (let retry = 0; retry < 3 && !batchResults; retry++) {
           try {
             batchResults = await browserPage.evaluate(
-              async (token: string, start: number, count: number, maxP: number) => {
-                const out: any[] = [];
-                for (let i = 0; i < count && (start + i) < maxP; i++) {
-                  const p = start + i;
-                  try {
-                    const res = await fetch(`/api/v2/info/votes/${token}?page=${p}&size=15&limit=15`, { credentials: 'include' });
-                    const text = await res.text();
-                    const json = JSON.parse(text);
-                    out.push({ page: p, data: json });
-                  } catch (e) {
-                    out.push({ page: p, data: null });
-                  }
-                }
-                return out;
+              async (token: string, pages: number[]) => {
+                return await Promise.all(
+                  pages.map(async (p) => {
+                    try {
+                      const res = await fetch(`/api/v2/info/votes/${token}?page=${p}&size=15&limit=15`, { credentials: 'include' });
+                      if (!res.ok) return { page: p, data: null };
+                      const json = await res.json();
+                      return { page: p, data: json };
+                    } catch {
+                      return { page: p, data: null };
+                    }
+                  })
+                );
               },
               initToken,
-              batchStart,
-              10,
-              totalPages,
+              pageNumbers,
             );
           } catch {
             batchResults = null;
           }
-          if (!batchResults) await new Promise((r) => setTimeout(r, 400));
+          if (!batchResults) await new Promise((r) => setTimeout(r, 300));
         }
 
         if (!batchResults || batchResults.length === 0) {
-          this.logger.warn(`⚠️ [Prewarm] Partiya ${batchStart} javob bermadi, to'xtatilmoqda.`);
-          break;
+          this.logger.warn(`⚠️ [Prewarm] Partiya ${batchStart}..${batchStart + pageNumbers.length - 1} javob bermadi.`);
+          continue;
         }
 
         let validInBatch = 0;
@@ -1923,11 +1924,11 @@ export class OpenBudgetService {
           }
         }
 
-        if (validInBatch === 0) {
+        if (validInBatch === 0 && batchStart > 0) {
           break;
         }
 
-        await new Promise((r) => setTimeout(r, 200));
+        await new Promise((r) => setTimeout(r, 100));
       }
 
       await browserPage.close().catch(() => {});
