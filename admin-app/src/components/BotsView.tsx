@@ -301,22 +301,24 @@ export const BotsView: React.FC<BotsViewProps> = ({
                       className="w-full mt-2 py-2 px-3 rounded-xl bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 text-xs font-bold border border-indigo-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                     >
                       <Eye className="w-3.5 h-3.5" />
-                      <span>📋 Ovozlarni Ko'rish (Captcha & Ro'yxat)</span>
+                      <span>Ovozlarni Ko'rish (Captcha & Ro'yxat)</span>
                     </button>
                   </div>
 
                   {/* 💰 Financial Configuration Grid */}
                   <div className="grid grid-cols-2 gap-2.5 mb-4 text-xs">
                     <div className="p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-950/60 border border-slate-200/60 dark:border-slate-800/60">
-                      <span className="text-[10px] font-medium text-slate-400 block mb-0.5">1 Ovoz mukofoti:</span>
+                      <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1">
+                        <span className="font-semibold text-[10px]">1 Ovoz mukofoti:</span>
+                      </div>
                       <span className="font-mono font-bold text-sm text-emerald-600 dark:text-emerald-400">
                         {formatSum(bot.voteReward || 30000)} so'm
                       </span>
                     </div>
 
                     <div className="p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-950/60 border border-slate-200/60 dark:border-slate-800/60">
-                      <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-[10px] font-medium text-slate-400">Referal:</span>
+                      <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1">
+                        <span className="font-semibold text-[10px]">Referal:</span>
                         <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
                           bot.isRefActive !== false
                             ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
@@ -372,15 +374,7 @@ export const BotsView: React.FC<BotsViewProps> = ({
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => setSelectedBotForVotes(bot)}
-                      className="p-2 rounded-xl text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-indigo-500/20 transition-colors"
-                      title="Ovozlarni ko'rish"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                    </button>
-
+                  <div>
                     {bot.botUsername && (
                       <a
                         href={`https://t.me/${bot.botUsername}`}
