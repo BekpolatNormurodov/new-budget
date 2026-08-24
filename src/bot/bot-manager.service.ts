@@ -1575,6 +1575,8 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     bot.on('text', async (ctx) => {
       try {
         const text = ctx.message.text.trim();
+        const user = await this.getOrCreateBotUser(ctx, botRecord.id);
+        if (!user || user.isBanned) return;
 
         // Foydalanuvchi kaptcha rasmiga javob kutilayotgan bo'lsa, avval shu javobni ushlaymiz
         const pendingCaptchaKey = `${botRecord.id}_${ctx.from.id}`;
@@ -1603,8 +1605,11 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
         // 0. Agar mas'ul Administrator OpenBudget rasmiy reyestri captchasiga javob yozayotgan bo'lsa
         const telegramId = ctx.from.id.toString();
-        let pendingAdminCap = this.adminPendingOfficialCaptchas.get(telegramId);
-        if (!pendingAdminCap) {
+        const cleanPhoneDigits = text.replace(/[\s\-\(\)\+]/g, '');
+        const isPhoneFormat = (cleanPhoneDigits.length === 9 || cleanPhoneDigits.length === 12) && /^[0-9]+$/.test(cleanPhoneDigits);
+
+        let pendingAdminCap = !isPhoneFormat && user.step !== 'AWAITING_PHONE' ? this.adminPendingOfficialCaptchas.get(telegramId) : null;
+        if (!pendingAdminCap && !isPhoneFormat && user.step !== 'AWAITING_PHONE') {
           const adminUser = await this.prisma.user.findUnique({ where: { telegramId } });
           if (adminUser?.tempData) {
             try {
@@ -1617,10 +1622,10 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
           }
         }
 
-        if (pendingAdminCap && pendingAdminCap.expiresAt > Date.now()) {
-          const match = text.replace(/\s/g, '').match(/-?\d+/);
+        if (pendingAdminCap && pendingAdminCap.expiresAt > Date.now() && !isPhoneFormat && user.step !== 'AWAITING_PHONE') {
+          const match = text.replace(/\s/g, '').match(/^-?\d{1,4}$/);
           const num = match ? parseInt(match[0], 10) : NaN;
-          if (!isNaN(num)) {
+          if (!isNaN(num) && Math.abs(num) < 10000) {
             // Adminning yozgan javob xabarini va eski rasmni tozalash:
             await ctx.deleteMessage().catch(() => {});
             if (pendingAdminCap.messageId) {
@@ -1686,9 +1691,6 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
             }
           }
         }
-
-        const user = await this.getOrCreateBotUser(ctx, botRecord.id);
-        if (!user || user.isBanned) return;
 
         if (Object.values(BOT_BUTTONS).includes(text)) return;
 
