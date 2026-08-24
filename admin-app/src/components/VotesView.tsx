@@ -9,7 +9,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { VoteItem, BotInstanceItem } from '../types';
-import { formatSum, toTashkentDateStr, tashkentToday, tashkentYesterday, formatPhone, formatTashkentDateTime, formatTashkentTime } from '../utils/format';
+import { formatSum, toTashkentDateStr, tashkentToday, tashkentYesterday, formatPhone, formatShortDateTime, formatTashkentDateTime, formatTashkentTime } from '../utils/format';
 import { Pagination } from './Pagination';
 import { exportToCsv } from '../utils/exportToCsv';
 import { SmartFilterBar } from './SmartFilterBar';
@@ -269,7 +269,7 @@ export const VotesView: React.FC<VotesViewProps> = ({
                     <Building2 className="w-3 h-3 text-slate-400" />
                     <strong className="text-slate-700 dark:text-slate-300">{vote.botInstance?.mahallaName || 'Bosh Mahalla'}</strong>
                   </span>
-                  <span>{formatTashkentTime(vote.createdAt)}</span>
+                  <span className="font-mono text-[10px] text-slate-400 dark:text-slate-500">{formatShortDateTime(vote.createdAt)}</span>
                 </div>
 
                 {/* Action button if pending */}
@@ -297,7 +297,7 @@ export const VotesView: React.FC<VotesViewProps> = ({
                 <th className="p-3.5">Foydalanuvchi</th>
                 <th className="p-3.5">Mahalla / Bot</th>
                 <th className="p-3.5">Mukofot</th>
-                <th className="p-3.5">Sana & Vaqt</th>
+                <th className="p-3.5">Ovoz Berilgan Vaqti</th>
                 <th className="p-3.5">Holat</th>
                 <th className="p-3.5 text-right">Amal</th>
               </tr>
@@ -340,8 +340,10 @@ export const VotesView: React.FC<VotesViewProps> = ({
                       <span className="font-bold text-emerald-600 dark:text-emerald-400">+{formatSum(vote.rewardAmount || 30000)} so'm</span>
                     </td>
 
-                    <td className="p-3.5 text-slate-500 dark:text-slate-400 text-[11px]">
-                      {formatTashkentDateTime(vote.createdAt)}
+                    <td className="p-3.5 whitespace-nowrap">
+                      <span className="font-mono text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        {formatShortDateTime(vote.createdAt)}
+                      </span>
                     </td>
 
                     <td className="p-3.5">
