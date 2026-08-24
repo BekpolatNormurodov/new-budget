@@ -1829,7 +1829,30 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (globalExistingVote) {
-      const errorReason = globalExistingVote.errorMessage || "Ushbu raqam orqali ushbu mavsumda allaqachon ovoz berilgan";
+      let rawError = globalExistingVote.errorMessage || "Ushbu raqam orqali ushbu mavsumda allaqachon ovoz berilgan";
+      try {
+        if (rawError.includes('Ò') || rawError.includes('Ñ') || rawError.includes('Ð')) {
+          rawError = Buffer.from(rawError, 'latin1').toString('utf8');
+        }
+      } catch {}
+
+      // Kirilldan toza O'zbek Lotin alifbosiga o'tkazish
+      const cyrillicMap: Record<string, string> = {
+        'А': 'A', 'а': 'a', 'Б': 'B', 'б': 'b', 'В': 'V', 'в': 'v',
+        'Г': 'G', 'г': 'g', 'Д': 'D', 'д': 'd', 'Е': 'E', 'е': 'e',
+        'Ё': 'Yo', 'ё': 'yo', 'Ж': 'J', 'ж': 'j', 'З': 'Z', 'з': 'z',
+        'И': 'I', 'и': 'i', 'Й': 'Y', 'й': 'y', 'К': 'K', 'к': 'k',
+        'Л': 'L', 'л': 'l', 'М': 'M', 'м': 'm', 'Н': 'N', 'н': 'n',
+        'О': 'O', 'о': 'o', 'П': 'P', 'п': 'p', 'Р': 'R', 'р': 'r',
+        'С': 'S', 'с': 's', 'Т': 'T', 'т': 't', 'У': 'U', 'у': 'u',
+        'Ф': 'F', 'ф': 'f', 'Х': 'X', 'х': 'x', 'Ц': 'Ts', 'ц': 'ts',
+        'Ч': 'Ch', 'ч': 'ch', 'Ш': 'Sh', 'ш': 'sh', 'Щ': 'Sh', 'щ': 'sh',
+        'Ъ': "'", 'ъ': "'", 'Ь': '', 'ь': '', 'Э': 'E', 'э': 'e',
+        'Ю': 'Yu', 'ю': 'yu', 'Я': 'Ya', 'я': 'ya', 'Ў': "O'", 'ў': "o'",
+        'Қ': 'Q', 'қ': 'q', 'Ғ': "G'", 'ғ': "g'", 'Ҳ': 'H', 'ҳ': 'h',
+      };
+      const errorReason = rawError.split('').map(c => cyrillicMap[c] || c).join('');
+
       const formattedPhone = clean9.length === 9
         ? `+998 ${clean9.slice(0, 2)} ${clean9.slice(2, 5)}-${clean9.slice(5, 7)}-${clean9.slice(7, 9)}`
         : `+${clean12}`;
