@@ -331,7 +331,12 @@ export class AdminService {
 
   async deleteBot(id: number) {
     await this.botManagerService.stopBotInstance(id);
-    return this.prisma.botInstance.delete({ where: { id } });
+    return this.prisma.botInstance.update({
+      where: { id },
+      data: { status: 'ARCHIVED', isActive: false },
+    }).catch(async () => {
+      return this.prisma.botInstance.delete({ where: { id } }).catch(() => null);
+    });
   }
 
   // Votes Management

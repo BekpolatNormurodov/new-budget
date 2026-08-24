@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
 import * as FormData from 'form-data';
-import { Telegraf, Context } from 'telegraf';
+import { Telegraf, Context, Markup } from 'telegraf';
 import { PrismaService } from '../prisma/prisma.service';
 import { OpenBudgetService } from '../openbudget/openbudget.service';
 import { WalletService } from '../wallet/wallet.service';
@@ -350,11 +350,13 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Bazadagi barcha faol botlarni ishga tushirish
+   * Bazadagi barcha botlarni ishga tushirish (To'xtatilgan botlar ham Cross-Promo uchun faol qoladi)
    */
   async launchAllActiveBots() {
-    const bots = await this.prisma.botInstance.findMany({ where: { isActive: true } });
-    this.logger.log(`🚀 Jami ${bots.length} ta faol bot topildi. Ishga tushirilmoqda...`);
+    const bots = await this.prisma.botInstance.findMany({
+      where: { status: { not: 'ARCHIVED' } },
+    });
+    this.logger.log(`🚀 Jami ${bots.length} ta bot instansiyasi ishga tushirilmoqda...`);
 
     for (const botRecord of bots) {
       await this.startBotInstance(botRecord);
@@ -821,12 +823,129 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * 📢 Boshqa faol botlarni reklama qilish va foydalanuvchini yo'naltirish (Cross-Promotion)
+   */
+  private async sendCrossPromoMessage(
+    ctx: Context,
+    user: any,
+    currentBotRecord: any,
+    reason: 'STOPPED' | 'TARGET_REACHED'
+  ) {
+    const otherActiveBots = await this.prisma.botInstance.findMany({
+      where: {
+        id: { not: currentBotRecord.id },
+        isActive: true,
+        status: 'ONLINE',
+      },
+    });
+
+    const isAgent = !!user.agentId;
+    let messageText = '';
+
+    if (reason === 'TARGET_REACHED') {
+      const target = currentBotRecord.targetVotes || 5000;
+      messageText =
+        `🎉 <b>TABRIKLAYMIZ! "${currentBotRecord.mahallaName}" boti bo'yicha belgilangan reja (${formatSum(target)} ta ovoz) 100% to'ldi!</b> 🏆\n\n` +
+        `Ushbu mahalla loyihasi g'olib bo'lishi uchun hissa qo'shgan barcha fuqarolarimizga katta minnatdorchilik bildiramiz!\n\n`;
+
+      if (otherActiveBots.length > 0) {
+        messageText +=
+          `💰 <b>Siz boshqa faol mahallalarimiz botlariga o'tib, ovoz berib pul ishlashda davom etishingiz mumkin!</b>\n\n` +
+          `Quyidagi faol botlarimizdan birini tanlang: 👇`;
+      } else {
+        messageText +=
+          `💰 <i>Yig'ilgan balansingizni <b>"💸 Pulni yechib olish"</b> bo'limi orqali istalgan vaqt kartangizga yechib olishingiz mumkin.</i>`;
+      }
+    } else {
+      // STOPPED
+      messageText =
+        `⚠️ <b>Ushbu mahalla ("${currentBotRecord.mahallaName}") uchun ovoz yig'ish vaqtincha to'xtatilgan.</b>\n\n`;
+
+      if (otherActiveBots.length > 0) {
+        messageText +=
+          `💰 <b>Lekin siz boshqa faol mahallalarimiz botlariga o'tib, ovoz berib pul ishlashingiz mumkin!</b>\n\n` +
+          `Quyidagi faol botlarimizdan birini tanlang va ovoz bering: 👇`;
+      } else {
+        messageText +=
+          `ℹ️ <i>Bot tez orada qayta faollashtiriladi. Hozirda yig'ilgan balansingizni tekshirishingiz yoki pul yechib olishingiz mumkin.</i>`;
+      }
+    }
+
+    const inlineButtons: any[] = [];
+    for (const otherBot of otherActiveBots) {
+      const botUser = otherBot.botUsername ? otherBot.botUsername.replace('@', '') : '';
+      if (botUser) {
+        const reward = formatSum(otherBot.voteReward || 30000);
+        inlineButtons.push([
+          Markup.button.url(`🚀 ${otherBot.mahallaName} (+${reward} so'm) ➔`, `https://t.me/${botUser}?start=promo_${user.telegramId}`)
+        ]);
+      }
+    }
+
+    return ctx.reply(messageText, {
+      parse_mode: 'HTML',
+      ...(inlineButtons.length > 0 ? Markup.inlineKeyboard(inlineButtons) : {}),
+      ...BotKeyboards.mainMenu(user.role === 'ADMIN', isAgent),
+    });
+  }
+
+  /**
    * Har bir alohida bot uchun xabarlar va menyularni sozlash
    */
   private setupBotHandlers(bot: Telegraf, botRecord: any) {
     // Alohida bot uchun xatoliklarni xavfsiz izolyatsiya qilish (boshqa botlarga ta'sir qilmaydi)
     bot.catch((err: any, ctx: Context) => {
       this.logger.error(`[Bot #${botRecord.id} - ${botRecord.name}] Update xatoligi: ${err?.message || err}`);
+    });
+
+    // 0. 🎯 CROSS-PROMOTION & AVTOMATIK REKLAMA MIDDLEWARE (STOPPED & LIMIT TO'LGAN HOLATLAR)
+    bot.use(async (ctx, next) => {
+      try {
+        const freshBot = await this.prisma.botInstance.findUnique({ where: { id: botRecord.id } });
+        if (!freshBot) return next();
+
+        const isStopped = !freshBot.isActive || freshBot.status === 'STOPPED' || freshBot.status === 'PAUSED' || freshBot.status === 'ARCHIVED';
+
+        const totalVotes = await this.prisma.vote.count({
+          where: { botInstanceId: freshBot.id, status: { in: ['VERIFIED', 'PENDING_VERIFICATION'] } },
+        });
+        const isTargetReached = totalVotes >= (freshBot.targetVotes || 5000);
+
+        // Pul yechish va Balans ko'rish har doim ishlashi kerak (foydalanuvchi yig'gan pulini ololishi uchun)
+        const msgText = (ctx.message as any)?.text || '';
+        const cbData = (ctx.callbackQuery as any)?.data || '';
+        const isMoneyAction =
+          msgText.includes('Balans') || msgText.includes('yechish') || msgText.includes('Pul') ||
+          cbData.includes('balance') || cbData.includes('withdraw') ||
+          msgText === '/balance' || msgText === '/withdraw' ||
+          msgText === '/help' || msgText.includes('Yordam');
+
+        if (isMoneyAction) {
+          return next();
+        }
+
+        // Agar bot to'xtatilgan bo'lsa — har qanday xabarga boshqa faol botlarni reklama qiladi
+        if (isStopped) {
+          const user = await this.getOrCreateBotUser(ctx, freshBot.id);
+          if (user && !user.isBanned) {
+            await this.sendCrossPromoMessage(ctx, user, freshBot, 'STOPPED');
+            return;
+          }
+        }
+
+        // Agar reja/limit to'lgan bo'lsa va ovoz bermoqchi yoki start bosgan bo'lsa — boshqa faol botlarni taklif qiladi
+        if (isTargetReached && (msgText.includes('Ovoz berish') || msgText === '/vote' || msgText === '/start')) {
+          const user = await this.getOrCreateBotUser(ctx, freshBot.id);
+          if (user && !user.isBanned) {
+            await this.sendCrossPromoMessage(ctx, user, freshBot, 'TARGET_REACHED');
+            return;
+          }
+        }
+      } catch (err: any) {
+        this.logger.error(`[Bot #${botRecord.id}] Cross-Promo middleware xatosi: ${err.message}`);
+      }
+
+      return next();
     });
 
     // 1. /start komandasi
