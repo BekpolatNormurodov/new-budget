@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   X,
   RefreshCw,
@@ -13,6 +13,7 @@ import {
   Globe,
   KeyRound,
   ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 import { BotInstanceItem } from '../types';
 import { formatSum, formatTashkentDateTime } from '../utils/format';
@@ -55,6 +56,7 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
   const [ourTotalPages, setOurTotalPages] = useState(1);
   const [isOurLoading, setIsOurLoading] = useState(false);
   const [ourFilter, setOurFilter] = useState<'ALL' | 'VERIFIED' | 'PENDING'>('ALL');
+  const [allOurVotes, setAllOurVotes] = useState<any[]>([]);
 
   // Common Search & Sync
   const [search, setSearch] = useState('');
@@ -139,6 +141,33 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
     pendingVotes: 0,
   });
 
+  const fetchAllOurVotes = async () => {
+    if (!bot) return;
+    try {
+      const res = await fetch(`/api/admin/bots/${bot.id}/votes-feed?page=1&size=2000`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.content)) {
+        setAllOurVotes(data.content);
+      }
+    } catch (e) {
+      console.error('Failed to load all our votes for cross-ref:', e);
+    }
+  };
+
+  const ourVotesByTail = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const v of allOurVotes) {
+      const clean = (v.phone || v.phoneNumber || v.rawPhone || '').replace(/\D/g, '');
+      if (clean.length >= 6) {
+        map.set(clean.slice(-6), v);
+      }
+      if (clean.length >= 5 && !map.has(clean.slice(-5))) {
+        map.set(clean.slice(-5), v);
+      }
+    }
+    return map;
+  }, [allOurVotes]);
+
   useEffect(() => {
     if (isOpen && bot) {
       setLiveStats({
@@ -149,6 +178,7 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
       setLastSyncTime(new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       fetchOfficialVotes(0);
       fetchOurVotes(1, search, ourFilter);
+      fetchAllOurVotes();
     }
   }, [isOpen, bot?.id]);
 
@@ -604,19 +634,60 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
                       </button>
                     </div>
                   ) : (
-                    filteredObVotes.map((v, idx) => (
-                      <div key={idx} className="p-3 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono text-slate-400">#{obPage * 15 + idx + 1}</span>
-                          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 font-mono font-bold text-xs">
-                            {v.phoneNumber}
+                    filteredObVotes.map((v, idx) => {
+                      const itemDigits = (v.phoneNumber || '').replace(/\D/g, '');
+                      const matchedOurVote = itemDigits.length >= 5
+                        ? (ourVotesByTail.get(itemDigits.slice(-6)) || ourVotesByTail.get(itemDigits.slice(-5)))
+                        : null;
+                      const isOurVerified = matchedOurVote && matchedOurVote.status === 'VERIFIED';
+                      const isOurPending = matchedOurVote && matchedOurVote.status === 'PENDING_VERIFICATION';
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`p-3 flex items-center justify-between gap-2 transition-colors ${
+                            isOurVerified
+                              ? 'bg-emerald-500/10 dark:bg-emerald-500/15 border-l-4 border-l-emerald-500'
+                              : isOurPending
+                              ? 'bg-amber-500/10 dark:bg-amber-500/15 border-l-4 border-l-amber-500'
+                              : ''
+                          }`}
+                        >
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-mono text-slate-400">#{obPage * 15 + idx + 1}</span>
+                              <span
+                                className={`px-2 py-0.5 rounded-lg font-mono font-bold text-xs ${
+                                  isOurVerified
+                                    ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border border-emerald-500/40'
+                                    : isOurPending
+                                    ? 'bg-amber-500/20 text-amber-800 dark:text-amber-200 border border-amber-500/40'
+                                    : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20'
+                                }`}
+                              >
+                                {v.phoneNumber}
+                              </span>
+                            </div>
+                            {isOurVerified ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                Bizning Bot (Tasdiqlangan)
+                              </span>
+                            ) : isOurPending ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                                <Hourglass className="w-3 h-3 text-amber-500" />
+                                Bizning Bot (Kutilmoqda)
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500">🌐 Tashqi ovoz</span>
+                            )}
+                          </div>
+                          <span className="text-right text-slate-500 dark:text-slate-400 font-mono text-[11px]">
+                            {v.voteDate}
                           </span>
                         </div>
-                        <span className="text-right text-slate-500 dark:text-slate-400 font-mono text-[11px]">
-                          {v.voteDate}
-                        </span>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
 
@@ -627,13 +698,14 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
                       <tr>
                         <th className="py-3 px-4 font-semibold w-12">#</th>
                         <th className="py-3 px-4 font-semibold">Telefon Raqami</th>
+                        <th className="py-3 px-4 font-semibold">Bizning Tizim Holati</th>
                         <th className="py-3 px-4 font-semibold text-right">Ovoz Berilgan Vaqti</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                       {(isObLoading || (activeTab === 'OPENBUDGET' && isObSearching)) && obVotes.length === 0 ? (
                         <tr>
-                          <td colSpan={3} className="py-12 text-center text-slate-400">
+                          <td colSpan={4} className="py-12 text-center text-slate-400">
                             <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-500" />
                             {activeTab === 'OPENBUDGET' && isObSearching
                               ? "Butun rasmiy ro'yxat bo'ylab qidirilmoqda..."
@@ -642,7 +714,7 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
                         </tr>
                       ) : filteredObVotes.length === 0 ? (
                         <tr>
-                          <td colSpan={3} className="py-12 text-center text-slate-400">
+                          <td colSpan={4} className="py-12 text-center text-slate-400">
                             <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-slate-700" />
                             <p className="font-semibold text-slate-700 dark:text-slate-300">Rasmiy reyestr ro'yxati hozircha bo'sh</p>
                             <button
@@ -655,21 +727,67 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
                           </td>
                         </tr>
                       ) : (
-                        filteredObVotes.map((v, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-900/50 transition-colors">
-                            <td className="py-3 px-4 text-slate-400 font-mono text-[11px]">
-                              {obPage * 15 + idx + 1}
-                            </td>
-                            <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
-                              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
-                                {v.phoneNumber}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 text-right text-slate-600 dark:text-slate-300 font-mono text-xs">
-                              {v.voteDate}
-                            </td>
-                          </tr>
-                        ))
+                        filteredObVotes.map((v, idx) => {
+                          const itemDigits = (v.phoneNumber || '').replace(/\D/g, '');
+                          const matchedOurVote = itemDigits.length >= 5
+                            ? (ourVotesByTail.get(itemDigits.slice(-6)) || ourVotesByTail.get(itemDigits.slice(-5)))
+                            : null;
+                          const isOurVerified = matchedOurVote && matchedOurVote.status === 'VERIFIED';
+                          const isOurPending = matchedOurVote && matchedOurVote.status === 'PENDING_VERIFICATION';
+
+                          return (
+                            <tr
+                              key={idx}
+                              className={`transition-colors ${
+                                isOurVerified
+                                  ? 'bg-emerald-500/10 dark:bg-emerald-500/15 hover:bg-emerald-500/20'
+                                  : isOurPending
+                                  ? 'bg-amber-500/10 dark:bg-amber-500/15 hover:bg-amber-500/20'
+                                  : 'hover:bg-slate-50/80 dark:hover:bg-slate-900/50'
+                              }`}
+                            >
+                              <td className="py-3 px-4 text-slate-400 font-mono text-[11px]">
+                                {obPage * 15 + idx + 1}
+                              </td>
+                              <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
+                                <span
+                                  className={`px-2.5 py-1 rounded-lg border font-mono ${
+                                    isOurVerified
+                                      ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border-emerald-500/40'
+                                      : isOurPending
+                                      ? 'bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/40'
+                                      : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+                                  }`}
+                                >
+                                  {v.phoneNumber}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4">
+                                {isOurVerified ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500 text-white shadow-sm shadow-emerald-500/20 animate-in fade-in">
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>Bizning Bot (Tasdiqlangan)</span>
+                                    {matchedOurVote?.user?.firstName && (
+                                      <span className="opacity-80 font-normal">({matchedOurVote.user.firstName})</span>
+                                    )}
+                                  </span>
+                                ) : isOurPending ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500 text-white shadow-sm shadow-amber-500/20">
+                                    <Hourglass className="w-3.5 h-3.5" />
+                                    <span>Bizning Bot (Kutilmoqda)</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80">
+                                    <span>🌐 Tashqi ovoz</span>
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 px-4 text-right text-slate-600 dark:text-slate-300 font-mono text-xs">
+                                {v.voteDate}
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
