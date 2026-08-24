@@ -72,6 +72,7 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
   // tezlashtirish maqsadida, qidiruv (search) esa har doim butun ro'yxatni
   // ko'radi (quyida alohida ko'rsatiladi). Bu holat aniq ko'rsatilmasa, admin
   // "3 soatdan eski ovoz yo'q" deb noto'g'ri xulosaga kelishi mumkin edi.
+  // Fon rejimidagi tez-kesh (prewarm) qamrovi
   const [prewarmStatus, setPrewarmStatus] = useState<{
     cachedPages: number;
     totalPages: number;
@@ -80,31 +81,51 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
     finishedAt: number;
   } | null>(null);
 
+  // OUR_SYSTEM search & filter effect
   useEffect(() => {
-    const tailDigits = search.replace(/\D/g, '');
-    if (activeTab !== 'OPENBUDGET' || tailDigits.length < 5 || !bot) {
+    if (activeTab !== 'OUR_SYSTEM' || !bot) return;
+    const timer = setTimeout(() => {
+      fetchOurVotes(1, search, ourFilter);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search, ourFilter, activeTab, bot?.id]);
+
+  // OPENBUDGET search effect (searches in-memory RAM cache instantly, then server)
+  useEffect(() => {
+    if (activeTab !== 'OPENBUDGET' || !bot) {
       setObSearchResults(null);
       setObSearchNotFound(false);
       setObSearchCoverage(null);
       return;
     }
+    const cleanSearch = search.trim();
+    if (cleanSearch.length < 3) {
+      setObSearchResults(null);
+      setObSearchNotFound(false);
+      setObSearchCoverage(null);
+      return;
+    }
+
     setIsObSearching(true);
     setObSearchNotFound(false);
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/admin/bots/${bot.id}/official-votes-search?tail=${tailDigits}`);
+        const res = await fetch(`/api/admin/bots/${bot.id}/official-votes-search?tail=${encodeURIComponent(cleanSearch)}`);
         const data = await res.json();
         if (data.success) {
           setObSearchResults(data.matches || []);
           setObSearchNotFound((data.matches || []).length === 0);
           setObSearchCoverage({ scannedPages: data.scannedPages || 0, totalPages: data.totalPages || 0 });
+        } else {
+          setObSearchResults([]);
+          setObSearchNotFound(true);
         }
       } catch (e) {
         console.error(e);
       } finally {
         setIsObSearching(false);
       }
-    }, 500);
+    }, 350);
     return () => clearTimeout(timer);
   }, [search, activeTab, bot?.id]);
 
@@ -127,7 +148,7 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
       });
       setLastSyncTime(new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       fetchOfficialVotes(0);
-      fetchOurVotes(1);
+      fetchOurVotes(1, search, ourFilter);
     }
   }, [isOpen, bot?.id]);
 
@@ -201,12 +222,12 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
         }),
       });
       const data = await res.json();
-      if (data.success && data.content) {
+      if (data.success) {
         setNeedCaptcha(false);
         setObVotes(data.content || []);
         setObTotalElements(data.totalElements || 0);
         setObTotalPages(data.totalPages || 1);
-        setObPage(data.page || 0);
+        setObPage(0);
         setLiveStats((prev) => ({
           ...prev,
           openBudgetVotes: data.totalElements || prev.openBudgetVotes,
@@ -223,12 +244,23 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
     }
   };
 
-  // Fetch from our local DB
-  const fetchOurVotes = async (targetPage: number = 1) => {
+  // Fetch from our local DB with server-side query filtering
+  const fetchOurVotes = async (
+    targetPage: number = 1,
+    currentSearch: string = search,
+    currentFilter: string = ourFilter,
+  ) => {
     if (!bot) return;
     setIsOurLoading(true);
     try {
-      const res = await fetch(`/api/admin/bots/${bot.id}/votes-feed?page=${targetPage}&size=15`);
+      const params = new URLSearchParams({
+        page: String(targetPage),
+        size: '15',
+      });
+      if (currentSearch.trim()) params.append('search', currentSearch.trim());
+      if (currentFilter !== 'ALL') params.append('status', currentFilter);
+
+      const res = await fetch(`/api/admin/bots/${bot.id}/votes-feed?${params.toString()}`);
       const data = await res.json();
       if (data.success) {
         setOurVotes(data.content || []);
@@ -257,7 +289,7 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
         });
         setLastSyncTime(new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         fetchOfficialVotes(obPage, true);
-        fetchOurVotes(ourPage);
+        fetchOurVotes(ourPage, search, ourFilter);
         if (onBotUpdated) onBotUpdated();
       }
     } catch (e) {
@@ -269,11 +301,6 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
 
   if (!isOpen || !bot) return null;
 
-  // Filtered lists
-  // OpenBudget rasmiy ro'yxatida telefon raqamlar qisman yashiringan (masalan "**-*88-37-10"),
-  // shuning uchun to'liq raqam bo'yicha oddiy includes() hech qachon mos kelmaydi —
-  // oxirgi 5 ta (yoki qisqaroq kiritilgan bo'lsa, shuncha) ko'rinadigan raqam bo'yicha
-  // solishtiriladi.
   const TAIL_MATCH_LEN = 5;
   const formatCoverage = (minutes: number) => {
     const h = Math.floor(minutes / 60);
@@ -282,8 +309,7 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
     return m > 0 ? `${h}s ${m}d` : `${h} soat`;
   };
   const searchDigits = search.replace(/\D/g, '');
-  // 5+ raqam kiritilsa, butun ro'yxat bo'yicha serverdan qidirilgan natija ko'rsatiladi;
-  // aks holda joriy sahifadagi ma'lumot bo'yicha (tezkor, lokal) filtrlanadi.
+
   const filteredObVotes = obSearchResults !== null
     ? obSearchResults
     : obVotes.filter((v) => {
@@ -293,22 +319,10 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
           const len = Math.min(TAIL_MATCH_LEN, searchDigits.length, phoneDigits.length);
           if (len > 0 && searchDigits.slice(-len) === phoneDigits.slice(-len)) return true;
         }
-        return (v.voteDate || '').includes(search);
+        return (v.voteDate || '').toLowerCase().includes(search.toLowerCase());
       });
 
-  const filteredOurVotes = ourVotes.filter((v) => {
-    const matchesSearch =
-      v.phoneNumber.toLowerCase().includes(search.toLowerCase()) ||
-      v.rawPhone.includes(search) ||
-      (v.user?.firstName && v.user.firstName.toLowerCase().includes(search.toLowerCase()));
-
-    const matchesStatus =
-      ourFilter === 'ALL' ||
-      (ourFilter === 'VERIFIED' && v.status === 'VERIFIED') ||
-      (ourFilter === 'PENDING' && v.status === 'PENDING_VERIFICATION');
-
-    return matchesSearch && matchesStatus;
-  });
+  const filteredOurVotes = ourVotes;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">

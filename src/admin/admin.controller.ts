@@ -84,11 +84,15 @@ export class AdminController {
     @Param('id') id: string,
     @Query('page') page?: string,
     @Query('size') size?: string,
+    @Query('search') search?: string,
+    @Query('status') status?: string,
   ) {
     return this.adminService.getBotVotesFeed(
       parseInt(id, 10),
       page ? parseInt(page, 10) : 1,
       size ? parseInt(size, 10) : 15,
+      search,
+      status,
     );
   }
 

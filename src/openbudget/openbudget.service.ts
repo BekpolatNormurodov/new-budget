@@ -1388,6 +1388,8 @@ export class OpenBudgetService {
   private initiativeTokenCache = new Map<string, { token: string; expiresAt: number }>();
   private captchaSessionMap = new Map<string, { cookies: string; sessionKey: string; page?: any }>();
   private initiativeVotesListCache = new Map<string, { votes: any[]; totalElements: number; totalPages: number; fetchedAt: number }>();
+  private activePrewarmPromises = new Map<string, Promise<void>>();
+  private activeSearchPromises = new Map<string, Promise<any>>();
   // Har bir prewarm siklidan keyin HAQIQIY qamrov holatini saqlaydi (UI'da
   // ko'rsatish uchun) — chunki cheklov (rate-limit) tufayli erta to'xtagan
   // holatda kesh "3 soat qamrab olindi" deb NOTO'G'RI da'vo qilmasligi kerak.
@@ -1413,29 +1415,35 @@ export class OpenBudgetService {
       this.configService.get<string>('puppeteer.executablePath') ||
       '/usr/bin/chromium-browser';
 
+    let proxyArg = '';
+    let proxyAuth: { username: string; password: string } | null = null;
+    const proxy = this.proxyManager.getNextProxy();
+    if (proxy) {
+      proxyArg = `--proxy-server=${proxy.protocol.startsWith('socks') ? proxy.protocol : 'http'}://${proxy.host}:${proxy.port}`;
+      if (proxy.auth?.username) {
+        proxyAuth = { username: proxy.auth.username, password: proxy.auth.password || '' };
+      }
+    }
+
     const args = [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process',
       '--disable-gpu',
+      '--disable-features=site-per-process',
     ];
-
-    // Server IP'sining o'zi OpenBudget tomonidan bloklangani uchun, headless brauzer
-    // ham (agar mavjud bo'lsa) proxy hovuzidagi IP orqali ishga tushiriladi.
-    const proxy = this.proxyManager.getNextProxy();
-    this.headlessProxyAuth = null;
-    if (proxy) {
-      args.push(`--proxy-server=${proxy.protocol.startsWith('socks') ? proxy.protocol : 'http'}://${proxy.host}:${proxy.port}`);
-      if (proxy.auth?.username) {
-        this.headlessProxyAuth = { username: proxy.auth.username, password: proxy.auth.password || '' };
-      }
-    }
+    if (proxyArg) args.push(proxyArg);
 
     this.headlessBrowser = await puppeteer.launch({
       executablePath,
       headless: true,
       args,
     });
+    this.headlessProxyAuth = proxyAuth;
     return this.headlessBrowser;
   }
 
@@ -1453,86 +1461,95 @@ export class OpenBudgetService {
    */
   private async restartHeadlessBrowser(): Promise<void> {
     try {
-      if (this.headlessBrowser) await this.headlessBrowser.close().catch(() => {});
-    } finally {
-      this.headlessBrowser = null;
-    }
+      if (this.headlessBrowser) {
+        await this.headlessBrowser.close().catch(() => {});
+        this.headlessBrowser = null;
+      }
+    } catch {}
   }
 
   /**
    * 🌐 Bitta headless sahifa/navigatsiya doirasida OCR bilan captcha'ni bir necha marta
    * urinib avtomatik yechadi va tokenni qaytaradi. Har bir urinishda YANGI sahifa/
    * navigatsiya OCHMAYDI (faqat fetch() qayta chaqiradi) — shu bilan CPU sarfini va
-   * botning asosiy event loop'ini bloklab qo'yish xavfini keskin kamaytiradi.
+   * botning asosiy event loop'ini bloklab qo'jish xavfini keskin kamaytiradi.
    */
   private async solveInitiativeTokenHeadless(
     initiativeUuid: string,
-    maxAttempts: number = 10,
+    maxTries: number = 5,
   ): Promise<{ success: boolean; token?: string; error?: string }> {
-    let page: any;
-    try {
-      const browser = await this.getHeadlessBrowser();
-      page = await this.newHeadlessPage(browser);
-      await page.setUserAgent(
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-      );
-      await page.goto(
-        `https://new.openbudget.uz/uz/initiative-budget/active-initiatives/55/${initiativeUuid}`,
-        { waitUntil: 'domcontentloaded', timeout: 20000 },
-      );
+    for (let tryIndex = 0; tryIndex < maxTries; tryIndex++) {
+      let page: any;
+      try {
+        const browser = await this.getHeadlessBrowser();
+        page = await this.newHeadlessPage(browser);
+        await page.setUserAgent(
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        );
 
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-          const capResult = await page.evaluate(async () => {
-            const res = await fetch('/api/v2/vote/captcha-2', {
-              headers: { hl: 'uz_lat' },
-              credentials: 'include',
-            });
-            return res.json();
-          });
-          if (!capResult?.image || !capResult?.captchaKey) continue;
+        await page.goto(
+          `https://new.openbudget.uz/uz/initiative-budget/active-initiatives/55/${initiativeUuid}`,
+          { waitUntil: 'domcontentloaded', timeout: 20000 },
+        );
 
-          const solveRes = await this.captchaSolver.solve(capResult.image);
-          if (!solveRes.success || solveRes.answer === undefined) continue;
-          const numAns = typeof solveRes.answer === 'number' ? solveRes.answer : parseInt(String(solveRes.answer), 10);
-          if (isNaN(numAns)) continue;
+        const capResult = await page.evaluate(async () => {
+          const res = await fetch('/api/v2/vote/captcha-2', { credentials: 'include' });
+          return await res.json();
+        });
 
-          const submitResult = await page.evaluate(
-            async (uuid: string, key: string, ans: number) => {
-              const res = await fetch('/api/v2/info/get-initiative-token', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ captchaKey: key, captchaResult: ans, initiativeId: uuid }),
-              });
-              return res.json();
-            },
-            initiativeUuid,
-            capResult.captchaKey,
-            numAns,
-          );
-
-          if (submitResult?.token) {
-            this.logger.log(`🎉 [Headless Auto-OCR] Muvaffaqiyatli yechildi (${attempt}-urinish): ${solveRes.expression} = ${solveRes.answer}`);
-            this.initiativeTokenCache.set(initiativeUuid, {
-              token: submitResult.token,
-              expiresAt: Date.now() + 60 * 60 * 1000,
-            });
-            await page.close().catch(() => {});
-            return { success: true, token: submitResult.token };
-          }
-        } catch (attemptErr: any) {
-          this.logger.debug(`Headless auto-solver attempt #${attempt} error: ${attemptErr.message}`);
+        if (!capResult || !capResult.image || !capResult.captchaKey) {
+          await page.close().catch(() => {});
+          continue;
         }
-      }
 
-      await page.close().catch(() => {});
-      return { success: false, error: 'OpenBudget token olinmadi (barcha urinishlar tugadi)' };
-    } catch (e: any) {
-      if (page) await page.close().catch(() => {});
-      this.logger.error(`❌ [Headless Auto-OCR] Xatolik: ${e.message}`);
-      return { success: false, error: e.message };
+        const solveRes = await this.captchaSolver.solve(capResult.image);
+        if (!solveRes.success || solveRes.answer === undefined || solveRes.answer === null) {
+          await page.close().catch(() => {});
+          continue;
+        }
+        const numAns = typeof solveRes.answer === 'number' ? solveRes.answer : parseInt(String(solveRes.answer), 10);
+        if (isNaN(numAns)) {
+          await page.close().catch(() => {});
+          continue;
+        }
+
+        const submitResult = await page.evaluate(
+          async (uuid: string, key: string, ans: number) => {
+            const res = await fetch(`/api/v2/info/votes/token/${uuid}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ captchaKey: key, captchaResult: ans }),
+            });
+            const text = await res.text();
+            try {
+              return JSON.parse(text);
+            } catch {
+              return { error: text };
+            }
+          },
+          initiativeUuid,
+          capResult.captchaKey,
+          numAns,
+        );
+
+        await page.close().catch(() => {});
+
+        const token = submitResult?.token || submitResult?.data?.token;
+        if (token) {
+          this.initiativeTokenCache.set(initiativeUuid, {
+            token,
+            expiresAt: Date.now() + 25 * 60 * 1000,
+          });
+          return { success: true, token };
+        }
+      } catch (err: any) {
+        if (page) await page.close().catch(() => {});
+        this.logger.debug(`[solveInitiativeTokenHeadless] Try ${tryIndex + 1} error: ${err.message}`);
+      }
+      await new Promise((r) => setTimeout(r, 400));
     }
+    return { success: false, error: 'Initiative token olish muvaffaqiyatsiz bo\'ldi' };
   }
 
   /**
@@ -1544,51 +1561,48 @@ export class OpenBudgetService {
   private async getOfficialInitiativeCaptchaHeadless(
     initiativeUuid: string,
   ): Promise<{ success: boolean; captchaKey?: string; image?: string; error?: string }> {
-    // Rotating proxy IP so'rov o'rtasida almashib qolishi (ERR_NETWORK_CHANGED va
-    // shunga o'xshash tarmoq xatolari) mumkin — bunday hollarda brauzerni yangi
-    // proxy bilan qayta ishga tushirib, 1 marta qayta urinamiz.
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      let page: any;
-      try {
-        const browser = await this.getHeadlessBrowser();
-        page = await this.newHeadlessPage(browser);
-        await page.setUserAgent(
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        );
-        await page.goto(
-          `https://new.openbudget.uz/uz/initiative-budget/active-initiatives/55/${initiativeUuid}`,
-          { waitUntil: 'domcontentloaded', timeout: 20000 },
-        );
+    let browserPage: any;
+    try {
+      const browser = await this.getHeadlessBrowser();
+      browserPage = await this.newHeadlessPage(browser);
+      await browserPage.setUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      );
+      await browserPage.goto(
+        `https://new.openbudget.uz/uz/initiative-budget/active-initiatives/55/${initiativeUuid}`,
+        { waitUntil: 'domcontentloaded', timeout: 20000 },
+      );
 
-        const result = await page.evaluate(async () => {
-          const res = await fetch('/api/v2/vote/captcha-2', {
-            headers: { hl: 'uz_lat' },
-            credentials: 'include',
-          });
-          const data = await res.json();
-          return { status: res.status, data };
+      const result = await browserPage.evaluate(async () => {
+        const res = await fetch('/api/v2/vote/captcha-2', { credentials: 'include' });
+        return await res.json();
+      });
+
+      if (result && result.image && result.captchaKey) {
+        const sessionKey = `official_${initiativeUuid}_${Date.now()}`;
+        this.captchaSessionMap.set(sessionKey, {
+          cookies: '',
+          sessionKey,
+          page: browserPage,
         });
 
-        if (result?.data?.image && result?.data?.captchaKey) {
-          const captchaKey = result.data.captchaKey;
-          this.captchaSessionMap.set(captchaKey, { cookies: '', sessionKey: '', page });
-          return { success: true, captchaKey, image: result.data.image };
-        }
+        setTimeout(async () => {
+          const s = this.captchaSessionMap.get(sessionKey);
+          if (s && s.page) {
+            await s.page.close().catch(() => {});
+            this.captchaSessionMap.delete(sessionKey);
+          }
+        }, 3 * 60 * 1000);
 
-        await page.close().catch(() => {});
-        return { success: false, error: "Headless captcha olinmadi" };
-      } catch (e: any) {
-        if (page) await page.close().catch(() => {});
-        const isNetworkGlitch = /ERR_NETWORK_CHANGED|ERR_CONNECTION|ERR_PROXY|net::/.test(e.message || '');
-        if (isNetworkGlitch && attempt < 2) {
-          this.logger.warn(`⚠️ [Headless captcha] Tarmoq xatosi (${e.message}), yangi proxy bilan qayta urinilmoqda...`);
-          await this.restartHeadlessBrowser();
-          continue;
-        }
-        return { success: false, error: e.message };
+        return { success: true, captchaKey: result.captchaKey, image: result.image };
       }
+
+      await browserPage.close().catch(() => {});
+      return { success: false, error: 'Captcha olinmadi' };
+    } catch (e: any) {
+      if (browserPage) await browserPage.close().catch(() => {});
+      return { success: false, error: e.message };
     }
-    return { success: false, error: 'Captcha olinmadi (qayta urinishlardan keyin ham)' };
   }
 
   /**
@@ -1596,9 +1610,9 @@ export class OpenBudgetService {
    */
   private async fetchVotesListHeadless(
     initiativeUuid: string,
-    initToken: string,
-    page: number,
-    size: number,
+    token: string,
+    page: number = 0,
+    size: number = 15,
   ): Promise<{ content: any[]; totalElements: number; totalPages: number } | null> {
     let browserPage: any;
     try {
@@ -1614,134 +1628,214 @@ export class OpenBudgetService {
 
       const result = await browserPage.evaluate(
         async (token: string, p: number, s: number) => {
-          const url = `/api/v2/info/votes/${token}?page=${p}&size=${s}&limit=${s}`;
+          const res = await fetch(`/api/v2/info/votes/${token}?page=${p}&size=${s}&limit=${s}`, { credentials: 'include' });
+          const text = await res.text();
           try {
-            const res = await fetch(url, { credentials: 'include' });
-            if (!res.ok) return { status: res.status, data: null };
-            const text = await res.text();
-            if (!text || !text.trim()) return { status: res.status, data: null };
-            return { status: res.status, data: JSON.parse(text) };
-          } catch (e) {
-            return { status: 0, data: null };
+            return JSON.parse(text);
+          } catch {
+            return null;
           }
         },
-        initToken,
+        token,
         page,
         size,
       );
 
       await browserPage.close().catch(() => {});
-
-      if (result?.data) {
+      if (result && Array.isArray(result.content)) {
         return {
-          content: result.data.content || [],
-          totalElements: result.data.totalElements || (result.data.content || []).length,
-          totalPages: result.data.totalPages || 1,
+          content: result.content,
+          totalElements: result.totalElements || result.content.length,
+          totalPages: result.totalPages || 1,
         };
-      } else {
-        this.initiativeTokenCache.delete(initiativeUuid);
       }
       return null;
     } catch (e: any) {
       if (browserPage) await browserPage.close().catch(() => {});
-      this.logger.error(`❌ [Headless votes fetch] Xatolik: ${e.message}`);
+      this.logger.error(`❌ [Headless votes list] Xatolik: ${e.message}`);
       return null;
     }
   }
 
   /**
-   * 🔎 Telefon raqamining oxirgi (ko'rinadigan) raqamlari bo'yicha OpenBudget rasmiy
-   * ro'yxatining BARCHA sahifalari bo'ylab qidiradi. OpenBudget bir so'rovda faqat
-   * o'zining kichik sahifasini (~12-15 ta) qaytargani uchun, admin panel qidiruvi
-   * to'liq ro'yxatni topishi uchun shu funksiya kerak — bitta headless sahifa/
-   * navigatsiya doirasida, ketma-ket fetch() chaqiruvlari bilan.
+   * 🔎 Telefon raqamining oxirgi raqamlari yoki to'liq qidiruv bo'yicha OpenBudget rasmiy
+   * ro'yxatidan qidirish (Avval xotiradagi tezkor keshdan 0ms da, so'ng zarur bo'lsa serverdan).
    */
   async searchOfficialVotesByTail(
     initiativeUuid: string,
     tailDigits: string,
-    maxPages: number = 140,
+    maxPages: number = 40,
   ): Promise<{ success: boolean; matches: any[]; scannedPages: number; totalPages: number; error?: string }> {
-    if (!tailDigits) return { success: false, matches: [], scannedPages: 0, totalPages: 0, error: "Qidiruv matni bo'sh" };
-
-    let initToken = '';
-    const cached = this.initiativeTokenCache.get(initiativeUuid);
-    if (cached && cached.expiresAt > Date.now()) {
-      initToken = cached.token;
-    }
-    if (!initToken) {
-      const solved = await this.solveInitiativeTokenHeadless(initiativeUuid, 6);
-      if (solved.success && solved.token) initToken = solved.token;
-    }
-    if (!initToken) {
-      return { success: false, matches: [], scannedPages: 0, totalPages: 0, error: 'OpenBudget token olinmadi' };
+    if (!tailDigits || tailDigits.trim().length === 0) {
+      return { success: false, matches: [], scannedPages: 0, totalPages: 0, error: "Qidiruv matni bo'sh" };
     }
 
-    let browserPage: any;
-    try {
-      const browser = await this.getHeadlessBrowser();
-      browserPage = await this.newHeadlessPage(browser);
-      await browserPage.setUserAgent(
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-      );
-      await browserPage.goto(
-        `https://new.openbudget.uz/uz/initiative-budget/active-initiatives/55/${initiativeUuid}`,
-        { waitUntil: 'domcontentloaded', timeout: 20000 },
-      );
+    const cleanTail = tailDigits.replace(/\D/g, '');
+    const rawSearch = tailDigits.trim().toLowerCase();
 
-      const matches: any[] = [];
-      // Haqiqiy totalPages birinchi muvaffaqiyatli javobdan aniqlanguncha, maxPages'gacha
-      // urinib ko'riladi (aks holda 1-sahifa vaqtincha xato bersa, qidiruv darhol to'xtab qolardi).
-      let totalPages = maxPages;
+    // 1. Birinchi bo'lib XOTIRADAGI barcha kesh sahifalaridan tezkor qidiramiz (0 millisekund)
+    const matches: any[] = [];
+    const seenUnique = new Set<string>();
+    let totalCachedPages = 0;
 
-      for (let p = 0; p < maxPages && p < totalPages; p++) {
-        let result: any = null;
-        // Vaqtinchalik (WAF/tarmoq) xatoliklarda shu sahifani 2 marta qayta urinib ko'rish
-        for (let retry = 0; retry < 2 && !result; retry++) {
-          try {
-            result = await browserPage.evaluate(
-              async (token: string, page: number) => {
-                const res = await fetch(`/api/v2/info/votes/${token}?page=${page}&size=15&limit=15`, { credentials: 'include' });
-                const text = await res.text();
-                if (!text) return null;
-                try { return JSON.parse(text); } catch { return null; }
-              },
-              initToken,
-              p,
-            );
-          } catch {
-            result = null;
-          }
-          if (!result) await new Promise((r) => setTimeout(r, 300));
-        }
-        if (!result) continue; // shu sahifa o'tkazib yuboriladi, qidiruv davom etadi
-        totalPages = result.totalPages || totalPages;
-        const content = result.content || [];
-        for (const v of content) {
+    for (const [key, cached] of this.initiativeVotesListCache.entries()) {
+      if (key.startsWith(`${initiativeUuid}_p`)) {
+        totalCachedPages++;
+        for (const v of cached.votes || []) {
           const digits = String(v.phoneNumber || '').replace(/\D/g, '');
-          const len = Math.min(tailDigits.length, digits.length);
-          if (len > 0 && digits.slice(-len) === tailDigits.slice(-len)) {
-            matches.push(v);
+          const voteDate = String(v.voteDate || '').toLowerCase();
+
+          let isMatch = false;
+          if (cleanTail.length >= 3 && digits.length >= 3) {
+            const len = Math.min(cleanTail.length, digits.length);
+            if (digits.slice(-len) === cleanTail.slice(-len)) {
+              isMatch = true;
+            }
+          }
+          if (!isMatch && (voteDate.includes(rawSearch) || String(v.phoneNumber || '').toLowerCase().includes(rawSearch))) {
+            isMatch = true;
+          }
+
+          if (isMatch) {
+            const uKey = `${v.phoneNumber}_${v.voteDate}`;
+            if (!seenUnique.has(uKey)) {
+              seenUnique.add(uKey);
+              matches.push(v);
+            }
           }
         }
-        if (matches.length > 0) break; // topilgach darhol to'xtaydi
+      }
+    }
+
+    // Agar xotiradagi keshda topilsa
+    if (matches.length > 0) {
+      return {
+        success: true,
+        matches,
+        scannedPages: totalCachedPages,
+        totalPages: totalCachedPages,
+      };
+    }
+
+    // 2. Agar xotirada topilmasa va ayni vaqtda boshqa qidiruv ketayotgan bo'lsa
+    const searchLockKey = `${initiativeUuid}_${cleanTail || rawSearch}`;
+    if (this.activeSearchPromises.has(searchLockKey)) {
+      return this.activeSearchPromises.get(searchLockKey)!;
+    }
+
+    const searchPromise = (async () => {
+      let initToken = '';
+      const cached = this.initiativeTokenCache.get(initiativeUuid);
+      if (cached && cached.expiresAt > Date.now()) {
+        initToken = cached.token;
+      }
+      if (!initToken) {
+        const solved = await this.solveInitiativeTokenHeadless(initiativeUuid, 6);
+        if (solved.success && solved.token) initToken = solved.token;
+      }
+      if (!initToken) {
+        return { success: false, matches: [], scannedPages: 0, totalPages: 0, error: 'OpenBudget token olinmadi' };
       }
 
-      await browserPage.close().catch(() => {});
-      return { success: true, matches, scannedPages: Math.min(maxPages, totalPages), totalPages };
-    } catch (e: any) {
-      if (browserPage) await browserPage.close().catch(() => {});
-      this.logger.error(`❌ [Headless votes search] Xatolik: ${e.message}`);
-      return { success: false, matches: [], scannedPages: 0, totalPages: 0, error: e.message };
-    }
+      let browserPage: any;
+      try {
+        const browser = await this.getHeadlessBrowser();
+        browserPage = await this.newHeadlessPage(browser);
+        await browserPage.setUserAgent(
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        );
+        await browserPage.goto(
+          `https://new.openbudget.uz/uz/initiative-budget/active-initiatives/55/${initiativeUuid}`,
+          { waitUntil: 'domcontentloaded', timeout: 15000 },
+        );
+
+        let totalPages = maxPages;
+        for (let p = 0; p < maxPages && p < totalPages; p++) {
+          let result: any = null;
+          for (let retry = 0; retry < 2 && !result; retry++) {
+            try {
+              result = await browserPage.evaluate(
+                async (token: string, page: number) => {
+                  const res = await fetch(`/api/v2/info/votes/${token}?page=${page}&size=15&limit=15`, { credentials: 'include' });
+                  const text = await res.text();
+                  if (!text) return null;
+                  try { return JSON.parse(text); } catch { return null; }
+                },
+                initToken,
+                p,
+              );
+            } catch {
+              result = null;
+            }
+            if (!result) await new Promise((r) => setTimeout(r, 200));
+          }
+          if (!result) continue;
+
+          totalPages = result.totalPages || totalPages;
+          const content = result.content || [];
+          this.initiativeVotesListCache.set(`${initiativeUuid}_p${p}`, {
+            votes: content,
+            totalElements: result.totalElements || 0,
+            totalPages,
+            fetchedAt: Date.now(),
+          });
+
+          for (const v of content) {
+            const digits = String(v.phoneNumber || '').replace(/\D/g, '');
+            const voteDate = String(v.voteDate || '').toLowerCase();
+            let isMatch = false;
+            if (cleanTail.length >= 3 && digits.length >= 3) {
+              const len = Math.min(cleanTail.length, digits.length);
+              if (digits.slice(-len) === cleanTail.slice(-len)) isMatch = true;
+            }
+            if (!isMatch && (voteDate.includes(rawSearch) || String(v.phoneNumber || '').toLowerCase().includes(rawSearch))) {
+              isMatch = true;
+            }
+            if (isMatch) {
+              const uKey = `${v.phoneNumber}_${v.voteDate}`;
+              if (!seenUnique.has(uKey)) {
+                seenUnique.add(uKey);
+                matches.push(v);
+              }
+            }
+          }
+          if (matches.length > 0) break;
+        }
+
+        await browserPage.close().catch(() => {});
+        return { success: true, matches, scannedPages: Math.min(maxPages, totalPages), totalPages };
+      } catch (e: any) {
+        if (browserPage) await browserPage.close().catch(() => {});
+        return { success: false, matches: [], scannedPages: 0, totalPages: 0, error: e.message };
+      }
+    })().finally(() => {
+      this.activeSearchPromises.delete(searchLockKey);
+    });
+
+    this.activeSearchPromises.set(searchLockKey, searchPromise);
+    return searchPromise;
   }
 
   /**
    * 🔄 OpenBudget rasmiy ro'yxatining BARCHA sahifalarini fon rejimida oldindan
-   * yuklab, har biri alohida 30 daqiqalik keshga saqlaydi. Shu tufayli admin panel
-   * ochilganda yoki qidiruv qilinganda ma'lumot deyarli bir zumda (keshdan) chiqadi —
-   * uzoq (real vaqtli) kutish faqat shu fon jarayonining o'zida bo'ladi.
+   * yuklab, har biri alohida 30 daqiqalik keshga saqlaydi.
+   * Concurrency Safe: bir vaqtda faqat bitta prewarm ishlaydi!
    */
   async prewarmOfficialVotesCache(initiativeUuid: string, maxPages: number = 230): Promise<void> {
+    if (this.activePrewarmPromises.has(initiativeUuid)) {
+      this.logger.log(`🔄 [Prewarm] "${initiativeUuid}" uchun ro'yxatni yuklash allaqachon bajarilmoqda. Mavjud jarayonga ulanildi.`);
+      return this.activePrewarmPromises.get(initiativeUuid)!;
+    }
+
+    const prewarmPromise = this.doPrewarmOfficialVotesCache(initiativeUuid, maxPages).finally(() => {
+      this.activePrewarmPromises.delete(initiativeUuid);
+    });
+
+    this.activePrewarmPromises.set(initiativeUuid, prewarmPromise);
+    return prewarmPromise;
+  }
+
+  private async doPrewarmOfficialVotesCache(initiativeUuid: string, maxPages: number = 230): Promise<void> {
     let initToken = '';
     const cached = this.initiativeTokenCache.get(initiativeUuid);
     if (cached && cached.expiresAt > Date.now()) {
@@ -1773,7 +1867,7 @@ export class OpenBudgetService {
       let tokenRefreshesUsed = 0;
       let oldestCoveredTs: number | null = null;
       let reachedFullCutoff = false;
-      const MAX_TOKEN_REFRESHES = 15; // 215 sahifa / ~20 tadan ~11 marta yangilash kifoya, zaxira bilan
+      const MAX_TOKEN_REFRESHES = 15;
 
       for (let p = 0; p < maxPages && p < totalPages; p++) {
         let result: any = null;

@@ -908,13 +908,40 @@ export class AdminService {
   /**
    * 📋 Botga oid ovozlar ro'yxati va faollik tasmasi (Ovozlarni ko'rish)
    */
-  async getBotVotesFeed(botId: number, page: number = 1, size: number = 15) {
+  async getBotVotesFeed(
+    botId: number,
+    page: number = 1,
+    size: number = 15,
+    search?: string,
+    status?: string,
+  ) {
     const bot = await this.prisma.botInstance.findUnique({ where: { id: botId } });
     if (!bot) throw new Error('Bot topilmadi');
 
-    const total = await this.prisma.vote.count({ where: { botInstanceId: botId } });
+    const where: any = { botInstanceId: botId };
+    if (status && status !== 'ALL') {
+      where.status = status === 'PENDING' ? 'PENDING_VERIFICATION' : status;
+    }
+    if (search && search.trim()) {
+      const q = search.trim();
+      const digits = q.replace(/\D/g, '');
+      const orConditions: any[] = [];
+      if (digits) {
+        orConditions.push({ phone: { contains: digits } });
+      }
+      orConditions.push(
+        { user: { firstName: { contains: q } } },
+        { user: { username: { contains: q } } },
+      );
+      if (!isNaN(Number(q))) {
+        orConditions.push({ id: Number(q) });
+      }
+      where.OR = orConditions;
+    }
+
+    const total = await this.prisma.vote.count({ where });
     const votes = await this.prisma.vote.findMany({
-      where: { botInstanceId: botId },
+      where,
       include: { user: true },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * size,
