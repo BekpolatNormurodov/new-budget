@@ -11,6 +11,50 @@ interface ApproveWithdrawalModalProps {
   onConfirm: (id: number, receiptImage?: string, note?: string) => Promise<void> | void;
 }
 
+const compressImage = (file: File, maxDimension = 1600, quality = 0.85): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (readerEvent) => {
+      const image = new window.Image();
+      image.onload = () => {
+        let width = image.width;
+        let height = image.height;
+
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(readerEvent.target?.result as string);
+          return;
+        }
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(image, 0, 0, width, height);
+
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressedDataUrl);
+      };
+      image.onerror = (err) => reject(err);
+      image.src = readerEvent.target?.result as string;
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+};
+
 export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
   isOpen,
   onClose,
@@ -21,23 +65,29 @@ export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
   const [receiptError, setReceiptError] = useState<string>('');
   const [note, setNote] = useState<string>('To\'lov muvaffaqiyatli amalga oshirildi');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen || !withdrawal) return null;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Rasm hajmi 5MB dan oshmasligi kerak');
-        return;
-      }
       setReceiptError('');
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setReceiptImage(event.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+      setIsCompressing(true);
+      try {
+        const compressedBase64 = await compressImage(file);
+        setReceiptImage(compressedBase64);
+      } catch (err) {
+        // Fallback to direct read
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setReceiptImage(event.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+      } finally {
+        setIsCompressing(false);
+      }
     }
   };
 
@@ -167,12 +217,12 @@ export const ApproveWithdrawalModal: React.FC<ApproveWithdrawalModalProps> = ({
                     : 'border-slate-300 dark:border-slate-700 hover:border-indigo-500/60'
                 }`}
               >
-                <Upload className={`w-8 h-8 mx-auto ${receiptError ? 'text-rose-500' : 'text-indigo-500 dark:text-indigo-400'}`} />
+                <Upload className={`w-8 h-8 mx-auto ${receiptError ? 'text-rose-500' : 'text-indigo-500 dark:text-indigo-400'} ${isCompressing ? 'animate-bounce' : ''}`} />
                 <p className="font-semibold text-slate-700 dark:text-slate-300">
-                  Chek rasmini yuklash uchun bu yerga bosing
+                  {isCompressing ? '⏳ Rasm tayyorlanmoqda...' : 'Chek rasmini yuklash uchun bu yerga bosing'}
                 </p>
                 <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                  (JPG, PNG, WebP — Payme / Click / Bank cheki) — <b>majburiy</b>
+                  (iPhone / Android / Payme / Click cheklari) — <b>majburiy</b>
                 </p>
               </div>
             )}
