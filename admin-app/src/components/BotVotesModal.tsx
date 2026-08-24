@@ -311,20 +311,20 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[92vh] transition-colors">
         {/* Header */}
-        <div className="p-5 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-3 bg-slate-50/70 dark:bg-slate-950/70">
+        <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 bg-slate-50/90 dark:bg-slate-950/70">
           <div className="flex items-center gap-3.5 min-w-0">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-500 flex items-center justify-center text-white font-black text-lg shadow-md shadow-indigo-500/20 shrink-0">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-500 flex items-center justify-center text-white font-black text-base sm:text-lg shadow-md shadow-indigo-500/20 shrink-0">
               {bot.mahallaName.charAt(0)}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-slate-900 dark:text-white truncate">
+                <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white truncate">
                   {bot.mahallaName} — Ovozlar Ro'yxati
                 </h3>
-                <span className="shrink-0 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                <span className="shrink-0 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
                   #{bot.mahallaId?.slice(-6) || bot.id}
                 </span>
               </div>
@@ -355,9 +355,9 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
         </div>
 
         {/* Live Metrics Grid */}
-        <div className="px-5 py-3.5 bg-gradient-to-r from-indigo-50/80 via-purple-50/50 to-emerald-50/80 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 border-b border-slate-100 dark:border-slate-800/80 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-          <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 shadow-sm">
-            <div className="flex items-center gap-1.5 text-slate-400 mb-0.5">
+        <div className="px-3 sm:px-5 py-3 sm:py-3.5 bg-slate-100/70 dark:bg-slate-950/60 border-b border-slate-200 dark:border-slate-800/80 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 text-xs">
+          <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 mb-0.5">
               <Globe className="w-3.5 h-3.5 text-emerald-500" />
               <span className="text-[10px] font-semibold uppercase">OpenBudget:</span>
             </div>
@@ -366,8 +366,8 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
             </p>
           </div>
 
-          <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 shadow-sm">
-            <div className="flex items-center gap-1.5 text-slate-400 mb-0.5">
+          <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 mb-0.5">
               <Bot className="w-3.5 h-3.5 text-indigo-500" />
               <span className="text-[10px] font-semibold uppercase">Biz orqali:</span>
             </div>
@@ -376,8 +376,8 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
             </p>
           </div>
 
-          <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 shadow-sm">
-            <div className="flex items-center gap-1.5 text-slate-400 mb-0.5">
+          <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 mb-0.5">
               <Hourglass className="w-3.5 h-3.5 text-amber-500" />
               <span className="text-[10px] font-semibold uppercase">Kutilmoqda:</span>
             </div>
@@ -386,8 +386,8 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
             </p>
           </div>
 
-          <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 shadow-sm">
-            <div className="flex items-center gap-1.5 text-slate-400 mb-0.5">
+          <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 mb-0.5">
               <Target className="w-3.5 h-3.5 text-purple-500" />
               <span className="text-[10px] font-semibold uppercase">Reja:</span>
             </div>
@@ -398,12 +398,12 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
         </div>
 
         {/* Tab Selector */}
-        <div className="px-5 pt-3 flex items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-950/40">
-          <div className="flex items-center gap-2">
+        <div className="px-3 sm:px-5 pt-2 sm:pt-3 flex items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-950/40 overflow-x-auto scrollbar-none">
+          <div className="flex items-center gap-1 sm:gap-2">
             <button
               type="button"
               onClick={() => setActiveTab('OPENBUDGET')}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'OPENBUDGET'
                   ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
                   : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
@@ -416,7 +416,7 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('OUR_SYSTEM')}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'OUR_SYSTEM'
                   ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
                   : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
@@ -429,17 +429,17 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-4">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4">
           {/* Search Bar */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="relative flex-1 w-full">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
+              <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3.5 top-2.5" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Raqam yoki vaqt bo'yicha qidirish..."
-                className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
               />
               {activeTab === 'OPENBUDGET' && isObSearching && (
                 <span className="absolute right-3 top-2 text-[10px] text-indigo-500 font-bold animate-pulse">
