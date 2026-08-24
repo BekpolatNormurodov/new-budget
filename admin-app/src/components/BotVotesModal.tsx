@@ -406,12 +406,12 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
               onClick={() => setActiveTab('OPENBUDGET')}
               className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
                 activeTab === 'OPENBUDGET'
-                  ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                  ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
                   : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <Globe className="w-4 h-4" />
-              <span>🌐 OpenBudget Rasmiy Ro'yxati ({obTotalElements || liveStats.openBudgetVotes})</span>
+              <span>OpenBudget Rasmiy Ro'yxati ({obTotalElements || liveStats.openBudgetVotes})</span>
             </button>
 
             <button
@@ -424,7 +424,7 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
               }`}
             >
               <Bot className="w-4 h-4" />
-              <span>🤖 Bizning Bot Tizimi ({ourTotal})</span>
+              <span>Bizning Bot Tizimi ({ourTotal})</span>
             </button>
           </div>
         </div>
