@@ -977,7 +977,7 @@ export class AdminService {
   /**
    * 🌐 OpenBudget Rasmiy Saytidan Ovozlar Ro'yxatini Olish (Official Votes List)
    */
-  async getBotOfficialVotesList(botId: number, page: number = 0) {
+  async getBotOfficialVotesList(botId: number, page: number = 0, forceRefresh: boolean = false) {
     const bot = await this.prisma.botInstance.findUnique({ where: { id: botId } });
     if (!bot) throw new Error('Bot topilmadi');
 
@@ -989,7 +989,7 @@ export class AdminService {
       }
     }
 
-    const res = await this.openBudgetService.fetchOfficialInitiativeVotesList(uuid, page);
+    const res = await this.openBudgetService.fetchOfficialInitiativeVotesList(uuid, page, 15, forceRefresh);
     if (!res.success && res.error === 'OpenBudget token olinmadi') {
       const cap = await this.openBudgetService.getOfficialInitiativeCaptcha(uuid);
 

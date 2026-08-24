@@ -1977,7 +1977,9 @@ export class OpenBudgetService {
     try {
       const cacheKey = `${initiativeUuid}_p${page}`;
       const cachedPage = this.initiativeVotesListCache.get(cacheKey);
-      const cacheTtl = page === 0 ? 10 * 1000 : 2 * 60 * 1000;
+      // Fon jarayoni har 1 soatda avtomatik yangilab turadi — 65 daqiqalik kesh
+      // tufayli modal ochilganda yoki sahifalashda ma'lumot 0 millisoniyada bir zumda ochiladi.
+      const cacheTtl = 65 * 60 * 1000;
       if (!forceRefresh && cachedPage && Date.now() - cachedPage.fetchedAt < cacheTtl) {
         return {
           success: true,

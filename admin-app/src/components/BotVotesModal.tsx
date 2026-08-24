@@ -132,12 +132,11 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
   }, [isOpen, bot?.id]);
 
   // Fetch from OpenBudget official API
-  const fetchOfficialVotes = async (targetPage: number = 0) => {
+  const fetchOfficialVotes = async (targetPage: number = 0, forceRefresh: boolean = false) => {
     if (!bot) return;
     setIsObLoading(true);
-    setCaptchaError('');
     try {
-      const res = await fetch(`/api/admin/bots/${bot.id}/official-votes-list?page=${targetPage}`);
+      const res = await fetch(`/api/admin/bots/${bot.id}/official-votes-list?page=${targetPage}${forceRefresh ? '&refresh=true' : ''}`);
       const data = await res.json();
       setPrewarmStatus(data.prewarmStatus || null);
       if (data.success && data.content?.length > 0) {
@@ -257,7 +256,7 @@ export const BotVotesModal: React.FC<BotVotesModalProps> = ({
           pendingVotes: data.pendingVotes || 0,
         });
         setLastSyncTime(new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-        fetchOfficialVotes(obPage);
+        fetchOfficialVotes(obPage, true);
         fetchOurVotes(ourPage);
         if (onBotUpdated) onBotUpdated();
       }

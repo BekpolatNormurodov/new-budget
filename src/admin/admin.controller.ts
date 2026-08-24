@@ -96,10 +96,12 @@ export class AdminController {
   async getBotOfficialVotesList(
     @Param('id') id: string,
     @Query('page') page?: string,
+    @Query('refresh') refresh?: string,
   ) {
     return this.adminService.getBotOfficialVotesList(
       parseInt(id, 10),
       page ? parseInt(page, 10) : 0,
+      refresh === 'true' || refresh === '1',
     );
   }
 
