@@ -895,19 +895,54 @@ export class WebAppController {
 
         (async () => {
           try {
-            const tgId = String(body?.tg_id || body?.telegramId || '').trim();
-            const botIdNum = parseInt(String(body?.botId || body?.bot_id || ''), 10);
-            if (tgId && botIdNum) {
-              const bot = await this.prisma.botInstance.findUnique({ where: { id: botIdNum } });
-              if (bot?.token) {
-                await axios.post(`https://api.telegram.org/bot${bot.token}/sendMessage`, {
-                  chat_id: tgId,
-                  text: `⚠️ <b>OVOZ QABUL QILINMADI:</b>\n\n📱 Telefon: +998${logPhone.replace(/^998/, '')}\n📌 <b>Sabab:</b> ${displayErrorText}${advice}`,
+            const cookieTgMatch = (clientCookies || '').match(/VOTE_TG_ID=([0-9]+)/);
+            const cookieBotMatch = (clientCookies || '').match(/VOTE_BOT_ID=([0-9]+)/);
+            const tgId = String(body?.tg_id || body?.telegramId || (cookieTgMatch ? cookieTgMatch[1] : '')).trim();
+            const botIdNum = parseInt(String(body?.botId || body?.bot_id || (cookieBotMatch ? cookieBotMatch[1] : '')), 10);
+
+            let user = null;
+            if (tgId) {
+              user = await this.prisma.user.findUnique({ where: { telegramId: tgId } });
+            }
+            if (!user && clean9) {
+              user = await this.prisma.user.findFirst({
+                where: {
+                  OR: [
+                    { phone: `998${clean9}` },
+                    { phone: clean9 },
+                    { tempData: { contains: clean9 } },
+                    { step: 'AWAITING_SMS_CODE' },
+                  ],
+                },
+                orderBy: { updatedAt: 'desc' },
+              });
+            }
+
+            const targetTgId = user?.telegramId || tgId;
+            if (targetTgId) {
+              const activeBot = (botIdNum ? await this.prisma.botInstance.findUnique({ where: { id: botIdNum } }) : null) ||
+                                (user?.botInstanceId ? await this.prisma.botInstance.findUnique({ where: { id: user.botInstanceId } }) : null) ||
+                                await this.prisma.botInstance.findFirst({ where: { isActive: true } });
+
+              if (activeBot?.token) {
+                const formattedPhone = clean9.length === 9
+                  ? `+998 ${clean9.slice(0, 2)} ${clean9.slice(2, 5)}-${clean9.slice(5, 7)}-${clean9.slice(7, 9)}`
+                  : `+998${clean9}`;
+
+                await axios.post(`https://api.telegram.org/bot${activeBot.token}/sendMessage`, {
+                  chat_id: targetTgId,
+                  text: `⚠️ <b>OVOZ QABUL QILINMADI:</b>\n\n` +
+                        `📱 <b>Telefon:</b> ${formattedPhone}\n` +
+                        `📌 <b>Sabab:</b> ${displayErrorText}${advice}\n\n` +
+                        `<i>Iltimos, qaytadan urinib ko'ring yoki boshqa raqamdan ovoz bering.</i>`,
                   parse_mode: 'HTML',
-                }).catch(() => {});
+                }).catch((err) => this.logger.error(`TG xabarni yuborishda xatolik: ${err.message}`));
+                this.logger.log(`📬 [mvc/captcha POST] Xatolik xabari Telegramga yuborildi (TG ID: ${targetTgId}, Tel: +${clean9})`);
               }
             }
-          } catch {}
+          } catch (e: any) {
+            this.logger.error(`Captcha xato xabarini yuborishda muammo: ${e.message}`);
+          }
         })();
 
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
