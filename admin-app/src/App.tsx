@@ -33,9 +33,9 @@ export function App() {
   });
 
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    const saved = localStorage.getItem('ob_theme');
+    const saved = localStorage.getItem('ob_theme_v2');
     if (saved === 'light' || saved === 'dark') return saved;
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    return 'dark'; // Open Budget PRO Signature Dark Theme
   });
 
   useEffect(() => {
@@ -44,7 +44,7 @@ export function App() {
     } else {
       document.documentElement.classList.remove('dark');
     }
-    localStorage.setItem('ob_theme', theme);
+    localStorage.setItem('ob_theme_v2', theme);
   }, [theme]);
 
   const toggleTheme = () => {
