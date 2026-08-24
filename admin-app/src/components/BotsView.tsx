@@ -99,10 +99,10 @@ export const BotsView: React.FC<BotsViewProps> = ({
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Controls & Filters Bar */}
-      <div className="p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-md dark:shadow-xl flex flex-col md:flex-row items-center justify-between gap-4 transition-colors">
-        <div className="flex items-center gap-3 w-full md:w-auto flex-wrap">
-          {/* Search Input */}
-          <div className="relative flex-1 md:w-64">
+      <div className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-md dark:shadow-xl space-y-3 transition-colors">
+        {/* Row 1: Search & Filter */}
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
+          <div className="relative sm:col-span-7">
             <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-2.5" />
             <input
               type="text"
@@ -113,8 +113,7 @@ export const BotsView: React.FC<BotsViewProps> = ({
             />
           </div>
 
-          {/* Status Filter ProDropdown */}
-          <div className="w-48">
+          <div className="sm:col-span-5">
             <ProDropdown
               options={[
                 { value: 'ALL', label: 'Barcha Holatlar', badge: `${bots.length}` },
@@ -128,10 +127,42 @@ export const BotsView: React.FC<BotsViewProps> = ({
           </div>
         </div>
 
-        {/* View Mode & Add Bot Button */}
-        <div className="flex items-center gap-2.5 w-full md:w-auto justify-end flex-wrap">
+        {/* Row 2: Action Buttons (Responsive Horizontal Scroll on Mobile) */}
+        <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none pt-1 border-t border-slate-100 dark:border-slate-800/80">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Add Bot Button */}
+            <button
+              onClick={onOpenAddBot}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-600/30 transition-all active:scale-95 cursor-pointer flex-shrink-0"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Yangi Bot</span>
+            </button>
+
+            {/* Marketing & Ad Broadcast Button */}
+            <button
+              onClick={() => setIsBroadcastModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-bold rounded-xl shadow-md shadow-orange-500/20 transition-all active:scale-95 cursor-pointer flex-shrink-0"
+              title="Barcha bot foydalanuvchilariga xabar yuborish"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Reklama</span>
+            </button>
+
+            {/* 15-Minute Live Vote Sync Trigger */}
+            <button
+              onClick={handleSyncVotes}
+              disabled={isSyncing}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 transition cursor-pointer disabled:opacity-50 flex-shrink-0"
+              title="Har 15 minutda avtomatik olinadigan ovozlar sonini yangilash"
+            >
+              <Sparkles className={`w-3.5 h-3.5 text-indigo-500 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>{isSyncing ? 'Yangilanmoqda...' : '15m Yangilash'}</span>
+            </button>
+          </div>
+
           {/* View Toggle */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-1 text-slate-500 dark:text-slate-400">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-1 text-slate-500 dark:text-slate-400 flex-shrink-0">
             <button
               onClick={() => setViewMode('grid')}
               className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
@@ -151,35 +182,6 @@ export const BotsView: React.FC<BotsViewProps> = ({
               <List className="w-4 h-4" />
             </button>
           </div>
-
-          {/* 15-Minute Live Vote Sync Trigger */}
-          <button
-            onClick={handleSyncVotes}
-            disabled={isSyncing}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition cursor-pointer disabled:opacity-50"
-            title="Har 15 minutda avtomatik olinadigan ovozlar sonini hozir yangilash"
-          >
-            <Sparkles className={`w-3.5 h-3.5 text-indigo-500 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span>{isSyncing ? 'Yangilanmoqda...' : 'Ovozlarni Yangilash (15m)'}</span>
-          </button>
-
-          {/* Marketing & Ad Broadcast Button */}
-          <button
-            onClick={() => setIsBroadcastModalOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-500 via-orange-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-xs font-bold rounded-xl shadow-lg shadow-orange-500/20 transition-all active:scale-95 cursor-pointer"
-            title="Barcha bot foydalanuvchilariga eslatma yoki reklama xabari yuborish"
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span>📢 Eslatma & Reklama</span>
-          </button>
-
-          <button
-            onClick={onOpenAddBot}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-all active:scale-95 cursor-pointer"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>Yangi Bot Yaratish</span>
-          </button>
         </div>
       </div>
 
