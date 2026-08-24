@@ -1829,9 +1829,15 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (globalExistingVote) {
+      const errorReason = globalExistingVote.errorMessage || "Ushbu raqam orqali ushbu mavsumda allaqachon ovoz berilgan";
+      const formattedPhone = clean9.length === 9
+        ? `+998 ${clean9.slice(0, 2)} ${clean9.slice(2, 5)}-${clean9.slice(5, 7)}-${clean9.slice(7, 9)}`
+        : `+${clean12}`;
+
       return ctx.reply(
-        `⚠️ <b>Ushbu telefon raqam (+${clean12}) orqali ushbu mavsumda allaqachon ovoz berilgan!</b>\n\n` +
-        `📌 <b>Ochiq Budjet qoidasi:</b> Bitta fuqaro (pasport) yoki telefon raqam nomidan bir mavsumda faqat 1 marta ovoz berish mumkin.\n\n` +
+        `⚠️ <b>OVOZ QABUL QILINMAYDI:</b>\n\n` +
+        `📱 <b>Telefon:</b> <code>${formattedPhone}</code>\n` +
+        `📌 <b>Rasmiy sabab:</b> <i>${errorReason}</i>\n\n` +
         `💡 <i>Iltimos, boshqa yaqinlaringiz (boshqa pasport egasi) nomidagi telefon raqamidan ovoz bering!</i>`,
         { parse_mode: 'HTML', ...BotKeyboards.phoneRequestKeyboard() }
       );
