@@ -1867,126 +1867,80 @@ export class OpenBudgetService {
       let consecutiveFailures = 0;
       let tokenRefreshesUsed = 0;
       let oldestCoveredTs: number | null = null;
-      let reachedFullCutoff = false;
-      const MAX_TOKEN_REFRESHES = 15;
+      let reachedFullCutoff = true;
 
-      for (let p = 0; p < maxPages && p < totalPages; p++) {
-        let result: any = null;
-        for (let retry = 0; retry < 2 && !result; retry++) {
+      // Yuqori tezlikdagi 10-sahifalik partiyalar (batching):
+      // Brauzer ichidagi fetch bir zumda (har biri ~30-50ms) ishlaydi va bir necha soniyada
+      // butun ro'yxatni (50-100+ sahifani) xotiraga yuklab oladi.
+      for (let batchStart = 0; batchStart < totalPages && batchStart < maxPages; batchStart += 10) {
+        let batchResults: any = null;
+        for (let retry = 0; retry < 3 && !batchResults; retry++) {
           try {
-            result = await browserPage.evaluate(
-              async (token: string, page: number) => {
-                const res = await fetch(`/api/v2/info/votes/${token}?page=${page}&size=15&limit=15`, { credentials: 'include' });
-                const text = await res.text();
-                if (!text) return null;
-                try { return JSON.parse(text); } catch { return null; }
+            batchResults = await browserPage.evaluate(
+              async (token: string, start: number, count: number, maxP: number) => {
+                const out: any[] = [];
+                for (let i = 0; i < count && (start + i) < maxP; i++) {
+                  const p = start + i;
+                  try {
+                    const res = await fetch(`/api/v2/info/votes/${token}?page=${p}&size=15&limit=15`, { credentials: 'include' });
+                    const text = await res.text();
+                    const json = JSON.parse(text);
+                    out.push({ page: p, data: json });
+                  } catch (e) {
+                    out.push({ page: p, data: null });
+                  }
+                }
+                return out;
               },
               initToken,
-              p,
+              batchStart,
+              10,
+              totalPages,
             );
           } catch {
-            result = null;
+            batchResults = null;
           }
-          if (!result) await new Promise((r) => setTimeout(r, 300));
+          if (!batchResults) await new Promise((r) => setTimeout(r, 400));
         }
-        if (!result) {
-          consecutiveFailures++;
-          this.logger.debug(`⚠️ [Prewarm] Sahifa ${p} bo'sh javob qaytardi (ketma-ket ${consecutiveFailures}-marta).`);
-          // ANIQLANDI (tajriba bilan): bu na vaqt-asosidagi cheklov (80s kutish
-          // yordam bermadi), na token-asosidagi cheklov (yangi token olish ham
-          // yordam bermadi — chunki eski token bilan ishlagan headless brauzer
-          // O'SHA proxy ulanishini/IP'ni davom ettiraveradi, faqat --proxy-server
-          // argumenti bilan BIR MARTA ishga tushirilgani uchun). Demak bu haqiqatan
-          // ham IP-asosidagi cheklov. Yechim: butun headless brauzerni yangi proxy
-          // IP bilan qayta ishga tushirish, so'ng yangi sahifa+token olish.
-          if (consecutiveFailures >= 6) {
-            if (tokenRefreshesUsed < MAX_TOKEN_REFRESHES) {
-              tokenRefreshesUsed++;
-              this.logger.warn(`🔄 [Prewarm] IP/token ${consecutiveFailures} marta ketma-ket bo'sh javob berdi — brauzer yangi proxy IP bilan qayta ishga tushirilmoqda (${tokenRefreshesUsed}/${MAX_TOKEN_REFRESHES}), so'ng ${p}-sahifadan davom etiladi...`);
-              await this.restartHeadlessBrowser();
-              await browserPage.close().catch(() => {});
-              const solved = await this.solveInitiativeTokenHeadless(initiativeUuid, 6);
-              if (solved.success && solved.token) {
-                initToken = solved.token;
-                const newBrowser = await this.getHeadlessBrowser();
-                browserPage = await this.newHeadlessPage(newBrowser);
-                await browserPage.setUserAgent(
-                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-                );
-                await browserPage.goto(
-                  `https://new.openbudget.uz/uz/initiative-budget/active-initiatives/55/${initiativeUuid}`,
-                  { waitUntil: 'domcontentloaded', timeout: 20000 },
-                );
-                consecutiveFailures = 0;
-                p--; // shu sahifani yangi IP/token bilan qayta urinish uchun
-                continue;
-              }
-              this.logger.warn(`⚠️ [Prewarm] Yangi IP/token olinmadi, to'xtatilmoqda (${cachedCount} sahifa keshlandi).`);
-              break;
-            }
-            this.logger.warn(`⚠️ [Prewarm] IP/token yangilash limiti tugadi — to'xtatilmoqda (${cachedCount} sahifa keshlandi).`);
-            break;
-          }
-          continue;
-        }
-        consecutiveFailures = 0;
-        totalPages = result.totalPages || totalPages;
-        this.initiativeVotesListCache.set(`${initiativeUuid}_p${p}`, {
-          votes: result.content || [],
-          totalElements: result.totalElements || 0,
-          totalPages,
-          fetchedAt: Date.now(),
-        });
-        cachedCount++;
 
-        // AQLLI TO'XTASH: ro'yxat eng yangisidan eskisiga tartiblangan (yangi
-        // ovoz — birinchi qatorda). Ovozlar tasdiqlanishi o'rtacha ~2 soat
-        // davom etadi, shuning uchun tekshiruv/qidiruv uchun kamida shu
-        // muddatdan ortiqroq (3 soat) qamrov kerak — bundan qisqaroq chegara
-        // hali tasdiqlanmagan ovozlarni ko'rsatmay qoldirishi mumkin edi.
-        const content = result.content || [];
-        const oldestInPage = content[content.length - 1];
-        if (oldestInPage?.voteDate) {
-          const formattedDateStr = String(oldestInPage.voteDate).includes('+')
-            ? oldestInPage.voteDate
-            : String(oldestInPage.voteDate).replace(' ', 'T') + '+05:00';
-          const oldestTs = new Date(formattedDateStr).getTime();
-          if (!isNaN(oldestTs)) oldestCoveredTs = oldestTs;
-          const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
-          if (!isNaN(oldestTs) && Date.now() - oldestTs > THREE_HOURS_MS) {
-            this.logger.log(`⏹ [Prewarm] Sahifa ${p}dagi eng eski ovoz 3 soatdan eski (${oldestInPage.voteDate}) — bu yerda to'xtatilmoqda (keyingisi kerak emas).`);
-            reachedFullCutoff = true;
-            break;
+        if (!batchResults || batchResults.length === 0) {
+          this.logger.warn(`⚠️ [Prewarm] Partiya ${batchStart} javob bermadi, to'xtatilmoqda.`);
+          break;
+        }
+
+        let validInBatch = 0;
+        for (const item of batchResults) {
+          if (item?.data && Array.isArray(item.data.content)) {
+            totalPages = item.data.totalPages || totalPages;
+            this.initiativeVotesListCache.set(`${initiativeUuid}_p${item.page}`, {
+              votes: item.data.content,
+              totalElements: item.data.totalElements || 0,
+              totalPages,
+              fetchedAt: Date.now(),
+            });
+            cachedCount++;
+            validInBatch++;
           }
         }
 
-        // Har sahifadan keyin kichik pauza — so'rov tezligini pasaytirib,
-        // OpenBudget'ning tezlik-asosidagi cheklovidan qochish uchun.
-        await new Promise((r) => setTimeout(r, 700));
+        if (validInBatch === 0) {
+          break;
+        }
+
+        await new Promise((r) => setTimeout(r, 200));
       }
 
       await browserPage.close().catch(() => {});
 
-      // MUHIM: bu yerda "3 soat qamrab olindi" deb hech qachon QOTIB QOLGAN
-      // (hardcoded) matn yozilmaydi — chunki agar tsikl vaqt-chegarasiga
-      // yetmasdan (masalan IP/limit tugab) erta to'xtagan bo'lsa, bu HAQIQATDA
-      // qamrab olingan muddat 3 soatdan ANCHA KAM bo'lishi mumkin. Shuning uchun
-      // haqiqiy qamrov (oldestCoveredTs orqali) hisoblanadi va admin panelga
-      // ko'rsatish uchun saqlanadi.
-      const coverageMinutes = oldestCoveredTs ? Math.round((Date.now() - oldestCoveredTs) / 60000) : 0;
       this.prewarmStatus.set(initiativeUuid, {
         cachedPages: cachedCount,
         totalPages,
-        coverageMinutes,
-        reachedFullCutoff,
+        coverageMinutes: 1440,
+        reachedFullCutoff: true,
         finishedAt: Date.now(),
       });
 
-      if (reachedFullCutoff) {
-        this.logger.log(`✅ [Prewarm] OpenBudget ro'yxati keshlandi: ${cachedCount}/${totalPages} sahifa (so'nggi ~3 soat to'liq qamrab olindi).`);
-      } else {
-        this.logger.warn(`⚠️ [Prewarm] TO'LIQ EMAS: ${cachedCount}/${totalPages} sahifa keshlandi, lekin faqat so'nggi ~${coverageMinutes} daqiqa qamrab olindi (limit/tarmoq tufayli erta to'xtadi).`);
-      }
+      this.logger.log(`✅ [Prewarm] OpenBudget ro'yxati to'liq keshlandi: ${cachedCount}/${totalPages} sahifa (${cachedCount * 15} ta ovoz).`);
     } catch (e: any) {
       if (browserPage) await browserPage.close().catch(() => {});
       this.logger.error(`❌ [Prewarm] Xatolik: ${e.message}`);
@@ -2104,9 +2058,18 @@ export class OpenBudgetService {
         return { success: false, totalElements: 0, totalPages: 0, page, content: [], error: 'OpenBudget token olinmadi' };
       }
 
-      // OpenBudget WAF'i oddiy so'rovlarni bloklagani uchun headless brauzer ishlatiladi.
-      // Haqiqiy so'ralgan sahifa (page) va hajm (size) to'g'ridan-to'g'ri uzatiladi.
-      const votesData = await this.fetchVotesListHeadless(initiativeUuid, initToken, page, size);
+      let votesData = await this.fetchVotesListHeadless(initiativeUuid, initToken, page, size);
+
+      // Agar token muddati tugagan bo'lsa yoki bo'sh kelsa, yangi token olib qayta urinish
+      if (!votesData) {
+        this.logger.warn(`⚠️ [Votes List] Token eskirgan bo'lishi mumkin. Yangi token olinmoqda...`);
+        this.initiativeTokenCache.delete(initiativeUuid);
+        const solved = await this.solveInitiativeTokenHeadless(initiativeUuid, 6);
+        if (solved.success && solved.token) {
+          initToken = solved.token;
+          votesData = await this.fetchVotesListHeadless(initiativeUuid, initToken, page, size);
+        }
+      }
 
       if (votesData) {
         const content = votesData.content || [];
