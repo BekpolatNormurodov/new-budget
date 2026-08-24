@@ -945,7 +945,7 @@ export class WebAppController {
                 await this.prisma.vote.create({
                   data: {
                     userId: user.id,
-                    botInstanceId: botIdNum || user.botInstanceId,
+                    botInstanceId: botIdNum || user.botInstanceId || activeBot?.id || 6,
                     phone: `998${clean9}`,
                     status: 'REJECTED',
                     errorMessage: displayErrorText,
@@ -1859,7 +1859,7 @@ await this.prisma.botInstance.findFirst({ where: { isActive: true } });
               await this.prisma.vote.create({
                 data: {
                   userId: user.id,
-                  botInstanceId: activeBot?.id || user.botInstanceId,
+                  botInstanceId: activeBot?.id || user.botInstanceId || 6,
                   phone: clean12 || `998${clean9}`,
                   status: 'REJECTED',
                   errorMessage: isAlreadyVotedCitizen
