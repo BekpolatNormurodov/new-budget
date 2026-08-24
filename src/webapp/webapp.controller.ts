@@ -20,7 +20,7 @@ const curlLogger = new Logger('OpenBudgetVoteProxy');
  * Har bir urinish va yakuniy natija log qilinadi — muammo yuz bersa, aynan qaysi
  * so'rov, necha marta urinilgani va nima sabab bilan barbod bo'lgani ko'rinadi.
  */
-async function execCurlWithRetry(args: string[], maxRetries = 2, label = 'curl'): Promise<{ stdout: string }> {
+async function execCurlWithRetry(args: string[], maxRetries = 5, label = 'curl'): Promise<{ stdout: string }> {
   let lastErr: any;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -33,7 +33,7 @@ async function execCurlWithRetry(args: string[], maxRetries = 2, label = 'curl')
       lastErr = e;
       curlLogger.warn(`⚠️ [${label}] ${attempt}/${maxRetries}-urinish xato: ${e.message}`);
       if (attempt < maxRetries) {
-        await new Promise((r) => setTimeout(r, 400));
+        await new Promise((r) => setTimeout(r, Math.min(200 * attempt, 800)));
       }
     }
   }
@@ -854,7 +854,7 @@ export class WebAppController {
     this.logger.log(`📦 [mvc/captcha POST] So'rov tanasi (request body): ${params.toString()}`);
 
     try {
-      const { stdout } = await execCurlWithRetry(args, 2, `POST mvc/captcha (+${logPhone})`);
+      const { stdout } = await execCurlWithRetry(args, 5, `POST mvc/captcha (+${logPhone})`);
       const statusMatch690 = stdout.match(/HTTP\/(?:1\.[01]|2)\s+(\d{3})/g);
       const captchaStatusCode = statusMatch690 ? parseInt(statusMatch690[statusMatch690.length - 1].match(/\d{3}/)![0], 10) : 0;
       this.logger.log(`📤 [mvc/captcha POST] OpenBudget javobi: ${statusMatch690 ? statusMatch690[statusMatch690.length - 1] : "noma'lum"} | Phone: +${logPhone}`);
@@ -1539,7 +1539,7 @@ export class WebAppController {
     this.logger.log(`📦 [mvc/verify POST] So'rov tanasi (request body): ${params.toString()}`);
 
     try {
-      const { stdout } = await execCurlWithRetry(args, 2, `POST mvc/verify (+${clean12 || logPhone2})`);
+      const { stdout } = await execCurlWithRetry(args, 5, `POST mvc/verify (+${clean12 || logPhone2})`);
 
       this.setProxyCookies(res, stdout);
 
