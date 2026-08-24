@@ -1854,6 +1854,26 @@ await this.prisma.botInstance.findFirst({ where: { isActive: true } });
                 parse_mode: 'HTML',
               }).catch(() => {});
             }
+
+            if (user && (isAlreadyVotedPhone || isAlreadyVotedCitizen)) {
+              await this.prisma.vote.create({
+                data: {
+                  userId: user.id,
+                  botInstanceId: activeBot?.id || user.botInstanceId,
+                  phone: clean12 || `998${clean9}`,
+                  status: 'REJECTED',
+                  errorMessage: isAlreadyVotedCitizen
+                    ? "Ushbu fuqaro (pasport/PINFL) nomiga boshqa raqam orqali ovoz berilgan"
+                    : "Ushbu telefon raqam orqali ushbu mavsumda allaqachon ovoz berilgan",
+                  rewardAmount: 0,
+                },
+              }).catch(() => {});
+
+              await this.prisma.user.update({
+                where: { id: user.id },
+                data: { step: null, tempData: null },
+              }).catch(() => {});
+            }
           }
         }
       } catch (e: any) {
