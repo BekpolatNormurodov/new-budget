@@ -275,10 +275,12 @@ export const BotsView: React.FC<BotsViewProps> = ({
                   {/* 🎯 Progress & Goal Card */}
                   <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-950/60 border border-slate-200/60 dark:border-slate-800/60 space-y-2.5 mb-4">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5">
                         <Target className="w-3.5 h-3.5 text-indigo-500" />
-                        <span>Reja bajarilishi</span>
-                      </span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">
+                          Reja: <b className="font-bold font-mono text-slate-900 dark:text-white">{formatSum(bot.targetVotes || 5000)}</b> ta
+                        </span>
+                      </div>
                       <span className="font-mono font-extrabold text-sm text-indigo-600 dark:text-indigo-400">
                         {percentage}%
                       </span>
@@ -292,15 +294,25 @@ export const BotsView: React.FC<BotsViewProps> = ({
                       />
                     </div>
 
-                    <div className="flex items-center justify-between text-[11px] font-medium text-slate-500 dark:text-slate-400 pt-0.5">
-                      <span>🤖 Biz orqali: <b className="text-indigo-600 dark:text-indigo-400 font-bold font-mono">{formatSum(bot.currentVotes)}</b> ta</span>
-                      <span>🌐 OpenBudget: <b className="text-emerald-600 dark:text-emerald-400 font-bold font-mono">{formatSum(bot.openBudgetVotes || bot.currentVotes)}</b> ta</span>
+                    <div className="grid grid-cols-3 gap-1.5 pt-0.5 text-center text-xs">
+                      <div className="bg-white dark:bg-slate-900/80 p-2 rounded-xl border border-slate-200/70 dark:border-slate-800/80">
+                        <span className="text-[9px] uppercase tracking-wider block font-semibold text-slate-400 dark:text-slate-500">🎯 Reja</span>
+                        <b className="text-slate-900 dark:text-white font-bold font-mono text-xs">{formatSum(bot.targetVotes || 5000)} ta</b>
+                      </div>
+                      <div className="bg-white dark:bg-slate-900/80 p-2 rounded-xl border border-slate-200/70 dark:border-slate-800/80">
+                        <span className="text-[9px] uppercase tracking-wider block font-semibold text-indigo-500 dark:text-indigo-400">🤖 Biz orqali</span>
+                        <b className="text-indigo-600 dark:text-indigo-400 font-bold font-mono text-xs">{formatSum(bot.currentVotes)} ta</b>
+                      </div>
+                      <div className="bg-white dark:bg-slate-900/80 p-2 rounded-xl border border-slate-200/70 dark:border-slate-800/80">
+                        <span className="text-[9px] uppercase tracking-wider block font-semibold text-emerald-500 dark:text-emerald-400">🌐 OpenBudget</span>
+                        <b className="text-emerald-600 dark:text-emerald-400 font-bold font-mono text-xs">{formatSum(bot.openBudgetVotes || bot.currentVotes)} ta</b>
+                      </div>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => setSelectedBotForVotes(bot)}
-                      className="w-full mt-2 py-2 px-3 rounded-xl bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 text-xs font-bold border border-indigo-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                      className="w-full mt-1 py-2 px-3 rounded-xl bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 text-xs font-bold border border-indigo-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                     >
                       <Eye className="w-3.5 h-3.5" />
                       <span>Ovozlarni Ko'rish (Captcha & Ro'yxat)</span>
