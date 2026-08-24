@@ -7,10 +7,11 @@ import {
   UserCheck,
   Download,
   Calendar,
+  Clock,
   Sparkles,
 } from 'lucide-react';
 import { UserItem, BotInstanceItem } from '../types';
-import { formatSum, toTashkentDateStr, tashkentToday, tashkentYesterday } from '../utils/format';
+import { formatSum, formatTashkentDateTime, toTashkentDateStr, tashkentToday, tashkentYesterday } from '../utils/format';
 import { Pagination } from './Pagination';
 import { exportToCsv } from '../utils/exportToCsv';
 import { EditUserBalanceModal } from './EditUserBalanceModal';
@@ -214,8 +215,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
       {/* Main Container: Mobile Case Cards (< md) + Desktop Table (>= md) */}
       <div className="rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-md dark:shadow-xl overflow-hidden transition-colors">
-        {/* Mobile Case Cards View (< md screens) */}
-        <div className="block md:hidden divide-y divide-slate-100 dark:divide-slate-800/80">
+        {/* Mobile Cards List (< md screens) */}
+        <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800/60">
           {paginatedUsers.length === 0 ? (
             <div className="py-10 text-center text-slate-400 dark:text-slate-500 text-xs px-4">
               <Users className="w-7 h-7 mx-auto mb-2 text-slate-400 dark:text-slate-600 opacity-50" />
@@ -224,7 +225,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
           ) : (
             paginatedUsers.map((u) => (
               <div key={u.id} className="p-3.5 space-y-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                {/* Header: Name, Telegram & Status */}
+                {/* Header: Name, Telegram, Joined Time & Status */}
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-1.5">
@@ -235,9 +236,16 @@ export const UsersView: React.FC<UsersViewProps> = ({
                         </span>
                       )}
                     </div>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono block mt-0.5">
-                      {u.username ? `@${u.username}` : `TG: ${u.telegramId}`}
-                    </span>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                        {u.username ? `@${u.username}` : `TG: ${u.telegramId}`}
+                      </span>
+                      <span className="text-slate-300 dark:text-slate-700">•</span>
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono flex items-center gap-1">
+                        <Clock className="w-2.5 h-2.5 text-indigo-400" />
+                        {formatTashkentDateTime(u.createdAt)}
+                      </span>
+                    </div>
                   </div>
 
                   <span
@@ -310,6 +318,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
               <tr>
                 <th className="p-3.5">Foydalanuvchi</th>
                 <th className="p-3.5">Telefon</th>
+                <th className="p-3.5">Qo'shilgan Vaqti</th>
                 <th className="p-3.5">Balans</th>
                 <th className="p-3.5">Ovozlar</th>
                 <th className="p-3.5">Taklif Qilgan</th>
@@ -320,7 +329,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
               {paginatedUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-slate-400 dark:text-slate-500 text-xs">
+                  <td colSpan={8} className="py-10 text-center text-slate-400 dark:text-slate-500 text-xs">
                     <Users className="w-7 h-7 mx-auto mb-2 text-slate-400 dark:text-slate-600 opacity-50" />
                     Tanlangan sana va filter bo'yicha foydalanuvchilar topilmadi.
                   </td>
@@ -348,6 +357,18 @@ export const UsersView: React.FC<UsersViewProps> = ({
                       <span className="font-mono text-slate-700 dark:text-slate-300">
                         {u.phone ? `+${u.phone}` : '-'}
                       </span>
+                    </td>
+
+                    <td className="p-3.5">
+                      <div className="flex flex-col">
+                        <span className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                          {formatTashkentDateTime(u.createdAt)}
+                        </span>
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                          <Clock className="w-2.5 h-2.5 text-indigo-500" />
+                          /start bosilgan
+                        </span>
+                      </div>
                     </td>
 
                     <td className="p-3.5">
