@@ -1515,11 +1515,11 @@ export class OpenBudgetService {
 
         const submitResult = await page.evaluate(
           async (uuid: string, key: string, ans: number) => {
-            const res = await fetch(`/api/v2/info/votes/token/${uuid}`, {
+            const res = await fetch('/api/v2/info/get-initiative-token', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               credentials: 'include',
-              body: JSON.stringify({ captchaKey: key, captchaResult: ans }),
+              body: JSON.stringify({ captchaKey: key, captchaResult: ans, initiativeId: uuid }),
             });
             const text = await res.text();
             try {
@@ -1537,9 +1537,10 @@ export class OpenBudgetService {
 
         const token = submitResult?.token || submitResult?.data?.token;
         if (token) {
+          this.logger.log(`🎉 [Headless Auto-OCR] Token muvaffaqiyatli olindi: ${solveRes.expression || numAns} (${tryIndex + 1}-urinish)`);
           this.initiativeTokenCache.set(initiativeUuid, {
             token,
-            expiresAt: Date.now() + 25 * 60 * 1000,
+            expiresAt: Date.now() + 60 * 60 * 1000,
           });
           return { success: true, token };
         }
