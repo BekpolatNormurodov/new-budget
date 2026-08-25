@@ -119,7 +119,7 @@ export class WalletService {
     const refBonus = this.configService.get<number>('bot.referralBonus') || 5000;
     let shouldRewardReferrer = false;
 
-    if (referrerId) {
+    if (referrerId && referrerId !== vote.userId) {
       const existingRefReward = await this.prisma.referralReward.findFirst({
         where: { refereeId: vote.userId },
       });
