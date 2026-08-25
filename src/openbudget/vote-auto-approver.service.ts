@@ -83,28 +83,46 @@ export class VoteAutoApproverService {
           take: 100,
         });
 
-        if (pendingVotes.length === 0) return;
-        this.logger.log(`🔍 [Auto-Approver 15-Min Sync] ${pendingVotes.length} ta kutilayotgan ovoz tekshirilmoqda...`);
+        let newlyApproved = 0;
+        let newlyRejected = 0;
 
-        for (const vote of pendingVotes) {
-          try {
-            await this.processVote(vote);
-          } catch (voteErr: any) {
-            this.logger.warn(`Ovoz #${vote.id} tekshiruvida xatolik: ${voteErr.message}`);
+        if (pendingVotes.length > 0) {
+          this.logger.log(`🔍 [Auto-Approver 1-Hour Sync] ${pendingVotes.length} ta kutilayotgan ovoz tekshirilmoqda...`);
+
+          for (const vote of pendingVotes) {
+            try {
+              const res = await this.processVote(vote);
+              if (res.approved) newlyApproved++;
+              if (res.rejected) newlyRejected++;
+            } catch (voteErr: any) {
+              this.logger.warn(`Ovoz #${vote.id} tekshiruvida xatolik: ${voteErr.message}`);
+            }
+          }
+        }
+
+        // Har soatlik admin hisoboti:
+        const remainingPending = await this.prisma.vote.count({ where: { status: 'PENDING_VERIFICATION' } });
+        const activeBots = await this.prisma.botInstance.findMany({ where: { isActive: true } });
+        const adminIds = this.configService.get<string[]>('bot.adminIds') || ['8140304652', '2053690211', '5957905121'];
+
+        const tashkentTime = new Date().toLocaleTimeString('uz-UZ', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit' });
+        for (const b of activeBots) {
+          const reportMsg = BOT_MESSAGES.HOURLY_ADMIN_REPORT({
+            time: tashkentTime,
+            approvedCount: newlyApproved,
+            rejectedCount: newlyRejected,
+            pendingCount: remainingPending,
+            totalOpenBudgetVotes: (b as any).openBudgetVotes || b.currentVotes || 0,
+            mahallaName: b.mahallaName,
+          });
+
+          for (const adminId of adminIds) {
+            await this.sendMessageCallback?.(b.id, adminId, reportMsg).catch(() => {});
           }
         }
       } catch (err: any) {
         this.logger.error(`LiveVoteChecker xatoligi: ${err.message}`);
       }
-      // MUHIM: `syncAllBotVotes()` bu yerda ILGARI ham chaqirilar edi — lekin
-      // `SystemHealthService`'da AYNAN shu funksiya uchun ALOHIDA, o'zining
-      // mustaqil 15-daqiqalik rejalashtiruvchisi allaqachon bor edi. Ikkalasi
-      // ham dastur ishga tushishi bilan bir necha soniya farq bilan boshlanib,
-      // 15 daqiqalik interval bir xil bo'lgani uchun HAR DOIM deyarli bir vaqtda
-      // (soniya farqi bilan) ishga tushib, og'ir (headless-brauzer + butun
-      // reyestrni qayta yuklovchi) ishni behuda IKKI MARTA bajarardi — bu esa
-      // botning vaqtincha "qotib qolgan"dek sezilishiga sabab bo'lishi mumkin
-      // edi. Endi faqat SystemHealthService orqali, bir marta ishga tushadi.
     };
 
     // Server ko'tarilishi bilan 5 soniyadan so'ng 1-marta tekshirish
@@ -264,6 +282,14 @@ export class VoteAutoApproverService {
       }
     }
 
+    // 1.8. 2 SOATDAN ORTIQ KUTILGAN OVOZLARNI AVTOMATIK RAD ETISH
+    const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+    const voteAgeMs = Date.now() - new Date(vote.createdAt).getTime();
+    if (!shouldApprove && !shouldReject && voteAgeMs > TWO_HOURS_MS) {
+      shouldReject = true;
+      rejectReason = "Ushbu raqam 2 soat ichida OpenBudget rasmiy reyestridan o'tmadi (avval boshqa tashabbusga ovoz berilgan yoki bekor qilingan bo'lishi mumkin).";
+    }
+
     // 2. RAD ETISH HOLATI
     if (shouldReject) {
       await this.prisma.vote.update({
@@ -271,14 +297,12 @@ export class VoteAutoApproverService {
         data: {
           status: 'REJECTED',
           errorMessage: rejectReason,
+          completedAt: new Date(),
         },
       });
       this.logger.warn(`❌ [Auto-Approver] Ovoz #${vote.id} (+${vote.phone}) rad etildi: ${rejectReason}`);
 
-      const rejectMsg = `⚠️ <b>Ovoz qabul qilinmadi!</b>\n\n` +
-        `📌 <b>Sabab:</b> ${rejectReason}\n\n` +
-        `Siz boshqa yaqinlaringiz raqamidan ushbu mahalla foydasiga ovoz berib pul ishlashingiz mumkin!`;
-
+      const rejectMsg = BOT_MESSAGES.VOTE_REJECTED_STALE(vote.phone, botRecord?.mahallaName);
       await this.sendMessageCallback?.(vote.botInstanceId, vote.user.telegramId, rejectMsg).catch(() => {});
       return { approved: false, rejected: true, reason: rejectReason };
     }

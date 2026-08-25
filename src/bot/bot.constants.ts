@@ -43,6 +43,29 @@ export const BOT_MESSAGES = {
     `💳 <b>Joriy balansingiz:</b> <code>${formatSum(balance)} so'm</code>\n\n` +
     `Do'stlaringizni taklif qiling va har bir do'stingiz uchun <b>+5 000 so'm</b> bonus oling! 🚀`,
 
+  VOTE_REJECTED_STALE: (phone: string, mahallaName?: string) =>
+    `❌ <b>Ovozingiz tasdiqlanmadi!</b>\n\n` +
+    (mahallaName ? `📍 <b>Loyiha:</b> ${mahallaName}\n` : '') +
+    `📱 <b>Telefon:</b> +${phone}\n\n` +
+    `⚠️ <b>Sabab:</b> Ushbu raqam 2 soat ichida OpenBudget rasmiy reyestridan o'tmadi (avval boshqa tashabbusga ovoz berilgan yoki bekor qilingan bo'lishi mumkin).\n\n` +
+    `💡 <i>Siz boshqa yaqinlaringiz raqamidan ovoz berib, mukofot olishingiz mumkin!</i> ⚡️`,
+
+  HOURLY_ADMIN_REPORT: (data: {
+    time: string;
+    approvedCount: number;
+    rejectedCount: number;
+    pendingCount: number;
+    totalOpenBudgetVotes: number;
+    mahallaName: string;
+  }) =>
+    `📊 <b>[OpenBudget Soatlik Hisobot]</b>\n\n` +
+    `⏰ <b>Vaqt:</b> ${data.time}\n` +
+    `📍 <b>Loyiha:</b> ${data.mahallaName}\n\n` +
+    `✅ <b>Yangi Tasdiqlangan:</b> ${data.approvedCount} ta\n` +
+    `❌ <b>Rad etilgan (2+ soat kutilgan):</b> ${data.rejectedCount} ta\n` +
+    `⏳ <b>Hozirda kutilmoqda:</b> ${data.pendingCount} ta\n` +
+    `🌐 <b>OpenBudget Jami Ovozlar:</b> ${formatSum(data.totalOpenBudgetVotes)} ta`,
+
   BALANCE: (balance: number, referralsCount: number, votesCount: number, pendingVotesCount: number, totalWithdrawn: number, pendingReward: number = 30000) => 
     `💰 <b>SIZNING SHAXSIY HISOBINGIZ:</b>\n\n` +
     `💳 <b>Mavjud asosiy balans:</b> <code>${formatSum(balance)} so'm</code>\n` +

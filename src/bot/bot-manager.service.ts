@@ -762,36 +762,41 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
           where: {
             status: 'PENDING_VERIFICATION',
             createdAt: { lte: thresholdDate },
-            OR: [
-              { errorMessage: null },
-              { NOT: { errorMessage: { startsWith: '[STALE-NOTIFIED' } } },
-            ],
           },
           include: { user: true, botInstance: true },
         });
 
         if (staleVotes.length === 0) return;
 
-        this.logger.warn(`⚠️ [Stale-Vote Watchdog] ${staleVotes.length} ta ovoz ${autoApproveHours} soatdan ortiq kutilmoqda — adminlarga xabar berilmoqda: ${staleVotes.map((v) => '+' + v.phone).join(', ')}`);
+        this.logger.warn(`⚠️ [Stale-Vote Watchdog] ${staleVotes.length} ta ovoz ${autoApproveHours} soatdan ortiq kutilmoqda — rad etilmoqda va xabar berilmoqda: ${staleVotes.map((v) => '+' + v.phone).join(', ')}`);
 
         const adminIds = this.configService.get<string[]>('bot.adminIds') || ['8140304652', '2053690211', '5957905121'];
         for (const vote of staleVotes) {
           try {
             await this.prisma.vote.update({
               where: { id: vote.id },
-              data: { errorMessage: `[STALE-NOTIFIED ${new Date().toISOString()}] ${autoApproveHours} soatdan ortiq kutilmoqda, qo'lda tekshiruv kerak` },
+              data: {
+                status: 'REJECTED',
+                errorMessage: `[AUTO-REJECT ${new Date().toISOString()}] ${autoApproveHours} soat ichida OpenBudget rasmiy reyestridan o'tmadi`,
+                completedAt: new Date(),
+              },
             }).catch(() => {});
 
             const activeBot = vote.botInstanceId ? this.activeBots.get(vote.botInstanceId) : null;
             const sender = activeBot ? activeBot.bot.telegram : this.activeBots.values().next().value?.bot.telegram;
             if (sender) {
-              const msg = `⚠️ <b>Qo'lda tekshiruv kerak!</b>\n\n` +
+              // Foydalanuvchiga xabar yuborish
+              const userMsg = BOT_MESSAGES.VOTE_REJECTED_STALE(vote.phone, vote.botInstance?.mahallaName);
+              await sender.sendMessage(vote.user.telegramId, userMsg, { parse_mode: 'HTML' }).catch(() => {});
+
+              // Adminga hisobot/ogohlantirish xabari
+              const adminMsg = `❌ <b>Ovoz rad etildi (${autoApproveHours} soatdan oshdi)!</b>\n\n` +
                 `📱 Telefon: +${vote.phone}\n` +
+                `👤 Foydalanuvchi: ${vote.user.firstName || '-'} (@${vote.user.username || '-'})\n` +
                 `🏘 Mahalla: ${vote.botInstance?.mahallaName || '-'}\n` +
-                `⏳ ${autoApproveHours} soatdan ortiq "kutilmoqda" holatida, hali rasmiy reyestrda tasdiqlanmagan.\n\n` +
-                `Admin panelda qo'lda tekshirib, kerak bo'lsa tasdiqlang.`;
+                `⏳ ${autoApproveHours} soat ichida OpenBudget rasmiy reyestridan o'tmadi va avtomatik rad etildi.`;
               for (const adminId of adminIds) {
-                await sender.sendMessage(adminId, msg, { parse_mode: 'HTML' }).catch(() => {});
+                await sender.sendMessage(adminId, adminMsg, { parse_mode: 'HTML' }).catch(() => {});
               }
             }
           } catch (e) {}
