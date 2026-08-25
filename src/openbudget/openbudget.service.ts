@@ -1832,20 +1832,7 @@ export class OpenBudgetService {
     return prewarmPromise;
   }
 
-  private async doPrewarmOfficialVotesCache(initiativeUuid: string, maxPages: number = 230): Promise<void> {
-    let initToken = '';
-    const cached = this.initiativeTokenCache.get(initiativeUuid);
-    if (cached && cached.expiresAt > Date.now()) {
-      initToken = cached.token;
-    } else {
-      const solved = await this.solveInitiativeTokenHeadless(initiativeUuid, 6);
-      if (solved.success && solved.token) initToken = solved.token;
-    }
-    if (!initToken) {
-      this.logger.warn('⚠️ [Prewarm] Token olinmadi, kesh yangilanmadi.');
-      return;
-    }
-
+  private async doPrewarmOfficialVotesCache(initiativeUuid: string, maxPages: number = 300): Promise<void> {
     let browserPage: any;
     try {
       const browser = await this.getHeadlessBrowser();
@@ -1858,15 +1845,163 @@ export class OpenBudgetService {
         { waitUntil: 'domcontentloaded', timeout: 20000 },
       );
 
-      let totalPages = maxPages;
+      // 1. Shu brauzer sahifasida token olish yoki captcha yechish:
+      let initToken = '';
+      const cached = this.initiativeTokenCache.get(initiativeUuid);
+      if (cached && cached.expiresAt > Date.now()) {
+        initToken = cached.token;
+      }
+
+      // Agar token bo'lmasa yoki eskirgan bo'lsa, to'g'ridan-to'g'ri shu browserPage da yechamiz:
+      if (!initToken) {
+        for (let tryIdx = 0; tryIdx < 6 && !initToken; tryIdx++) {
+          try {
+            const capRes = await browserPage.evaluate(async () => {
+              const res = await fetch('/api/v2/vote/captcha-2', { credentials: 'include' });
+              return await res.json();
+            });
+            if (capRes?.image && capRes?.captchaKey) {
+              const solveRes = await this.captchaSolver.solve(capRes.image);
+              if (solveRes.success && solveRes.answer !== undefined && solveRes.answer !== null) {
+                const numAns = typeof solveRes.answer === 'number' ? solveRes.answer : parseInt(String(solveRes.answer), 10);
+                if (!isNaN(numAns)) {
+                  const submitRes = await browserPage.evaluate(
+                    async (uuid: string, key: string, ans: number) => {
+                      const res = await fetch('/api/v2/info/get-initiative-token', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ captchaKey: key, captchaResult: ans, initiativeId: uuid }),
+                      });
+                      return await res.json();
+                    },
+                    initiativeUuid,
+                    capRes.captchaKey,
+                    numAns,
+                  );
+                  if (submitRes?.token || submitRes?.data?.token) {
+                    initToken = submitRes.token || submitRes.data.token;
+                    this.initiativeTokenCache.set(initiativeUuid, {
+                      token: initToken,
+                      expiresAt: Date.now() + 60 * 60 * 1000,
+                    });
+                    this.logger.log(`🎉 [Prewarm Auto-OCR] Token muvaffaqiyatli olindi: ${solveRes.expression || numAns} (${tryIdx + 1}-urinish)`);
+                    break;
+                  }
+                }
+              }
+            }
+          } catch (e: any) {
+            this.logger.debug(`[Prewarm Captcha Try ${tryIdx + 1}] ${e.message}`);
+          }
+          await new Promise((r) => setTimeout(r, 500));
+        }
+      }
+
+      if (!initToken) {
+        this.logger.warn('⚠️ [Prewarm] Token olinmadi, kesh yangilanmadi.');
+        await browserPage.close().catch(() => {});
+        return;
+      }
+
+      // 2. Birinchi sahifani (Page 0) tekshirib, jami sahifalar sonini (totalPages) aniqlaymiz:
+      let firstPageRes = await browserPage.evaluate(
+        async (token: string) => {
+          try {
+            const res = await fetch(`/api/v2/info/votes/${token}?page=0&size=15&limit=15`, { credentials: 'include' });
+            if (!res.ok) return null;
+            return await res.json();
+          } catch {
+            return null;
+          }
+        },
+        initToken,
+      );
+
+      // Agar birinchi sahifada token rad etilgan bo'lsa (401/403/invalid), darhol yangi token yechamiz:
+      if (!firstPageRes || !Array.isArray(firstPageRes.content)) {
+        this.logger.warn('⚠️ [Prewarm] Token eskirgan, shu sahifaning o\'zida yangi token olinmoqda...');
+        this.initiativeTokenCache.delete(initiativeUuid);
+        initToken = '';
+        for (let tryIdx = 0; tryIdx < 6 && !initToken; tryIdx++) {
+          try {
+            const capRes = await browserPage.evaluate(async () => {
+              const res = await fetch('/api/v2/vote/captcha-2', { credentials: 'include' });
+              return await res.json();
+            });
+            if (capRes?.image && capRes?.captchaKey) {
+              const solveRes = await this.captchaSolver.solve(capRes.image);
+              if (solveRes.success && solveRes.answer !== undefined && solveRes.answer !== null) {
+                const numAns = typeof solveRes.answer === 'number' ? solveRes.answer : parseInt(String(solveRes.answer), 10);
+                if (!isNaN(numAns)) {
+                  const submitRes = await browserPage.evaluate(
+                    async (uuid: string, key: string, ans: number) => {
+                      const res = await fetch('/api/v2/info/get-initiative-token', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ captchaKey: key, captchaResult: ans, initiativeId: uuid }),
+                      });
+                      return await res.json();
+                    },
+                    initiativeUuid,
+                    capRes.captchaKey,
+                    numAns,
+                  );
+                  if (submitRes?.token || submitRes?.data?.token) {
+                    initToken = submitRes.token || submitRes.data.token;
+                    this.initiativeTokenCache.set(initiativeUuid, {
+                      token: initToken,
+                      expiresAt: Date.now() + 60 * 60 * 1000,
+                    });
+                    this.logger.log(`🎉 [Prewarm Auto-OCR] Yangi token olindi: ${solveRes.expression || numAns}`);
+                    break;
+                  }
+                }
+              }
+            }
+          } catch (e: any) {}
+          await new Promise((r) => setTimeout(r, 500));
+        }
+
+        if (initToken) {
+          firstPageRes = await browserPage.evaluate(
+            async (token: string) => {
+              try {
+                const res = await fetch(`/api/v2/info/votes/${token}?page=0&size=15&limit=15`, { credentials: 'include' });
+                if (!res.ok) return null;
+                return await res.json();
+              } catch {
+                return null;
+              }
+            },
+            initToken,
+          );
+        }
+      }
+
+      if (!firstPageRes || !Array.isArray(firstPageRes.content)) {
+        this.logger.warn('⚠️ [Prewarm] Birinchi sahifa yuklanmadi.');
+        await browserPage.close().catch(() => {});
+        return;
+      }
+
+      let totalPages = firstPageRes.totalPages || 1;
+      const totalElements = firstPageRes.totalElements || firstPageRes.content.length;
       let cachedCount = 0;
-      let consecutiveFailures = 0;
-      let tokenRefreshesUsed = 0;
-      let oldestCoveredTs: number | null = null;
-      // Yuqori tezlikdagi 20-sahifalik parallel partiyalar (Promise.all):
-      // Brauzer ichida parallel HTTP/2 orqali bir vaqtning o'zida 20 tadan sahifa olinadi (~150ms)
+
+      // Page 0 ni darhol keshga saqlaymiz:
+      this.initiativeVotesListCache.set(`${initiativeUuid}_p0`, {
+        votes: firstPageRes.content,
+        totalElements,
+        totalPages,
+        fetchedAt: Date.now(),
+      });
+      cachedCount++;
+
+      // 3. Qolgan BARCHA sahifalarni 20-talik parallel partiyalarda (Promise.all) shu sahifa ichida bir zumda tortamiz:
       const BATCH_SIZE = 20;
-      for (let batchStart = 0; batchStart < totalPages && batchStart < maxPages; batchStart += BATCH_SIZE) {
+      for (let batchStart = 1; batchStart < totalPages && batchStart < maxPages; batchStart += BATCH_SIZE) {
         const pageNumbers: number[] = [];
         for (let i = 0; i < BATCH_SIZE && (batchStart + i) < totalPages && (batchStart + i) < maxPages; i++) {
           pageNumbers.push(batchStart + i);
@@ -1897,34 +2032,24 @@ export class OpenBudgetService {
           } catch {
             batchResults = null;
           }
-          if (!batchResults) await new Promise((r) => setTimeout(r, 300));
+          if (!batchResults) await new Promise((r) => setTimeout(r, 200));
         }
 
-        if (!batchResults || batchResults.length === 0) {
-          this.logger.warn(`⚠️ [Prewarm] Partiya ${batchStart}..${batchStart + pageNumbers.length - 1} javob bermadi.`);
-          continue;
-        }
-
-        let validInBatch = 0;
-        for (const item of batchResults) {
-          if (item?.data && Array.isArray(item.data.content)) {
-            totalPages = item.data.totalPages || totalPages;
-            this.initiativeVotesListCache.set(`${initiativeUuid}_p${item.page}`, {
-              votes: item.data.content,
-              totalElements: item.data.totalElements || 0,
-              totalPages,
-              fetchedAt: Date.now(),
-            });
-            cachedCount++;
-            validInBatch++;
+        if (batchResults && Array.isArray(batchResults)) {
+          for (const item of batchResults) {
+            if (item?.data && Array.isArray(item.data.content)) {
+              this.initiativeVotesListCache.set(`${initiativeUuid}_p${item.page}`, {
+                votes: item.data.content,
+                totalElements,
+                totalPages,
+                fetchedAt: Date.now(),
+              });
+              cachedCount++;
+            }
           }
         }
 
-        if (validInBatch === 0 && batchStart > 0) {
-          break;
-        }
-
-        await new Promise((r) => setTimeout(r, 100));
+        await new Promise((r) => setTimeout(r, 60));
       }
 
       await browserPage.close().catch(() => {});
