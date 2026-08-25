@@ -1999,8 +1999,8 @@ export class OpenBudgetService {
       });
       cachedCount++;
 
-      // 3. Qolgan BARCHA sahifalarni 20-talik parallel partiyalarda (Promise.all) shu sahifa ichida bir zumda tortamiz:
-      const BATCH_SIZE = 20;
+      // 3. Qolgan BARCHA sahifalarni 5-talik parallel partiyalarda tortamiz (WAF limitlaridan qochish uchun):
+      const BATCH_SIZE = 5;
       for (let batchStart = 1; batchStart < totalPages && batchStart < maxPages; batchStart += BATCH_SIZE) {
         const pageNumbers: number[] = [];
         for (let i = 0; i < BATCH_SIZE && (batchStart + i) < totalPages && (batchStart + i) < maxPages; i++) {
@@ -2017,11 +2017,11 @@ export class OpenBudgetService {
                   pages.map(async (p) => {
                     try {
                       const res = await fetch(`/api/v2/info/votes/${token}?page=${p}&size=15&limit=15`, { credentials: 'include' });
-                      if (!res.ok) return { page: p, data: null };
+                      if (!res.ok) return { page: p, ok: false, status: res.status, data: null };
                       const json = await res.json();
-                      return { page: p, data: json };
-                    } catch {
-                      return { page: p, data: null };
+                      return { page: p, ok: true, status: res.status, data: json };
+                    } catch (e: any) {
+                      return { page: p, ok: false, status: 0, error: e.message, data: null };
                     }
                   })
                 );
@@ -2036,6 +2036,7 @@ export class OpenBudgetService {
         }
 
         if (batchResults && Array.isArray(batchResults)) {
+          let hasAuthError = false;
           for (const item of batchResults) {
             if (item?.data && Array.isArray(item.data.content)) {
               this.initiativeVotesListCache.set(`${initiativeUuid}_p${item.page}`, {
@@ -2045,11 +2046,57 @@ export class OpenBudgetService {
                 fetchedAt: Date.now(),
               });
               cachedCount++;
+            } else if (item?.status === 401 || item?.status === 403 || item?.status === 400) {
+              hasAuthError = true;
+            }
+          }
+
+          // Agar token muddati tugasa, shu sahifada yangi token olib davom etamiz
+          if (hasAuthError) {
+            this.logger.debug(`[Prewarm] Token yangilanmoqda (sahifa ${batchStart})...`);
+            for (let tryIdx = 0; tryIdx < 4; tryIdx++) {
+              try {
+                const capRes = await browserPage.evaluate(async () => {
+                  const res = await fetch('/api/v2/vote/captcha-2', { credentials: 'include' });
+                  return await res.json();
+                });
+                if (capRes?.image && capRes?.captchaKey) {
+                  const solveRes = await this.captchaSolver.solve(capRes.image);
+                  if (solveRes.success && solveRes.answer !== undefined) {
+                    const numAns = typeof solveRes.answer === 'number' ? solveRes.answer : parseInt(String(solveRes.answer), 10);
+                    if (!isNaN(numAns)) {
+                      const submitRes = await browserPage.evaluate(
+                        async (uuid: string, key: string, ans: number) => {
+                          const res = await fetch('/api/v2/info/get-initiative-token', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ captchaKey: key, captchaResult: ans, initiativeId: uuid }),
+                          });
+                          return await res.json();
+                        },
+                        initiativeUuid,
+                        capRes.captchaKey,
+                        numAns,
+                      );
+                      if (submitRes?.token || submitRes?.data?.token) {
+                        initToken = submitRes.token || submitRes.data.token;
+                        this.initiativeTokenCache.set(initiativeUuid, {
+                          token: initToken,
+                          expiresAt: Date.now() + 60 * 60 * 1000,
+                        });
+                        break;
+                      }
+                    }
+                  }
+                }
+              } catch (e: any) {}
+              await new Promise((r) => setTimeout(r, 400));
             }
           }
         }
 
-        await new Promise((r) => setTimeout(r, 60));
+        await new Promise((r) => setTimeout(r, 70));
       }
 
       await browserPage.close().catch(() => {});
