@@ -377,6 +377,23 @@ export class AdminService {
         notifyText,
         vote.botInstanceId || undefined
       );
+
+      if (res.referrerRewarded) {
+        const referrer = await this.prisma.user.findUnique({
+          where: { id: res.referrerRewarded.referrerId },
+        });
+        if (referrer && referrer.telegramId) {
+          const refMsg = `🎉 <b>REFERAL BONUSI QO'SHILDI!</b>\n\n` +
+            `Siz taklif qilgan do'stingiz (<b>${vote.user.firstName || 'Do\'stingiz'}</b>) ovoz berdi va ovozi tasdiqlandi!\n` +
+            `💰 <b>Hisobingizga qo'shildi:</b> <code>+${formatSum(res.referrerRewarded.refBonus)} so'm</code>\n` +
+            `💳 <b>Joriy balansingiz:</b> <code>${formatSum(referrer.balance)} so'm</code> 🚀`;
+          await this.botManagerService.sendMessageToUser(
+            referrer.telegramId,
+            refMsg,
+            vote.botInstanceId || undefined
+          );
+        }
+      }
     }
 
     return res;

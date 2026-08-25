@@ -115,7 +115,41 @@ export class WalletService {
       );
     }
 
+    const referrerId = vote.user.referredById;
+    const refBonus = this.configService.get<number>('bot.referralBonus') || 5000;
+    let shouldRewardReferrer = false;
+
+    if (referrerId) {
+      const existingRefReward = await this.prisma.referralReward.findFirst({
+        where: { refereeId: vote.userId },
+      });
+      if (!existingRefReward) {
+        shouldRewardReferrer = true;
+        txOps.push(
+          this.prisma.user.update({
+            where: { id: referrerId },
+            data: {
+              balance: { increment: refBonus },
+              totalEarned: { increment: refBonus },
+            },
+          }),
+          this.prisma.referralReward.create({
+            data: {
+              referrerId,
+              refereeId: vote.userId,
+              amount: refBonus,
+              reason: 'VOTE_BONUS',
+            },
+          }),
+        );
+      }
+    }
+
     const [updatedVote, updatedUser] = await this.prisma.$transaction(txOps);
+
+    if (shouldRewardReferrer && referrerId) {
+      this.logger.log(`🎁 Taklifchi #${referrerId} ga taklif qilingan a'zo #${vote.userId} ovoz bergani uchun +${refBonus} so'm referal bonusi yozildi`);
+    }
 
     if (vote.agentId && vote.agentReward > 0) {
       this.logger.log(`🤝 Agent #${vote.agentId} ga ovoz #${voteId} uchun +${vote.agentReward} so'm komissiya yozildi.`);
@@ -130,7 +164,13 @@ export class WalletService {
     }
 
     this.logger.log(`✅ Ovoz #${voteId} tasdiqlandi. Foydalanuvchi #${vote.userId} ga +${rewardAmount} so'm yozildi.`);
-    return { vote: updatedVote, user: updatedUser, rewardAmount, alreadyVerified: false };
+    return {
+      vote: updatedVote,
+      user: updatedUser,
+      rewardAmount,
+      alreadyVerified: false,
+      referrerRewarded: shouldRewardReferrer ? { referrerId, refBonus } : null,
+    };
   }
 
   /**

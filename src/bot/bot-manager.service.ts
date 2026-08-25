@@ -1792,17 +1792,17 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
         });
 
         if (referredById) {
-          const refBonusRes = await this.walletService.creditReferralJoinBonus(referredById, user.id);
-          if (refBonusRes) {
-            const referrer = await this.prisma.user.findUnique({ where: { id: referredById } });
-            if (referrer) {
-              const activeBot = this.activeBots.get(botId);
-              if (activeBot) {
-                await activeBot.bot.telegram.sendMessage(
-                  referrer.telegramId,
-                  `🎉 Sizning referal havolangiz orqali yangi do'stingiz (${user.firstName || 'Foydalanuvchi'}) qo'shildi!\n💰 Hisobingizga +${formatSum(refBonusRes.refBonus)} so'm bonus qo'shildi!\n💳 Hozirgi balansingiz: ${formatSum(refBonusRes.updatedReferrer.balance)} so'm`
-                ).catch(() => {});
-              }
+          const referrer = await this.prisma.user.findUnique({ where: { id: referredById } });
+          if (referrer) {
+            const activeBot = this.activeBots.get(botId);
+            if (activeBot) {
+              await activeBot.bot.telegram.sendMessage(
+                referrer.telegramId,
+                `👥 <b>Yangi do'stingiz qo'shildi!</b>\n\n` +
+                `Sizning referal havolangiz orqali <b>${user.firstName || 'Do\'stingiz'}</b> botga kirdi.\n\n` +
+                `📌 <i>Do'stingiz bot orqali ovoz berib, ovozi tasdiqlangach hisobingizga avtomatik <b>+5 000 so'm</b> bonus qo'shiladi!</i> 🎯`,
+                { parse_mode: 'HTML' }
+              ).catch(() => {});
             }
           }
         }

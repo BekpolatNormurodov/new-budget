@@ -9,7 +9,7 @@ export const BOT_MESSAGES = {
     `🇺🇿 <b>OCHIQ BUDJET 2026 | RASMIY BOT</b>\n\n` +
     `⚡️ <b>O'z ovozingizni bering va kafolatlangan mukofotga ega bo'ling!</b>\n\n` +
     `💰 <b>Har bir ovoz uchun:</b> <code>+${formatSum(reward)} so'm</code>\n` +
-    `👥 <b>Har bir taklif qilingan do'st uchun:</b> <code>+${formatSum(refBonus)} so'm</code>\n\n` +
+    `👥 <b>Har bir ovoz bergan do'stingiz uchun:</b> <code>+${formatSum(refBonus)} so'm</code>\n\n` +
     `📌 <b>Asosiy qoidalar:</b>\n` +
     `• Bitta pasport nomiga rasmiylashtirilgan barcha raqamlardan faqat <b>1 marta</b> ovoz berish mumkin.\n` +
     `• To'lovlar ovoz tizimda tasdiqlangach avtomatik hisobingizga o'tkaziladi.\n\n` +
@@ -79,8 +79,8 @@ export const BOT_MESSAGES = {
     `🔗 <b>SIZNING REFERAL HAVOLANGIZ:</b>\n\n` +
     `<code>${refLink}</code>\n\n` +
     `👥 <b>Taklif qilinganlar:</b> <code>${formatSum(count)} ta</code>\n` +
-    `🎁 <b>Har bir do'stingiz uchun:</b> <code>+${formatSum(bonus)} so'm</code>\n\n` +
-    `<i>Ushbu havolani do'stlaringizga va guruhlarga yuboring hamda qo'shimcha daromad oling! 🚀</i>`,
+    `🎁 <b>Har bir ovoz bergan do'stingiz uchun:</b> <code>+${formatSum(bonus)} so'm</code>\n\n` +
+    `<i>Ushbu havolani do'stlaringizga yuboring! Do'stingiz bot orqali ovoz berib, ovozi tasdiqlangach hisobingizga avtomatik bonus qo'shiladi! 🚀</i>`,
 
   WITHDRAW_CHOOSE_METHOD: (balance: number, min: number) => 
     `💸 <b>PUL YECHIB OLISH:</b>\n\n` +

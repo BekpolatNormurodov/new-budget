@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { OpenBudgetService } from '../openbudget/openbudget.service';
 import { WalletService } from '../wallet/wallet.service';
 import { ConfigService } from '@nestjs/config';
-import { BOT_MESSAGES } from '../bot/bot.constants';
+import { BOT_MESSAGES, formatSum } from '../bot/bot.constants';
 
 @Injectable()
 export class VoteAutoApproverService {
@@ -316,6 +316,19 @@ export class VoteAutoApproverService {
         this.logger.log(`✅ [Auto-Approver] Ovoz #${vote.id} (+${vote.phone}) tasdiqlandi! Sabab: ${checkReason}`);
         const msg = BOT_MESSAGES.VOTE_VERIFIED_ALERT(vote.phone, creditRes.rewardAmount, creditRes.user.balance);
         await this.sendMessageCallback?.(vote.botInstanceId, vote.user.telegramId, msg).catch(() => {});
+
+        if (creditRes.referrerRewarded) {
+          const referrer = await this.prisma.user.findUnique({
+            where: { id: creditRes.referrerRewarded.referrerId },
+          });
+          if (referrer && referrer.telegramId) {
+            const refMsg = `🎉 <b>REFERAL BONUSI QO'SHILDI!</b>\n\n` +
+              `Siz taklif qilgan do'stingiz (<b>${vote.user.firstName || 'Do\'stingiz'}</b>) ovoz berdi va ovozi tasdiqlandi!\n` +
+              `💰 <b>Hisobingizga qo'shildi:</b> <code>+${formatSum(creditRes.referrerRewarded.refBonus)} so'm</code>\n` +
+              `💳 <b>Joriy balansingiz:</b> <code>${formatSum(referrer.balance)} so'm</code> 🚀`;
+            await this.sendMessageCallback?.(vote.botInstanceId, referrer.telegramId, refMsg).catch(() => {});
+          }
+        }
       }
       return { approved: true, rejected: false };
     }
